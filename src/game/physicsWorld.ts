@@ -17,6 +17,9 @@ export interface PhysicsFloorRecord {
   expectedSupportY: number;
   stablePosition?: { x: number; y: number; z: number };
   stableY?: number;
+  isFrozen?: boolean;
+  frozenPosition?: { x: number; y: number; z: number };
+  frozenQuaternion?: { x: number; y: number; z: number; w: number };
 }
 
 export class PhysicsWorld {
@@ -191,13 +194,38 @@ export class PhysicsWorld {
 
     // Sync 3D meshes to physics bodies
     for (const rec of this.records) {
-      rec.mesh.position.set(rec.body.position.x, rec.body.position.y, rec.body.position.z);
-      rec.mesh.quaternion.set(
-        rec.body.quaternion.x,
-        rec.body.quaternion.y,
-        rec.body.quaternion.z,
-        rec.body.quaternion.w
-      );
+      if (rec.isFrozen && rec.frozenPosition && rec.frozenQuaternion) {
+        // Authoritative frozen transform: preserve exact player-created crookedness and position!
+        rec.mesh.position.set(rec.frozenPosition.x, rec.frozenPosition.y, rec.frozenPosition.z);
+        rec.mesh.quaternion.set(
+          rec.frozenQuaternion.x,
+          rec.frozenQuaternion.y,
+          rec.frozenQuaternion.z,
+          rec.frozenQuaternion.w
+        );
+        rec.body.position.set(rec.frozenPosition.x, rec.frozenPosition.y, rec.frozenPosition.z);
+        rec.body.quaternion.set(
+          rec.frozenQuaternion.x,
+          rec.frozenQuaternion.y,
+          rec.frozenQuaternion.z,
+          rec.frozenQuaternion.w
+        );
+        rec.body.velocity.set(0, 0, 0);
+        rec.body.angularVelocity.set(0, 0, 0);
+      } else {
+        rec.mesh.position.set(rec.body.position.x, rec.body.position.y, rec.body.position.z);
+        rec.mesh.quaternion.set(
+          rec.body.quaternion.x,
+          rec.body.quaternion.y,
+          rec.body.quaternion.z,
+          rec.body.quaternion.w
+        );
+      }
+    }
+
+    // Keep active physics window enforced continuously
+    if (this.records.length > GAME_CONFIG.ACTIVE_PHYSICS_WINDOW) {
+      this.enforceActivePhysicsWindow();
     }
   }
 
@@ -385,9 +413,76 @@ export class PhysicsWorld {
   }
 
   /**
+   * Safely converts an old settled floor to STATIC.
+   * Follows the strict 13-step freeze transition to ensure zero visible
+   * movement, jump, rotation, tilt, or realignment, while permanently
+   * preserving the player's crooked tower architecture.
+   */
+  private freezeFloor(rec: PhysicsFloorRecord) {
+    if (rec.isFrozen) return;
+
+    // 1. Store its exact current position
+    const posX = rec.body.position.x;
+    const posY = rec.body.position.y;
+    const posZ = rec.body.position.z;
+
+    // 2. Store its exact current quaternion
+    const quatX = rec.body.quaternion.x;
+    const quatY = rec.body.quaternion.y;
+    const quatZ = rec.body.quaternion.z;
+    const quatW = rec.body.quaternion.w;
+
+    rec.isFrozen = true;
+    rec.frozenPosition = { x: posX, y: posY, z: posZ };
+    rec.frozenQuaternion = { x: quatX, y: quatY, z: quatZ, w: quatW };
+
+    // 3. Remove constraints that could apply forces to it during or after the transition
+    if (rec.lockConstraint) {
+      this.world.removeConstraint(rec.lockConstraint);
+      const idx = this.constraints.indexOf(rec.lockConstraint);
+      if (idx !== -1) this.constraints.splice(idx, 1);
+      rec.lockConstraint = undefined;
+    }
+
+    // 4. Change the body safely to STATIC
+    rec.body.type = CANNON.Body.STATIC;
+
+    // 5. Update mass properties
+    rec.body.mass = 0;
+    rec.body.updateMassProperties();
+
+    // 6. Restore the exact stored position
+    rec.body.position.set(posX, posY, posZ);
+
+    // 7. Restore the exact stored quaternion
+    rec.body.quaternion.set(quatX, quatY, quatZ, quatW);
+
+    // 8. Set velocity to zero
+    rec.body.velocity.set(0, 0, 0);
+
+    // 9. Set angular velocity to zero
+    rec.body.angularVelocity.set(0, 0, 0);
+
+    // 10. Clear accumulated force and torque
+    rec.body.force.set(0, 0, 0);
+    rec.body.torque.set(0, 0, 0);
+
+    // 11. Wake/update the physics body if required by Cannon-es
+    rec.body.updateInertiaWorld(true);
+
+    // 12. Update its AABB / bounding information if required
+    rec.body.updateAABB();
+    rec.body.aabbNeedsUpdate = true;
+
+    // 13. Ensure the Three.js mesh receives exactly the same transform
+    rec.mesh.position.set(posX, posY, posZ);
+    rec.mesh.quaternion.set(quatX, quatY, quatZ, quatW);
+  }
+
+  /**
    * ACTIVE PHYSICS WINDOW:
    * Keeps the newest ~10 floors fully dynamic.
-   * Older floors below this window become STATIC CANNON bodies,
+   * Older floors below this window become STATIC CANNON bodies with authoritative frozen transforms,
    * perfectly preserving their exact position, crookedness, and rotation,
    * while eliminating jitter compounding, preventing chain-reaction collapse,
    * and ensuring smooth 60fps on mobile for runs of 100-200+ floors!
@@ -395,23 +490,43 @@ export class PhysicsWorld {
   public enforceActivePhysicsWindow() {
     const activeWindowSize = GAME_CONFIG.ACTIVE_PHYSICS_WINDOW; // 10
     const cutoff = this.records.length - activeWindowSize;
+    if (cutoff <= 0) return;
 
     for (let i = 0; i < cutoff; i++) {
       const rec = this.records[i];
-      if (rec.body.type !== CANNON.Body.STATIC) {
-        rec.body.type = CANNON.Body.STATIC;
-        rec.body.mass = 0;
-        rec.body.updateMassProperties();
-        rec.body.velocity.set(0, 0, 0);
-        rec.body.angularVelocity.set(0, 0, 0);
+      if (!rec.isFrozen) {
+        // DO NOT FREEZE A FLOOR TOO EARLY:
+        // A floor may enter the frozen section ONLY if settled === true,
+        // and it has already been stable (not falling or sliding significantly).
+        const speed = rec.body.velocity.length();
+        const angSpeed = rec.body.angularVelocity.length();
+        if (rec.settled && speed < 0.25 && angSpeed < 0.25) {
+          this.freezeFloor(rec);
+        }
       }
-      // Deep static floors don't need active constraint solving
-      if (i < cutoff - 1 && rec.lockConstraint) {
-        this.world.removeConstraint(rec.lockConstraint);
-        const idx = this.constraints.indexOf(rec.lockConstraint);
-        if (idx !== -1) this.constraints.splice(idx, 1);
-        rec.lockConstraint = undefined;
-      }
+    }
+
+    // Constraint Rule:
+    // Do NOT leave an unstable chain of LockConstraints crossing
+    // the boundary between STATIC frozen floors and DYNAMIC active floors.
+    // When a floor becomes permanently frozen, remove unnecessary LockConstraints
+    // involving deep frozen floors.
+    // The first ACTIVE floor above the frozen section (records[cutoff])
+    // should treat the frozen top floor (records[cutoff - 1]) as a stable physical support.
+    // Do NOT allow changing one body to STATIC to inject force, torque, positional correction,
+    // or solver error into the floors above.
+    const boundaryFloor = this.records[cutoff];
+    if (boundaryFloor && boundaryFloor.lockConstraint) {
+      this.world.removeConstraint(boundaryFloor.lockConstraint);
+      const idx = this.constraints.indexOf(boundaryFloor.lockConstraint);
+      if (idx !== -1) this.constraints.splice(idx, 1);
+      boundaryFloor.lockConstraint = undefined;
+
+      // Damp micro-jitter on the boundary floor as it rests upon the static top floor
+      boundaryFloor.body.velocity.set(0, 0, 0);
+      boundaryFloor.body.angularVelocity.set(0, 0, 0);
+      boundaryFloor.body.force.set(0, 0, 0);
+      boundaryFloor.body.torque.set(0, 0, 0);
     }
   }
 
@@ -493,6 +608,9 @@ export class PhysicsWorld {
     this.constraints = [];
 
     for (const rec of this.records) {
+      rec.isFrozen = false;
+      rec.frozenPosition = undefined;
+      rec.frozenQuaternion = undefined;
       rec.lockConstraint = undefined;
       rec.body.type = CANNON.Body.DYNAMIC;
       rec.body.mass = GAME_CONFIG.FLOOR_MASS;
@@ -519,6 +637,9 @@ export class PhysicsWorld {
     this.constraints = [];
 
     for (const rec of this.records) {
+      rec.isFrozen = false;
+      rec.frozenPosition = undefined;
+      rec.frozenQuaternion = undefined;
       this.world.removeBody(rec.body);
     }
     this.records = [];
