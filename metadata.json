@@ -1,0 +1,6 @@
+{
+  "name": "Tower Builder 3D",
+  "description": "A physics-based 3D architectural tower stacking game. Time your crane drops, balance crooked floors, and climb into the clouds.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
