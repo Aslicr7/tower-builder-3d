@@ -65,7 +65,15 @@ export class GameEngine {
   private lastReleaseTime = 0;
   private missedFloorFailureDuration = 0;
   private collapseFailureDuration = 0;
-  private nextFloorSpawnTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  // Continuous Smooth Drop & Delivery Transition State Machine
+  private transitionPhase: 'READY' | 'IN_FLIGHT' | 'SETTLING' | 'DELIVERING' = 'READY';
+  private transitionTimer = 0;
+  private canDrop = true;
+  private currentCraneY = 0;
+  private currentHookY = 0;
+  private currentTrolleyX = 0;
+  private currentTrolleyZ = 0;
 
   // Animation frame
   private animId: number | null = null;
@@ -154,48 +162,42 @@ export class GameEngine {
 
   /**
    * Dedicated responsive framing ensuring:
-   * 1. Portrait mobile: FOV ~54°, floor occupies 26-32% screen width (visible scenery on BOTH sides).
-   * 2. Tablet / square: FOV ~48°, balanced framing.
-   * 3. Desktop: FOV ~42°, expansive skyline panorama.
+   * 1. Portrait mobile: FOV ~44°, elevated 3/4 perspective looking across city,
+   *    floor occupies 26-32% screen width with expansive skyline panorama.
+   * 2. Tablet / square: FOV ~40°, balanced framing.
+   * 3. Desktop: FOV ~36°, wide skyline vista.
    */
   private updateCameraResponsiveConfig(width: number, height: number) {
     const aspect = width / height;
     this.camera.aspect = aspect;
 
-    // Diagonal 3D viewing angle (front face + side face visible for depth & rotation judgment)
-    const azimuth = 33 * (Math.PI / 180);
-    const elevation = 20 * (Math.PI / 180);
-    const dirX = Math.sin(azimuth) * Math.cos(elevation); // ~0.512
-    const dirY = Math.sin(elevation);                    // ~0.342
-    const dirZ = Math.cos(azimuth) * Math.cos(elevation); // ~0.788
+    // Cinematic elevated 3/4 viewing angle:
+    // Gentle 9.5° downward elevation looking across the city, world horizon and sky clearly visible!
+    const azimuth = 28 * (Math.PI / 180);
+    const elevation = 9.5 * (Math.PI / 180);
+    const dirX = Math.sin(azimuth) * Math.cos(elevation); // ~0.463
+    const dirY = Math.sin(elevation);                    // ~0.165
+    const dirZ = Math.cos(azimuth) * Math.cos(elevation); // ~0.871
 
     if (aspect < 0.75) {
       // Portrait mobile (e.g. 9:16, 9:19.5, 9:20)
-      const fov = 54;
+      const fov = 44;
       this.camera.fov = fov;
-
-      // Desired visible width at tower center: ~19.2 units
-      // Floor diagonal is ~5.8m -> 5.8 / 19.2 ≈ 30.2% screen width!
-      const targetVisibleWidth = 19.2;
-      const fovRad = THREE.MathUtils.degToRad(fov);
-      const calculatedDist = targetVisibleWidth / (2 * Math.tan(fovRad / 2) * aspect);
-
-      // Distance is at least 38 units so the tower starts with plenty of surrounding scenery
-      const distance = Math.max(calculatedDist, 38.0);
+      const distance = 45.0;
       this.cameraBaseDistance = distance;
       this.cameraOffset.set(dirX * distance, dirY * distance, dirZ * distance);
     } else if (aspect <= 1.25) {
       // Tablet / square
-      const fov = 48;
+      const fov = 40;
       this.camera.fov = fov;
-      const distance = 35.0;
+      const distance = 42.0;
       this.cameraBaseDistance = distance;
       this.cameraOffset.set(dirX * distance, dirY * distance, dirZ * distance);
     } else {
       // Desktop
-      const fov = 42;
+      const fov = 36;
       this.camera.fov = fov;
-      const distance = 30.0;
+      const distance = 38.0;
       this.cameraBaseDistance = distance;
       this.cameraOffset.set(dirX * distance, dirY * distance, dirZ * distance);
     }
@@ -222,10 +224,6 @@ export class GameEngine {
   }
 
   public startNewGame() {
-    if (this.nextFloorSpawnTimeout) {
-      clearTimeout(this.nextFloorSpawnTimeout);
-      this.nextFloorSpawnTimeout = null;
-    }
     this.gameOverTriggered = false;
     this.gameOverReason = 'REAL_TOP_COLLAPSE';
     this.missedFloorFailureDuration = 0;
@@ -239,6 +237,7 @@ export class GameEngine {
     if (this.hangingFloorGroup) {
       this.scene.remove(this.hangingFloorGroup);
       this.hangingFloorGroup = null;
+      this.hangingFloorDims = null;
     }
 
     this.physics.reset();
@@ -250,9 +249,11 @@ export class GameEngine {
 
     this.updateStatsUI();
 
-    // Reset camera desired target
-    this.cameraDesiredTarget.set(0, 3.2, 0);
-    this.cameraTarget.set(0, 3.2, 0);
+    // Reset camera desired target with cinematic elevated 3/4 framing
+    const towerTopY = this.physics.getTowerTopY();
+    const initialTargetY = Math.max(towerTopY - 3.2, 3.2);
+    this.cameraDesiredTarget.set(0, initialTargetY, 0);
+    this.cameraTarget.set(0, initialTargetY, 0);
     this.camera.position.set(
       this.cameraTarget.x + this.cameraOffset.x,
       this.cameraTarget.y + this.cameraOffset.y,
@@ -260,11 +261,18 @@ export class GameEngine {
     );
     this.camera.lookAt(this.cameraTarget);
 
-    // Spawn first suspended floor
-    this.spawnNextFloor();
+    // Initialize crane positions
+    const initialFloorTopY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + 2.3;
+    this.currentCraneY = initialFloorTopY + 9.4;
+    this.currentHookY = initialFloorTopY + 4.85;
+    this.currentTrolleyX = 0;
+    this.currentTrolleyZ = 0;
+
+    // Spawn first suspended floor directly in ready position
+    this.spawnNextFloorImmediately();
   }
 
-  private spawnNextFloor() {
+  private spawnNextFloorImmediately() {
     if (this.state !== 'PLAYING') return;
 
     // Pick style from 12 distinct architectural styles
@@ -277,6 +285,9 @@ export class GameEngine {
     this.scene.add(group);
 
     this.isFloorHanging = true;
+    this.canDrop = true;
+    this.transitionPhase = 'READY';
+    this.transitionTimer = 0;
 
     // Crane height: above highest placed floor
     const towerTopY = this.physics.getTowerTopY();
@@ -285,9 +296,7 @@ export class GameEngine {
 
     this.hangingFloorGroup.position.set(0, hangingY, 0);
 
-    // Frame vertical region: top of existing tower at ~50-55% screen height,
-    // active hanging floor in upper-middle (~60-65%), 6-9 previous floors below visible
-    const targetY = Math.max(towerTopY - 1.2, 3.2);
+    const targetY = Math.max(towerTopY - 3.2, 3.2);
     this.cameraDesiredTarget.set(0, targetY, 0);
   }
 
@@ -296,7 +305,14 @@ export class GameEngine {
    * CLICK / TAP / SPACE = RELEASE THE FLOOR.
    */
   public releaseCurrentFloor() {
-    if (this.state !== 'PLAYING' || !this.isFloorHanging || !this.hangingFloorGroup || !this.hangingFloorDims) {
+    if (
+      !this.canDrop ||
+      this.transitionPhase !== 'READY' ||
+      this.state !== 'PLAYING' ||
+      !this.isFloorHanging ||
+      !this.hangingFloorGroup ||
+      !this.hangingFloorDims
+    ) {
       return;
     }
 
@@ -306,6 +322,12 @@ export class GameEngine {
     this.lastReleaseTime = performance.now();
     this.missedFloorFailureDuration = 0;
     this.collapseFailureDuration = 0;
+
+    // Lock drop input during in-flight, settling, and delivery sequence
+    this.canDrop = false;
+    this.isFloorHanging = false;
+    this.transitionPhase = 'IN_FLIGHT';
+    this.transitionTimer = 0;
 
     // Calculate release momentum
     const linearVelocity = new THREE.Vector3(this.craneVelX * 0.9, 0, this.craneVelZ * 0.9);
@@ -320,7 +342,6 @@ export class GameEngine {
       angularVelocityY
     );
 
-    this.isFloorHanging = false;
     this.hangingFloorGroup = null;
     this.hangingFloorDims = null;
   }
@@ -329,14 +350,7 @@ export class GameEngine {
     this.swingTime += delta;
 
     // Continuous smooth difficulty scaling (Floors 1 to 200+)
-    // Floors 1-20: Beginner / relaxing (slow, small rotation, small Z sway)
-    // Floors 21-50: Easy -> Normal
-    // Floors 51-100: Normal
-    // Floors 101-150: Hard
-    // Floors 151-200: Very Hard
-    // Floors 200+: Clamped extreme endgame
     const progress = Math.min(Math.max(this.floorCount / 180, 0), 1.0);
-    // Smoothstep interpolation for gradual, seamless scaling
     const t = progress * progress * (3 - 2 * progress);
 
     const speed = THREE.MathUtils.lerp(GAME_CONFIG.CRANE_MIN_SPEED, GAME_CONFIG.CRANE_MAX_SPEED, t);
@@ -365,14 +379,127 @@ export class GameEngine {
     this.craneVelZ = delta > 0 ? (this.craneZ - prevZ) / delta : 0;
     this.craneRotVelY = delta > 0 ? (this.craneRotY - prevRot) / delta : 0;
 
+    // Smooth continuous crane body elevation (crane boom at top edge of screen)
     const towerTopY = this.physics.getTowerTopY();
-    const craneY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + 3.0;
+    const activeFloorH = this.hangingFloorDims ? this.hangingFloorDims.height : 2.3;
+    const floorY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + activeFloorH / 2;
+    const floorTopY = floorY + activeFloorH / 2;
 
-    if (this.isFloorHanging && this.hangingFloorGroup && this.hangingFloorDims) {
-      const hookY = craneY - 1.2;
-      const floorY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + this.hangingFloorDims.height / 2;
+    const targetCraneY = floorTopY + 9.4;
+    if (this.currentCraneY === 0) {
+      this.currentCraneY = targetCraneY;
+    } else {
+      const craneAlpha = 1.0 - Math.exp(-2.5 * delta);
+      this.currentCraneY = THREE.MathUtils.lerp(this.currentCraneY, targetCraneY, craneAlpha);
+    }
 
-      // 4. Gentle pendulum sway while hanging (scales mildly with speed)
+    // Default hook block center position (hook saddle sits at defaultHookY - 2.15 = floorTopY + 2.7m)
+    const defaultHookY = floorTopY + 4.85;
+
+    if (this.transitionPhase === 'IN_FLIGHT') {
+      // Floor in flight: Hook stays suspended above, retracting slightly clear of falling floor
+      const targetRetractY = defaultHookY + 0.8;
+      const hookAlpha = 1.0 - Math.exp(-4.0 * delta);
+      this.currentHookY = THREE.MathUtils.lerp(this.currentHookY, targetRetractY, hookAlpha);
+      this.currentTrolleyX = THREE.MathUtils.lerp(this.currentTrolleyX, this.craneX, hookAlpha);
+      this.currentTrolleyZ = THREE.MathUtils.lerp(this.currentTrolleyZ, this.craneZ, hookAlpha);
+
+      this.crane.updatePosition(
+        this.currentCraneY,
+        this.currentTrolleyX,
+        this.currentTrolleyZ,
+        this.currentHookY,
+        null, // Slings release from falling floor!
+        undefined,
+        false
+      );
+    } else if (this.transitionPhase === 'SETTLING') {
+      // PHASE 1 -> PHASE 2: Allow visible settling (0.45s) while camera gently drifts upward
+      this.transitionTimer += delta;
+
+      const pickupX = CraneSystem.MAST_X - 2.5;
+      const trolleyAlpha = 1.0 - Math.exp(-3.5 * delta);
+      this.currentTrolleyX = THREE.MathUtils.lerp(this.currentTrolleyX, pickupX, trolleyAlpha);
+      this.currentTrolleyZ = THREE.MathUtils.lerp(this.currentTrolleyZ, CraneSystem.MAST_Z, trolleyAlpha);
+
+      const targetRetractY = defaultHookY + 0.5;
+      this.currentHookY = THREE.MathUtils.lerp(this.currentHookY, targetRetractY, trolleyAlpha);
+
+      this.crane.updatePosition(
+        this.currentCraneY,
+        this.currentTrolleyX,
+        this.currentTrolleyZ,
+        this.currentHookY,
+        null,
+        undefined,
+        false
+      );
+
+      if (this.transitionTimer >= 0.45 && this.state === 'PLAYING') {
+        // Transition to PHASE 3: NEXT FLOOR ARRIVAL
+        this.transitionPhase = 'DELIVERING';
+        this.transitionTimer = 0;
+
+        // Pre-create next floor module at crane jib pickup position
+        const styleIdx = (this.floorCount + Math.floor(Math.random() * 3)) % ALL_STYLES.length;
+        this.hangingFloorStyle = ALL_STYLES[styleIdx];
+
+        const { group, dimensions } = createFloorModule(this.hangingFloorStyle, this.floorCount + 1);
+        this.hangingFloorGroup = group;
+        this.hangingFloorDims = dimensions;
+        this.scene.add(group);
+
+        const pickupFloorY = floorY + 1.2;
+        this.hangingFloorGroup.position.set(pickupX, pickupFloorY, CraneSystem.MAST_Z);
+        this.currentTrolleyX = pickupX;
+        this.currentTrolleyZ = CraneSystem.MAST_Z;
+        this.currentHookY = pickupFloorY + dimensions.height / 2 + 4.85;
+      }
+    } else if (this.transitionPhase === 'DELIVERING' && this.hangingFloorGroup && this.hangingFloorDims) {
+      // PHASE 3: NEXT FLOOR ARRIVAL
+      // Trolley smoothly glides along crane boom into hanging position over 0.75s
+      this.transitionTimer += delta;
+      const deliveryDuration = 0.75;
+      const p = Math.min(this.transitionTimer / deliveryDuration, 1.0);
+      const ease = p * p * (3 - 2 * p); // Smoothstep easing
+
+      const pickupX = CraneSystem.MAST_X - 2.5;
+      const pickupFloorY = floorY + 1.2;
+      const targetFloorY = floorY;
+
+      this.currentTrolleyX = THREE.MathUtils.lerp(pickupX, this.craneX, ease);
+      this.currentTrolleyZ = THREE.MathUtils.lerp(CraneSystem.MAST_Z, this.craneZ, ease);
+
+      const curFloorY = THREE.MathUtils.lerp(pickupFloorY, targetFloorY, ease);
+      const curRotY = THREE.MathUtils.lerp(0, this.craneRotY, ease);
+
+      this.hangingFloorGroup.position.set(this.currentTrolleyX, curFloorY, this.currentTrolleyZ);
+      this.hangingFloorGroup.rotation.set(0, curRotY, 0);
+
+      this.currentHookY = curFloorY + this.hangingFloorDims.height / 2 + 4.85;
+
+      this.crane.updatePosition(
+        this.currentCraneY,
+        this.currentTrolleyX,
+        this.currentTrolleyZ,
+        this.currentHookY,
+        this.hangingFloorGroup,
+        this.hangingFloorDims,
+        false // arrows hidden during delivery
+      );
+
+      if (p >= 1.0) {
+        // PHASE 4: READY!
+        this.transitionPhase = 'READY';
+        this.isFloorHanging = true;
+        this.canDrop = true; // Player input re-enabled
+      }
+    } else if (this.isFloorHanging && this.hangingFloorGroup && this.hangingFloorDims) {
+      // PHASE 4 / NORMAL SWINGING MOTION
+      this.currentTrolleyX = this.craneX;
+      this.currentTrolleyZ = this.craneZ;
+      this.currentHookY = defaultHookY;
+
       const swayFactor = 0.02 + t * 0.02;
       const swayRoll = -this.craneVelX * swayFactor;
       const swayPitch = this.craneVelZ * swayFactor;
@@ -381,16 +508,24 @@ export class GameEngine {
       this.hangingFloorGroup.rotation.set(swayPitch, this.craneRotY, swayRoll);
 
       this.crane.updatePosition(
-        craneY,
+        this.currentCraneY,
         this.craneX,
         this.craneZ,
-        hookY,
+        defaultHookY,
         this.hangingFloorGroup,
         this.hangingFloorDims,
-        true
+        true // arrows visible when ready
       );
     } else {
-      this.crane.updatePosition(craneY, this.craneX, this.craneZ, craneY - 1.2, null, undefined, false);
+      this.crane.updatePosition(
+        this.currentCraneY,
+        this.craneX,
+        this.craneZ,
+        defaultHookY,
+        null,
+        undefined,
+        false
+      );
     }
   }
 
@@ -476,15 +611,17 @@ export class GameEngine {
       }
     }
 
-    // Spawn the next floor on the crane
-    if (this.nextFloorSpawnTimeout) {
-      clearTimeout(this.nextFloorSpawnTimeout);
-    }
-    this.nextFloorSpawnTimeout = setTimeout(() => {
-      if (this.state === 'PLAYING') {
-        this.spawnNextFloor();
-      }
-    }, 450);
+    // PHASE 1 -> PHASE 2:
+    // Floor has settled physically.
+    // Begin gentle camera follow toward new tower top.
+    // Camera does NOT jump! Exponential smoothing gently leads the camera up.
+    const towerTopY = this.physics.getTowerTopY();
+    const targetY = Math.max(towerTopY - 3.2, 3.2);
+    this.cameraDesiredTarget.set(0, targetY, 0);
+
+    // Begin settling delay in game loop before next floor delivery
+    this.transitionPhase = 'SETTLING';
+    this.transitionTimer = 0;
   }
 
   private triggerCollapse(reason: 'MISSED_FLOOR' | 'REAL_TOP_COLLAPSE') {
@@ -544,7 +681,8 @@ export class GameEngine {
       // Collapse camera: Slowly pull outward and reveal the falling crooked tower
       const elapsed = (performance.now() - this.collapseStartTime) / 1000;
       const collapseTarget = new THREE.Vector3(0, Math.max(this.floorCount * 0.9, 4.0), 0);
-      this.cameraTarget.lerp(collapseTarget, delta * 1.5);
+      const collapseAlpha = 1.0 - Math.exp(-1.5 * delta);
+      this.cameraTarget.lerp(collapseTarget, collapseAlpha);
 
       const pullBackDist = this.cameraBaseDistance * 1.35 + Math.min(elapsed * 6, 20);
       const targetCamPos = new THREE.Vector3(
@@ -552,7 +690,7 @@ export class GameEngine {
         this.cameraTarget.y + (this.cameraOffset.y / this.cameraBaseDistance) * pullBackDist * 1.05,
         this.cameraTarget.z + (this.cameraOffset.z / this.cameraBaseDistance) * pullBackDist
       );
-      this.camera.position.lerp(targetCamPos, delta * 1.8);
+      this.camera.position.lerp(targetCamPos, 1.0 - Math.exp(-1.8 * delta));
       this.camera.lookAt(this.cameraTarget);
 
       // Check if collapse observation time has completed
@@ -563,8 +701,10 @@ export class GameEngine {
       return;
     }
 
-    // Smooth tracking during gameplay
-    this.cameraTarget.lerp(this.cameraDesiredTarget, delta * 2.2);
+    // Smooth tracking during gameplay: delta-time-independent exponential smoothing
+    const followSpeed = 2.4;
+    const alpha = 1.0 - Math.exp(-followSpeed * delta);
+    this.cameraTarget.lerp(this.cameraDesiredTarget, alpha);
 
     const desiredCamPos = new THREE.Vector3(
       this.cameraTarget.x + this.cameraOffset.x,
@@ -572,7 +712,7 @@ export class GameEngine {
       this.cameraTarget.z + this.cameraOffset.z
     );
 
-    this.camera.position.lerp(desiredCamPos, delta * 2.2);
+    this.camera.position.lerp(desiredCamPos, alpha);
     this.camera.lookAt(this.cameraTarget);
 
     // Follow sun light target with camera
@@ -607,8 +747,8 @@ export class GameEngine {
       return;
     }
 
-    // 1. Scenery environmental animation (traffic, clouds)
-    this.scenery.update(delta);
+    // 1. Scenery environmental animation (traffic, clouds, and calm vertical parallax)
+    this.scenery.update(delta, this.cameraTarget.y);
 
     // 2. Physics simulation
     this.physics.step(delta);
@@ -703,10 +843,6 @@ export class GameEngine {
   }
 
   public destroy() {
-    if (this.nextFloorSpawnTimeout) {
-      clearTimeout(this.nextFloorSpawnTimeout);
-      this.nextFloorSpawnTimeout = null;
-    }
     if (this.animId) {
       cancelAnimationFrame(this.animId);
       this.animId = null;
