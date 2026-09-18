@@ -641,8 +641,8 @@ export class GameEngine {
       // Requirement 3: Grace period (disable structural Game Over detection for 1.8s after release)
       const inGracePeriod = performance.now() - this.lastReleaseTime < 1800;
 
-      // Requirement 5: Early game safety rule (floors 1-10 cannot trigger structural collapse)
-      const isEarlyGame = this.floorCount <= 10;
+      // Early game safety rule: floors 1-20 are very forgiving and cannot trigger structural collapse
+      const isEarlyGame = this.floorCount <= 20;
 
       if (!inGracePeriod && !isEarlyGame) {
         const collapseStatus = this.physics.checkActiveTopCollapse();

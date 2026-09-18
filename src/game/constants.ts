@@ -8,9 +8,9 @@ export const GAME_CONFIG = {
   // Height metric ratio (matches reference image: ~26m per floor)
   METERS_PER_FLOOR: 26.0,
   
-  // Active Physics Window: Only the newest/top 10 floors remain fully dynamic CANNON bodies.
-  // Older floors below this window are stabilized as STATIC bodies (preserving their exact crooked position & rotation).
-  ACTIVE_PHYSICS_WINDOW: 10,
+  // Active Physics Window: Only the newest/top 4 floors remain fully dynamic CANNON bodies.
+  // Everything below them becomes COMPLETED TOWER (permanently preserved, solid static support).
+  ACTIVE_PHYSICS_WINDOW: 4,
   
   // Crane and suspension - drop clearance 2.5m for crisp, heavy thud drops
   CRANE_CLEARANCE: 2.5,
