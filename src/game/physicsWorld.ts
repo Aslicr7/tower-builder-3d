@@ -6,11 +6,13 @@ import {
   getDifficultyForFloor,
   getCraneKinematicsForFloor,
   getReleaseMomentumMultipliers,
+  getSpeedMultiplierForFloor,
   getStabilizationMaxForce,
   getSettledDampingForFloor,
   getActivePhysicsWindowSize,
   getEarlyGripFactor,
   getEarlyGripWindowFactor,
+  getEarlySlipStrength,
   getImpactMomentumRetention,
   evaluatePlacementQuality,
   StabilizationStatus,
@@ -276,7 +278,7 @@ export class PhysicsWorld {
         const angSpeed = rec.body.angularVelocity.length();
 
         const quality = rec.placementQuality || 'NORMAL';
-        const w = getEarlyGripWindowFactor(rec.id);
+        const w = getEarlySlipStrength(rec.id);
 
         let deadZoneThresh: number;
         if (isDangerous) {
@@ -306,11 +308,19 @@ export class PhysicsWorld {
           }
         } else if (rec.supportRatio >= GAME_CONFIG.STABILIZATION_STABLE_SUPPORT) {
           // Well-supported floors get compressive friction resistance against lateral drift
-          // Part 9: For Floors 1-15, only PERFECT and GREAT get compressive drift damping!
-          // NORMAL and RISKY must NOT get this hidden damping, even if overlap >= 0.70!
-          const allowExtraDamping = w <= 0 || (quality === 'PERFECT' || quality === 'GREAT');
-          if (allowExtraDamping) {
-            const dampingFactor = Math.exp(-8.0 * clampedDelta);
+          // For Floors 1-15 (w=1.0), NORMAL and RISKY receive NO extra compressive damping
+          // As w transitions from Floor 16 to 35, NORMAL gradually receives compressive grip
+          let extraDampingFactor = 0;
+          if (quality === 'PERFECT' || quality === 'GREAT') {
+            extraDampingFactor = 1.0;
+          } else if (quality === 'NORMAL') {
+            extraDampingFactor = Math.max(0, 1.0 - w);
+          } else if (quality === 'RISKY') {
+            extraDampingFactor = w <= 0 ? 0.40 : 0;
+          }
+
+          if (extraDampingFactor > 0.05) {
+            const dampingFactor = Math.exp(-8.0 * extraDampingFactor * clampedDelta);
             rec.body.velocity.x *= dampingFactor;
             rec.body.velocity.z *= dampingFactor;
             rec.extraVeryStableDampingApplied = true;
@@ -397,14 +407,14 @@ export class PhysicsWorld {
       return { settled: false, missed: true, impactSpeed: linearSpeed, tiltAngle };
     }
 
-    // Settling Phase Logic (Part 10):
-    // For Floors 1-15 with NORMAL/RISKY placements, allow active physical motion to complete
+    // Settling Phase Logic:
+    // For floors with active slip (w > 0.40) and NORMAL/RISKY placements, allow active physical motion to complete
     // before declaring settled, so visible physical sliding/tipping does not get cut short!
     if (firstContactTime !== null) {
       const contactDuration = (now - firstContactTime) / 1000;
-      const isEarly = this.currentFallingFloor.id <= 15;
+      const w = getEarlySlipStrength(this.currentFallingFloor.id);
       const quality = this.currentFallingFloor.placementQuality || 'NORMAL';
-      const isEarlyUnsafe = isEarly && (quality === 'NORMAL' || quality === 'RISKY');
+      const isEarlyUnsafe = w > 0.40 && (quality === 'NORMAL' || quality === 'RISKY');
 
       const velThresh = isEarlyUnsafe ? 0.14 : GAME_CONFIG.SETTLING_VELOCITY_THRESH;
       const angThresh = isEarlyUnsafe ? 0.12 : GAME_CONFIG.SETTLING_ANGULAR_THRESH;
@@ -561,40 +571,48 @@ export class PhysicsWorld {
     const activeWindowSize = getActivePhysicsWindowSize(currentFloorCount);
     this.enforceActivePhysicsWindow(activeWindowSize);
 
-    // Development-only required debug log (Part 17)
+    // Development-only required debug log (Part 19)
     if (import.meta.env.DEV) {
       const retention = getImpactMomentumRetention(placementQuality, currentFloorCount);
-      const isEarly = currentFloorCount <= 15;
-      const extraVeryStableDampingApplied =
-        (!isEarly || placementQuality === 'PERFECT' || placementQuality === 'GREAT') &&
-        supportRatio >= GAME_CONFIG.STABILIZATION_STABLE_SUPPORT;
+      const slipStrength = getEarlySlipStrength(currentFloorCount);
+      const craneSpeedMult = getSpeedMultiplierForFloor(currentFloorCount);
+      const craneDiff = getDifficultyForFloor(currentFloorCount);
 
+      const isDangerous = status === 'DANGEROUS';
       const deadZone =
-        status === 'DANGEROUS'
+        isDangerous
           ? 0
-          : isEarly
+          : slipStrength > 0
           ? placementQuality === 'PERFECT' || placementQuality === 'GREAT'
             ? 0.030
             : placementQuality === 'NORMAL'
-            ? 0.008
-            : 0.005
+            ? (1.0 - slipStrength) * 0.030 + slipStrength * 0.008
+            : (1.0 - slipStrength) * 0.030 + slipStrength * 0.005
           : 0.030;
+
+      const extraVeryStableDampingApplied =
+        record.extraVeryStableDampingApplied ??
+        ((slipStrength <= 0 || placementQuality === 'PERFECT' || placementQuality === 'GREAT') &&
+          supportRatio >= GAME_CONFIG.STABILIZATION_STABLE_SUPPORT);
 
       console.log('[EarlyGrip]', {
         Floor: currentFloorCount,
         PlacementQuality: placementQuality,
         SupportRatio: Number(supportRatio.toFixed(3)),
         SupportStatus: status,
+        EarlySlipStrength: Number(slipStrength.toFixed(3)),
+        ImpactRetention: Number((record.impactRetention ?? retention.linear).toFixed(3)),
+        AngularRetention: Number((record.rotRetention ?? retention.angular).toFixed(3)),
+        ConstraintMaxForce: maxForce === 0 ? 0 : Number(maxForce.toExponential(2)),
+        LinearDamping: Number(record.body.linearDamping.toFixed(3)),
+        AngularDamping: Number(record.body.angularDamping.toFixed(3)),
+        DeadZone: Number(deadZone.toFixed(4)),
+        CraneSpeedMult: Number(craneSpeedMult.toFixed(3)),
+        CraneDifficulty: Number(craneDiff.toFixed(3)),
         HorizontalSpeedAtImpact: Number((record.horizontalSpeedAtImpact ?? 0).toFixed(3)),
         HorizontalSpeedAfterImpact: Number((record.horizontalSpeedAfterImpact ?? 0).toFixed(3)),
         AngularSpeedAtImpact: Number((record.angularSpeedAtImpact ?? 0).toFixed(3)),
         AngularSpeedAfterImpact: Number((record.angularSpeedAfterImpact ?? 0).toFixed(3)),
-        ImpactRetention: Number((record.impactRetention ?? retention.linear).toFixed(3)),
-        RotRetention: Number((record.rotRetention ?? retention.angular).toFixed(3)),
-        LockConstraintMaxForce: maxForce === 0 ? 0 : Number(maxForce.toExponential(2)),
-        LinearDamping: Number(record.body.linearDamping.toFixed(3)),
-        AngularDamping: Number(record.body.angularDamping.toFixed(3)),
-        DeadZone: deadZone,
         ExtraVeryStableDampingApplied: extraVeryStableDampingApplied,
       });
     }
