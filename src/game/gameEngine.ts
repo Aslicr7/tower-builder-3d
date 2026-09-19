@@ -79,6 +79,7 @@ export class GameEngine {
   private animId: number | null = null;
   private lastTime = 0;
   private boundResize: () => void;
+  private currentRegionName = 'CITY / GROUND';
 
   constructor(container: HTMLElement, callbacks: GameEngineCallbacks) {
     this.container = container;
@@ -734,7 +735,45 @@ export class GameEngine {
       perfectStreak: this.perfectStreak,
       isNewBest: this.isNewBest,
       gameOverReason: this.gameOverReason,
+      regionName: this.currentRegionName,
     });
+  }
+
+  /**
+   * Diagnostic / Testing tool: Allows instant warp to any target floor
+   * to immediately verify all 10 environment regions (e.g. Floors 5, 16, 25, 38, 45, 65, 85, 105, 125, 145, 165, 185).
+   */
+  public jumpToFloorForTesting(targetFloor: number) {
+    this.floorCount = Math.max(0, targetFloor);
+    const towerTopY = this.floorCount * 2.3;
+    const initialTargetY = Math.max(towerTopY - 3.2, 3.2);
+
+    this.cameraDesiredTarget.set(0, initialTargetY, 0);
+    this.cameraTarget.set(0, initialTargetY, 0);
+    this.camera.position.set(
+      this.cameraTarget.x + this.cameraOffset.x,
+      this.cameraTarget.y + this.cameraOffset.y,
+      this.cameraTarget.z + this.cameraOffset.z
+    );
+    this.camera.lookAt(this.cameraTarget);
+
+    const floorTopY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + 2.3;
+    this.currentCraneY = floorTopY + 9.4;
+    this.currentHookY = floorTopY + 4.85;
+
+    // Immediately trigger scenery update
+    const regionState = this.scenery.update(
+      0.016,
+      this.cameraTarget.y,
+      this.floorCount,
+      this.scene,
+      this.sunLight,
+      this.ambientLight
+    );
+    if (regionState) {
+      this.currentRegionName = regionState.regionName;
+    }
+    this.updateStatsUI();
   }
 
   private loop = (time: number) => {
@@ -747,8 +786,19 @@ export class GameEngine {
       return;
     }
 
-    // 1. Scenery environmental animation (traffic, clouds, and calm vertical parallax)
-    this.scenery.update(delta, this.cameraTarget.y);
+    // 1. Scenery environmental animation (traffic, clouds, and continuous vertical journey)
+    const regionState = this.scenery.update(
+      delta,
+      this.cameraTarget.y,
+      this.floorCount,
+      this.scene,
+      this.sunLight,
+      this.ambientLight
+    );
+    if (regionState && regionState.regionName !== this.currentRegionName) {
+      this.currentRegionName = regionState.regionName;
+      this.updateStatsUI();
+    }
 
     // 2. Physics simulation
     this.physics.step(delta);

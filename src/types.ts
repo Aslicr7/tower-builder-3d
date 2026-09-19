@@ -31,6 +31,7 @@ export interface GameStats {
   perfectStreak: number;
   isNewBest: boolean;
   gameOverReason?: GameOverReason;
+  regionName?: string;
 }
 
 export interface FeedbackEvent {

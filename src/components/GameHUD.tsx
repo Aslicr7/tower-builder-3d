@@ -91,8 +91,15 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               <Building2 className="w-3.5 h-3.5" />
             </div>
             <div>
-              <div className="text-[10px] font-medium text-slate-300 tracking-wide uppercase">
-                Floor
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-medium text-slate-300 tracking-wide uppercase">
+                  Floor
+                </span>
+                {stats.regionName && (
+                  <span className="text-[9px] font-bold text-sky-300 uppercase tracking-tight px-1.5 py-0.5 rounded bg-sky-950/70 border border-sky-400/30">
+                    {stats.regionName}
+                  </span>
+                )}
               </div>
               <div className="text-lg sm:text-xl font-extrabold tracking-tight font-display text-white leading-none mt-0.5">
                 {stats.currentFloor}{' '}

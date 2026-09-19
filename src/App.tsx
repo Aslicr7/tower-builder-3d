@@ -118,6 +118,10 @@ export default function App() {
         <PauseModal
           onResume={() => engineRef.current?.resume()}
           onRestart={handleRestart}
+          onJumpToFloor={(floor) => {
+            engineRef.current?.jumpToFloorForTesting(floor);
+            engineRef.current?.resume();
+          }}
         />
       )}
 
