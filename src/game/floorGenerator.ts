@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { FloorDimensions, FloorModuleStyle } from '../types';
 import { GAME_CONFIG } from './constants';
 import { buildBrickApartment } from './floorVisuals/brickApartment';
+import { buildGlassOffice } from './floorVisuals/glassOffice';
 
 // Shared materials cache for high performance
 const materialCache: Record<string, THREE.Material> = {};
@@ -1242,6 +1243,11 @@ export function createFloorModule(
   // Brick Apartment Archetype
   if (style === 'BRICK_APARTMENT') {
     return buildBrickApartment(floorIndex, w, d, h);
+  }
+
+  // Glass Office Archetype
+  if (style === 'GLASS_OFFICE') {
+    return buildGlassOffice(floorIndex, w, d, h);
   }
 
   const mats = getArchMaterials();

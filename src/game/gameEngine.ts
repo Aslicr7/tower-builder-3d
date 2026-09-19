@@ -276,9 +276,10 @@ export class GameEngine {
   private spawnNextFloorImmediately() {
     if (this.state !== 'PLAYING') return;
 
-    // TEMP: Brick Apartment visual test
-    this.hangingFloorStyle = 'BRICK_APARTMENT';
-    // Previous test:
+    // TEMP: Glass Office visual test
+    this.hangingFloorStyle = 'GLASS_OFFICE';
+    // Previous tests:
+    // this.hangingFloorStyle = 'BRICK_APARTMENT';
     // this.hangingFloorStyle = 'MODERN_APARTMENT_V1';
     // Original style selection preserved:
     // const styleIdx = (this.floorCount + Math.floor(Math.random() * 3)) % ALL_STYLES.length;
@@ -446,9 +447,10 @@ export class GameEngine {
         this.transitionTimer = 0;
 
         // Pre-create next floor module at crane jib pickup position
-        // TEMP: Brick Apartment visual test
-        this.hangingFloorStyle = 'BRICK_APARTMENT';
-        // Previous test:
+        // TEMP: Glass Office visual test
+        this.hangingFloorStyle = 'GLASS_OFFICE';
+        // Previous tests:
+        // this.hangingFloorStyle = 'BRICK_APARTMENT';
         // this.hangingFloorStyle = 'MODERN_APARTMENT_V1';
         // Original style selection preserved:
         // const styleIdx = (this.floorCount + Math.floor(Math.random() * 3)) % ALL_STYLES.length;

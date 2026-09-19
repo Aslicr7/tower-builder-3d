@@ -2,24 +2,21 @@ import * as THREE from 'three';
 import { FloorDimensions } from '../../types';
 
 // ============================================================================
-// BRICK APARTMENT V1.1
-// Architectural Masonry Archetype
-// Visual refinement:
-// 1. Natural architectural brick colors (Burnt Clay, Dark Brown, Terracotta)
-// 2. Subtle procedural brick & mortar variation (no expensive geometry)
-// 3. Removed harsh white horizontal stripes (thinner, muted warm stone slabs)
-// 4. Dramatic silhouette differentiation:
-//    - Variant A: Major projecting bay window (0.95m forward projection, 2.20m wide)
-//    - Variant B: Deep corner cutout recessed balcony (2.10m x 1.90m negative space)
-//    - Variant C: Stepped dual-mass architecture (1.10m depth offset between masses)
-// 5. Simplified open balcony railings (strong top rail, 2-3 supports, no cages)
-// 6. Deeply recessed masonry windows with muted stone sills & lintels
-// 7. Deterministic 15-20% soft amber interior lighting
+// BRICK APARTMENT ARCHETYPE
+// Believable Residential Apartment Architecture
+// 
+// Architectural Principles:
+// 1. Human-scale residential facade logic (Living room + Bedrooms + Balcony).
+// 2. Real usable balconies with depth, slabs, and glazed access doors.
+// 3. True residential windows with depth: brick reveal -> stone sill -> frame -> glass -> interior backing.
+// 4. Uniform lintel line alignment across doors and windows.
+// 5. Zero random floating strips or decorative clutter — clean masonry masses and slabs.
+// 6. Restrained architectural palette: burnt clay brick, warm limestone, charcoal frames, graphite metal.
+// 7. Deterministic ~15-20% warm interior lamplight for lived-in feel.
 // ============================================================================
 
 // ============================================================================
-// CACHED PROCEDURAL BRICK & STONE TEXTURES
-// Generated once on demand and cached. Ensures crisp, high-performance rendering.
+// CACHED PROCEDURAL TEXTURES
 // ============================================================================
 
 const textureCache: Record<string, THREE.CanvasTexture> = {};
@@ -35,15 +32,14 @@ function getCachedTexture(key: string, generator: () => HTMLCanvasElement): THRE
 }
 
 /**
- * Procedural brick canvas generator.
- * Creates subtle, natural tone shifts across individual bricks, realistic warm mortar,
- * and delicate surface grain — avoiding flat "painted box" appearance.
+ * Subtle procedural brick texture:
+ * Clean running bond, warm mortar, soft tone shifts across bricks.
+ * At gameplay distance it reads as natural masonry without noisy procedural patterns.
  */
-function createUrbanBrickCanvas(
+function createResidentialBrickCanvas(
   baseHex: string,
-  darkHex: string,
-  lightHex: string,
-  warmHex: string,
+  shade1Hex: string,
+  shade2Hex: string,
   mortarHex: string
 ): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
@@ -51,63 +47,47 @@ function createUrbanBrickCanvas(
   canvas.height = 256;
   const ctx = canvas.getContext('2d')!;
 
-  // Warm, muted mortar base
+  // Warm mortar base
   ctx.fillStyle = mortarHex;
   ctx.fillRect(0, 0, 256, 256);
 
   const rowH = 16;
   const colW = 32;
-  const mortarThick = 2;
-
-  const hexColors = [baseHex, darkHex, lightHex, warmHex, baseHex];
+  const mortar = 2;
+  const colors = [baseHex, shade1Hex, baseHex, shade2Hex];
 
   for (let y = 0; y < 256; y += rowH) {
     const isOdd = Math.floor(y / rowH) % 2 === 1;
     const offsetX = isOdd ? colW / 2 : 0;
 
     for (let x = -colW; x < 256 + colW; x += colW) {
-      // Deterministic pseudo-random variation per brick
-      const colorIdx = Math.abs((x * 19 + y * 37) % hexColors.length);
-      ctx.fillStyle = hexColors[colorIdx];
+      const colIdx = Math.abs((x * 13 + y * 29) % colors.length);
+      ctx.fillStyle = colors[colIdx];
       ctx.fillRect(
-        x + offsetX + mortarThick,
-        y + mortarThick,
-        colW - mortarThick * 2,
-        rowH - mortarThick * 2
+        x + offsetX + mortar,
+        y + mortar,
+        colW - mortar * 2,
+        rowH - mortar * 2
       );
 
-      // Subtle surface grain & slight micro-wear
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.06)';
+      // Subtle surface grain
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.04)';
       ctx.fillRect(
-        x + offsetX + mortarThick,
-        y + mortarThick,
-        (colW - mortarThick * 2) * 0.5,
-        rowH - mortarThick * 2
-      );
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
-      ctx.fillRect(
-        x + offsetX + mortarThick + 4,
-        y + mortarThick + 2,
-        (colW - mortarThick * 2) * 0.4,
-        (rowH - mortarThick * 2) * 0.4
+        x + offsetX + mortar,
+        y + mortar,
+        (colW - mortar * 2) * 0.5,
+        rowH - mortar * 2
       );
     }
-  }
-
-  // Soft atmospheric weathering bands
-  ctx.fillStyle = 'rgba(30, 25, 20, 0.04)';
-  for (let i = 0; i < 256; i += 32) {
-    ctx.fillRect(0, i, 256, 3);
   }
 
   return canvas;
 }
 
 /**
- * Procedural stone/concrete canvas generator.
- * Creates muted, earthy, warm stone texture to prevent harsh white stripes.
+ * Smooth, warm architectural limestone / concrete texture.
  */
-function createMasonryStoneCanvas(baseHex: string): HTMLCanvasElement {
+function createLimestoneCanvas(baseHex: string): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 256;
@@ -115,24 +95,18 @@ function createMasonryStoneCanvas(baseHex: string): HTMLCanvasElement {
   ctx.fillStyle = baseHex;
   ctx.fillRect(0, 0, 256, 256);
 
-  // Subtle natural flecks
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.06)';
-  for (let i = 0; i < 400; i++) {
-    const rx = (i * 41) % 256;
-    const ry = (i * 83) % 256;
-    ctx.fillRect(rx, ry, 2, 2);
-  }
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+  // Very subtle micro-speckle
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
   for (let i = 0; i < 300; i++) {
-    const rx = (i * 59) % 256;
-    const ry = (i * 97) % 256;
+    const rx = (i * 37) % 256;
+    const ry = (i * 71) % 256;
     ctx.fillRect(rx, ry, 2, 2);
   }
   return canvas;
 }
 
 // ============================================================================
-// MATERIAL DEFINITIONS (3 RESTRAINED ARCHITECTURAL PALETTES)
+// MATERIAL DEFINITIONS
 // ============================================================================
 
 const materialCache: Record<string, THREE.Material> = {};
@@ -145,143 +119,71 @@ function getMat(key: string, creator: () => THREE.Material): THREE.Material {
 }
 
 export function getBrickMaterials() {
-  // Palettes:
-  // A: Burnt Clay (Muted, earthy red-brown: #9B4936, #A8543E, #8F4435 — NOT bright red)
-  const brickTexA = getCachedTexture('b_v11_brickTexA', () =>
-    createUrbanBrickCanvas('#9B4936', '#853E2E', '#A8543E', '#8F4435', '#5C5248')
+  // Palette A: Muted Burnt Clay (Natural earthy red-brown)
+  const brickTexA = getCachedTexture('b_res_brickA', () =>
+    createResidentialBrickCanvas('#9B4E3E', '#924738', '#A25342', '#524840')
   );
   brickTexA.repeat.set(3, 1.6);
 
-  // B: Dark Brown Brick (Deep brown, visibly brown under lighting — NOT black: #6B493E, #745044, #60463D)
-  const brickTexB = getCachedTexture('b_v11_brickTexB', () =>
-    createUrbanBrickCanvas('#6B493E', '#5A3D34', '#785347', '#60463D', '#483E38')
+  // Palette B: Darker Burnt Clay / Warm Brown-Red
+  const brickTexB = getCachedTexture('b_res_brickB', () =>
+    createResidentialBrickCanvas('#7E4236', '#743C31', '#88493B', '#483E38')
   );
   brickTexB.repeat.set(3, 1.6);
 
-  // C: Weathered Terracotta (Dusty terracotta, restrained saturation: #B06B52, #A9614A, #B9785F)
-  const brickTexC = getCachedTexture('b_v11_brickTexC', () =>
-    createUrbanBrickCanvas('#B06B52', '#9E5D47', '#B9785F', '#A9614A', '#6E645A')
-  );
-  brickTexC.repeat.set(3, 1.6);
-
-  // Warm stone textures (Muted stone grey / warm concrete — prevents bright white stripes)
-  const stoneTexA = getCachedTexture('b_v11_stoneTexA', () => createMasonryStoneCanvas('#7A7369'));
-  stoneTexA.repeat.set(2, 2);
-
-  const stoneTexB = getCachedTexture('b_v11_stoneTexB', () => createMasonryStoneCanvas('#68625A'));
-  stoneTexB.repeat.set(2, 2);
-
-  const stoneTexC = getCachedTexture('b_v11_stoneTexC', () => createMasonryStoneCanvas('#827A70'));
-  stoneTexC.repeat.set(2, 2);
+  // Warm Limestone / Concrete Slabs
+  const stoneTex = getCachedTexture('b_res_stone', () => createLimestoneCanvas('#9A9388'));
+  stoneTex.repeat.set(2, 2);
 
   return {
-    // ---------------- Palette A: Burnt Clay ----------------
-    brickWallA: getMat('b_v11_brickWallA', () => new THREE.MeshStandardMaterial({
-      color: 0xffffff, // 100% fidelity to procedural canvas colors
+    brickWallA: getMat('b_res_matBrickA', () => new THREE.MeshStandardMaterial({
+      color: 0xffffff,
       map: brickTexA,
       roughness: 0.85,
       metalness: 0.02,
     })),
-    stoneA: getMat('b_v11_stoneA', () => new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      map: stoneTexA,
-      roughness: 0.80,
-      metalness: 0.04,
-    })),
-    frameA: getMat('b_v11_frameA', () => new THREE.MeshStandardMaterial({
-      color: 0x25282D, // Charcoal frame
-      roughness: 0.45,
-      metalness: 0.45,
-    })),
-    metalA: getMat('b_v11_metalA', () => new THREE.MeshStandardMaterial({
-      color: 0x2B2E33, // Dark Graphite
-      roughness: 0.50,
-      metalness: 0.60,
-    })),
-    glassA: getMat('b_v11_glassA', () => new THREE.MeshStandardMaterial({
-      color: 0x343C45, // Smoky dark blue-grey
-      roughness: 0.28,
-      metalness: 0.15,
-      transparent: true,
-      opacity: 0.88,
-    })),
-
-    // ---------------- Palette B: Dark Brown Brick ----------------
-    brickWallB: getMat('b_v11_brickWallB', () => new THREE.MeshStandardMaterial({
+    brickWallB: getMat('b_res_matBrickB', () => new THREE.MeshStandardMaterial({
       color: 0xffffff,
       map: brickTexB,
-      roughness: 0.86,
+      roughness: 0.85,
       metalness: 0.02,
     })),
-    stoneB: getMat('b_v11_stoneB', () => new THREE.MeshStandardMaterial({
+    stoneSlab: getMat('b_res_matStone', () => new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      map: stoneTexB,
-      roughness: 0.80,
-      metalness: 0.04,
-    })),
-    frameB: getMat('b_v11_frameB', () => new THREE.MeshStandardMaterial({
-      color: 0x222428,
-      roughness: 0.42,
-      metalness: 0.50,
-    })),
-    metalB: getMat('b_v11_metalB', () => new THREE.MeshStandardMaterial({
-      color: 0x24262A,
-      roughness: 0.52,
-      metalness: 0.60,
-    })),
-    glassB: getMat('b_v11_glassB', () => new THREE.MeshStandardMaterial({
-      color: 0x36393E, // Smoky neutral grey
-      roughness: 0.28,
-      metalness: 0.15,
-      transparent: true,
-      opacity: 0.88,
-    })),
-
-    // ---------------- Palette C: Weathered Terracotta ----------------
-    brickWallC: getMat('b_v11_brickWallC', () => new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      map: brickTexC,
-      roughness: 0.84,
-      metalness: 0.02,
-    })),
-    stoneC: getMat('b_v11_stoneC', () => new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      map: stoneTexC,
+      map: stoneTex,
       roughness: 0.78,
       metalness: 0.04,
     })),
-    frameC: getMat('b_v11_frameC', () => new THREE.MeshStandardMaterial({
-      color: 0x2A2723, // Bronze-charcoal
-      roughness: 0.44,
-      metalness: 0.48,
+    windowFrame: getMat('b_res_matFrame', () => new THREE.MeshStandardMaterial({
+      color: 0x25272B, // Charcoal frame
+      roughness: 0.45,
+      metalness: 0.40,
     })),
-    metalC: getMat('b_v11_metalC', () => new THREE.MeshStandardMaterial({
-      color: 0x2D2A26,
-      roughness: 0.52,
-      metalness: 0.58,
+    metalRailing: getMat('b_res_matRailing', () => new THREE.MeshStandardMaterial({
+      color: 0x2A2C30, // Dark graphite
+      roughness: 0.50,
+      metalness: 0.60,
     })),
-    glassC: getMat('b_v11_glassC', () => new THREE.MeshStandardMaterial({
-      color: 0x323B38, // Subtle grey-green smoke
-      roughness: 0.28,
+    windowGlass: getMat('b_res_matGlass', () => new THREE.MeshStandardMaterial({
+      color: 0x3A444D, // Smoky blue-grey
+      roughness: 0.22,
       metalness: 0.15,
       transparent: true,
-      opacity: 0.88,
+      opacity: 0.86,
     })),
-
-    // Common materials
-    interiorDark: getMat('b_v11_interiorDark', () => new THREE.MeshBasicMaterial({
-      color: 0x1F2328, // Deep charcoal interior (provides depth, not pure black)
+    interiorDark: getMat('b_res_interiorDark', () => new THREE.MeshBasicMaterial({
+      color: 0x1C1E20, // Dark warm charcoal shadow backing
     })),
-    interiorWarm: getMat('b_v11_interiorWarm', () => new THREE.MeshBasicMaterial({
-      color: 0xA67644, // Soft, muted amber interior backing (architectural, not neon)
+    interiorWarm: getMat('b_res_interiorWarm', () => new THREE.MeshBasicMaterial({
+      color: 0xA07346, // Soft warm amber interior lamplight
     })),
-    acUnit: getMat('b_v11_acUnit', () => new THREE.MeshStandardMaterial({
-      color: 0x9E9991, // Muted concrete/metal casing
-      roughness: 0.60,
+    utilityCasing: getMat('b_res_utilityCasing', () => new THREE.MeshStandardMaterial({
+      color: 0x8E8982,
+      roughness: 0.65,
       metalness: 0.20,
     })),
-    acGrill: getMat('b_v11_acGrill', () => new THREE.MeshStandardMaterial({
-      color: 0x2C3035,
+    utilityGrill: getMat('b_res_utilityGrill', () => new THREE.MeshStandardMaterial({
+      color: 0x2A2D32,
       roughness: 0.70,
       metalness: 0.50,
     })),
@@ -289,197 +191,235 @@ export function getBrickMaterials() {
 }
 
 // ============================================================================
-// ARCHITECTURAL HELPERS: DEEP RECESSED WINDOW & SIMPLIFIED OPEN BALCONY
+// RESIDENTIAL ARCHITECTURAL HELPERS
 // ============================================================================
 
+type BrickMats = ReturnType<typeof getBrickMaterials>;
+
 /**
- * Creates a deeply recessed masonry window opening:
- * Outer brick reveal -> Muted Stone Sill at base -> Muted Stone Lintel on top -> Dark Frame -> Glass -> Interior Backing
+ * Believable residential punched window:
+ * - Stone sill at base with gentle overhang
+ * - Clean charcoal frame recessed into brick
+ * - Single glass plane with positive depth separation
+ * - Central vertical mullion
+ * - Dark or warm interior backing plane with positive clearance from wall
  */
-function createMasonryWindow(
+function createResidentialWindow(
   width: number,
   height: number,
-  recessDepth: number,
-  stoneMat: THREE.Material,
-  frameMat: THREE.Material,
-  glassMat: THREE.Material,
-  useWarmInterior: boolean
+  mats: BrickMats,
+  isLit: boolean,
+  hasMullion: boolean = true
 ): THREE.Group {
   const g = new THREE.Group();
-  const materials = getBrickMaterials();
 
-  const sillH = 0.06; // Thinner sill for refined profile
-  const lintelH = 0.08;
-  const sillOverhang = 0.04;
-
-  // 1. Muted Stone Sill at bottom
-  const sillGeo = new THREE.BoxGeometry(width + sillOverhang * 2, sillH, recessDepth + 0.06);
-  const sill = new THREE.Mesh(sillGeo, stoneMat);
-  sill.position.set(0, -height / 2 + sillH / 2, 0.03);
-  sill.castShadow = true;
-  sill.receiveShadow = true;
-  g.add(sill);
-
-  // 2. Muted Stone Lintel across top
-  const lintelGeo = new THREE.BoxGeometry(width + sillOverhang * 2, lintelH, recessDepth + 0.04);
-  const lintel = new THREE.Mesh(lintelGeo, stoneMat);
-  lintel.position.set(0, height / 2 - lintelH / 2, 0.02);
-  lintel.castShadow = true;
-  lintel.receiveShadow = true;
-  g.add(lintel);
-
-  // 3. Deep Recessed Metal Frame
-  const actualGlassW = Math.max(0.12, width - 0.06);
-  const actualGlassH = Math.max(0.12, height - sillH - lintelH - 0.03);
-  const frameY = (-sillH + lintelH) / 2;
-
+  const sillH = 0.05;
+  const sillD = 0.08;
+  const sillOverhang = 0.03;
   const frameThick = 0.04;
-  const frameGeo = new THREE.BoxGeometry(actualGlassW, actualGlassH, 0.07);
-  const frame = new THREE.Mesh(frameGeo, frameMat);
-  frame.position.set(0, frameY, -recessDepth * 0.35);
-  frame.castShadow = true;
-  frame.receiveShadow = true;
-  g.add(frame);
 
-  // 4. Glass Pane
-  const glassGeo = new THREE.BoxGeometry(
-    actualGlassW - frameThick * 2,
-    actualGlassH - frameThick * 2,
-    0.02
-  );
-  const glass = new THREE.Mesh(glassGeo, glassMat);
-  glass.position.set(0, frameY, -recessDepth * 0.32);
+  // Layer 1: Interior Backing Plane (sits 8mm in front of wall face, completely covering the brick)
+  const glassW = width - frameThick * 2;
+  const glassH = height - frameThick * 2;
+  const backGeo = new THREE.PlaneGeometry(glassW, glassH);
+  const backMat = isLit ? mats.interiorWarm : mats.interiorDark;
+  const back = new THREE.Mesh(backGeo, backMat);
+  back.position.set(0, 0, 0.008);
+  g.add(back);
+
+  // Layer 2: Glass Pane (single plane, 18mm in front of backing plane at Z = 0.026)
+  const glassGeo = new THREE.PlaneGeometry(glassW, glassH);
+  const glass = new THREE.Mesh(glassGeo, mats.windowGlass);
+  glass.position.set(0, 0, 0.026);
   g.add(glass);
 
-  // 5. Interior Backing Plane (Dark or Soft Amber)
-  const backGeo = new THREE.PlaneGeometry(
-    actualGlassW - frameThick * 2,
-    actualGlassH - frameThick * 2
-  );
-  const backMat = useWarmInterior ? materials.interiorWarm : materials.interiorDark;
-  const backMesh = new THREE.Mesh(backGeo, backMat);
-  backMesh.position.set(0, frameY, -recessDepth * 0.48);
-  g.add(backMesh);
-
-  // Optional central vertical mullion for wide masonry openings
-  if (width > 0.85) {
-    const mullionGeo = new THREE.BoxGeometry(0.04, actualGlassH, 0.05);
-    const mullion = new THREE.Mesh(mullionGeo, frameMat);
-    mullion.position.set(0, frameY, -recessDepth * 0.30);
+  // Layer 3: Central Vertical Mullion (divides window into two sashes)
+  if (hasMullion && width > 0.65) {
+    const mullionGeo = new THREE.BoxGeometry(0.035, glassH, 0.016);
+    const mullion = new THREE.Mesh(mullionGeo, mats.windowFrame);
+    mullion.position.set(0, 0, 0.032);
     mullion.castShadow = true;
     g.add(mullion);
   }
 
+  // Layer 4: Charcoal Window Frame (wraps around glass and backing, anchoring against wall)
+  const frameGeo = new THREE.BoxGeometry(width, height, 0.045);
+  const frame = new THREE.Mesh(frameGeo, mats.windowFrame);
+  frame.position.set(0, 0, 0.024);
+  frame.castShadow = true;
+  g.add(frame);
+
+  // Layer 5: Clean Stone Sill at base (projects outward at Z = 0.038)
+  const sillGeo = new THREE.BoxGeometry(width + sillOverhang * 2, sillH, sillD);
+  const sill = new THREE.Mesh(sillGeo, mats.stoneSlab);
+  sill.position.set(0, -height / 2 - sillH / 2, 0.038);
+  sill.castShadow = true;
+  sill.receiveShadow = true;
+  g.add(sill);
+
   return g;
 }
 
 /**
- * Creates an outdoor AC compressor unit on masonry brackets
+ * Believable residential glazed balcony door:
+ * - Human-scale height (~1.96m)
+ * - Charcoal frame with glazed panel and handle divider
+ * - Distinct depth separation between door frame, glass, and backing
  */
-function createBrickAcUnit(mats: ReturnType<typeof getBrickMaterials>): THREE.Group {
+function createBalconyDoor(
+  width: number,
+  height: number,
+  mats: BrickMats,
+  isLit: boolean
+): THREE.Group {
   const g = new THREE.Group();
-  const box = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.46, 0.32), mats.acUnit);
+  const frameThick = 0.045;
+  const glassW = width - frameThick * 2;
+  const glassH = height - frameThick * 2;
+
+  // Layer 1: Interior Backing Plane (8mm in front of wall face)
+  const backMat = isLit ? mats.interiorWarm : mats.interiorDark;
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(glassW, glassH), backMat);
+  back.position.set(0, 0, 0.008);
+  g.add(back);
+
+  // Layer 2: Glass Pane (single plane, 18mm in front of backing at Z = 0.026)
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(glassW, glassH), mats.windowGlass);
+  glass.position.set(0, 0, 0.026);
+  g.add(glass);
+
+  // Layer 3: Mid-rail / door handle height divider
+  const midRail = new THREE.Mesh(new THREE.BoxGeometry(glassW, 0.05, 0.016), mats.windowFrame);
+  midRail.position.set(0, -height * 0.12, 0.032);
+  midRail.castShadow = true;
+  g.add(midRail);
+
+  // If wide (double sliding door), add vertical center stile
+  if (width > 1.1) {
+    const stile = new THREE.Mesh(new THREE.BoxGeometry(0.04, glassH, 0.016), mats.windowFrame);
+    stile.position.set(0, 0, 0.032);
+    stile.castShadow = true;
+    g.add(stile);
+  }
+
+  // Layer 4: Perimeter Frame
+  const frameGeo = new THREE.BoxGeometry(width, height, 0.045);
+  const frame = new THREE.Mesh(frameGeo, mats.windowFrame);
+  frame.position.set(0, 0, 0.024);
+  frame.castShadow = true;
+  g.add(frame);
+
+  return g;
+}
+
+/**
+ * Simplified, open residential metal railing:
+ * - Strong top handrail at human waist/chest height (~0.85m)
+ * - 2-3 vertical structural posts
+ * - Single mid-rail (large open sections, NOT a cage)
+ */
+function createResidentialRailing(
+  width: number,
+  depth: number,
+  height: number,
+  mat: THREE.Material
+): THREE.Group {
+  const g = new THREE.Group();
+  const postSize = 0.035;
+
+  // Front top handrail
+  const topFront = new THREE.Mesh(new THREE.BoxGeometry(width, 0.04, 0.04), mat);
+  topFront.position.set(0, height, depth / 2 - postSize / 2);
+  topFront.castShadow = true;
+  g.add(topFront);
+
+  // Front mid-rail
+  const midFront = new THREE.Mesh(new THREE.BoxGeometry(width - postSize * 2, 0.025, 0.025), mat);
+  midFront.position.set(0, height * 0.45, depth / 2 - postSize / 2);
+  g.add(midFront);
+
+  // Front corner posts
+  const postGeo = new THREE.BoxGeometry(postSize, height, postSize);
+  const postL = new THREE.Mesh(postGeo, mat);
+  postL.position.set(-width / 2 + postSize / 2, height / 2, depth / 2 - postSize / 2);
+  postL.castShadow = true;
+  g.add(postL);
+
+  const postR = new THREE.Mesh(postGeo, mat);
+  postR.position.set(width / 2 - postSize / 2, height / 2, depth / 2 - postSize / 2);
+  postR.castShadow = true;
+  g.add(postR);
+
+  // Center vertical support
+  if (width > 1.0) {
+    const postMid = new THREE.Mesh(postGeo, mat);
+    postMid.position.set(0, height / 2, depth / 2 - postSize / 2);
+    postMid.castShadow = true;
+    g.add(postMid);
+  }
+
+  // Side railings (if projecting balcony)
+  if (depth > 0.25) {
+    const sideRailW = depth - postSize;
+
+    // Left side
+    const topL = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, sideRailW), mat);
+    topL.position.set(-width / 2 + postSize / 2, height, 0);
+    topL.castShadow = true;
+    g.add(topL);
+
+    const midL = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, sideRailW), mat);
+    midL.position.set(-width / 2 + postSize / 2, height * 0.45, 0);
+    g.add(midL);
+
+    const backPostL = new THREE.Mesh(postGeo, mat);
+    backPostL.position.set(-width / 2 + postSize / 2, height / 2, -depth / 2 + postSize / 2);
+    backPostL.castShadow = true;
+    g.add(backPostL);
+
+    // Right side
+    const topR = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, sideRailW), mat);
+    topR.position.set(width / 2 - postSize / 2, height, 0);
+    topR.castShadow = true;
+    g.add(topR);
+
+    const midR = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, sideRailW), mat);
+    midR.position.set(width / 2 - postSize / 2, height * 0.45, 0);
+    g.add(midR);
+
+    const backPostR = new THREE.Mesh(postGeo, mat);
+    backPostR.position.set(width / 2 - postSize / 2, height / 2, -depth / 2 + postSize / 2);
+    backPostR.castShadow = true;
+    g.add(backPostR);
+  }
+
+  return g;
+}
+
+/**
+ * Compact wall-mounted AC compressor unit on rear utility wall
+ */
+function createUtilityAcUnit(mats: BrickMats): THREE.Group {
+  const g = new THREE.Group();
+  const box = new THREE.Mesh(new THREE.BoxGeometry(0.60, 0.42, 0.30), mats.utilityCasing);
   box.castShadow = true;
   box.receiveShadow = true;
   g.add(box);
 
-  const grill = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.32, 0.02), mats.acGrill);
-  grill.position.set(0.04, 0, -0.17);
+  const grill = new THREE.Mesh(new THREE.BoxGeometry(0.40, 0.30, 0.02), mats.utilityGrill);
+  grill.position.set(0.05, 0, -0.16);
   g.add(grill);
 
-  const b1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.42), mats.metalA);
-  b1.position.set(-0.22, -0.24, 0.06);
+  const bracketGeo = new THREE.BoxGeometry(0.04, 0.04, 0.38);
+  const b1 = new THREE.Mesh(bracketGeo, mats.metalRailing);
+  b1.position.set(-0.20, -0.22, 0.05);
   b1.castShadow = true;
   g.add(b1);
 
-  const b2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.42), mats.metalA);
-  b2.position.set(0.22, -0.24, 0.06);
+  const b2 = new THREE.Mesh(bracketGeo, mats.metalRailing);
+  b2.position.set(0.20, -0.22, 0.05);
   b2.castShadow = true;
   g.add(b2);
-
-  return g;
-}
-
-/**
- * Simplified Urban Metal Balcony Railing:
- * - Strong top rail
- * - 2-3 vertical supports
- * - Single mid-rail with large open sections
- * - Avoids thin cage bars so architectural recess and mass remain primary.
- */
-function createUrbanMetalBalcony(
-  width: number,
-  depth: number,
-  height: number,
-  metalMat: THREE.Material
-): THREE.Group {
-  const g = new THREE.Group();
-  const postW = 0.04;
-  const postGeo = new THREE.BoxGeometry(postW, height, postW);
-
-  // Outer corner posts
-  const pFrontL = new THREE.Mesh(postGeo, metalMat);
-  pFrontL.position.set(-width / 2 + postW / 2, height / 2, depth / 2 - postW / 2);
-  pFrontL.castShadow = true;
-  g.add(pFrontL);
-
-  const pFrontR = new THREE.Mesh(postGeo, metalMat);
-  pFrontR.position.set(width / 2 - postW / 2, height / 2, depth / 2 - postW / 2);
-  pFrontR.castShadow = true;
-  g.add(pFrontR);
-
-  if (depth > 0.25) {
-    const pBackL = new THREE.Mesh(postGeo, metalMat);
-    pBackL.position.set(-width / 2 + postW / 2, height / 2, -depth / 2 + postW / 2);
-    pBackL.castShadow = true;
-    g.add(pBackL);
-
-    const pBackR = new THREE.Mesh(postGeo, metalMat);
-    pBackR.position.set(width / 2 - postW / 2, height / 2, -depth / 2 + postW / 2);
-    pBackR.castShadow = true;
-    g.add(pBackR);
-  }
-
-  // Strong Top Handrails (bold square profile)
-  const topFront = new THREE.Mesh(new THREE.BoxGeometry(width, 0.05, 0.05), metalMat);
-  topFront.position.set(0, height, depth / 2 - postW / 2);
-  topFront.castShadow = true;
-  g.add(topFront);
-
-  if (depth > 0.25) {
-    const topSideL = new THREE.Mesh(new THREE.BoxGeometry(postW, 0.05, depth), metalMat);
-    topSideL.position.set(-width / 2 + postW / 2, height, 0);
-    topSideL.castShadow = true;
-    g.add(topSideL);
-
-    const topSideR = new THREE.Mesh(new THREE.BoxGeometry(postW, 0.05, depth), metalMat);
-    topSideR.position.set(width / 2 - postW / 2, height, 0);
-    topSideR.castShadow = true;
-    g.add(topSideR);
-  }
-
-  // Single Mid-Rail (large open sections, not a dense cage)
-  const midFront = new THREE.Mesh(new THREE.BoxGeometry(width - postW * 2, 0.025, 0.025), metalMat);
-  midFront.position.set(0, height * 0.45, depth / 2 - postW / 2);
-  g.add(midFront);
-
-  if (depth > 0.25) {
-    const midSideL = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, depth - postW * 2), metalMat);
-    midSideL.position.set(-width / 2 + postW / 2, height * 0.45, 0);
-    g.add(midSideL);
-
-    const midSideR = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, depth - postW * 2), metalMat);
-    midSideR.position.set(width / 2 - postW / 2, height * 0.45, 0);
-    g.add(midSideR);
-  }
-
-  // 1 Center Vertical Support Post
-  if (width > 0.8) {
-    const midPost = new THREE.Mesh(new THREE.BoxGeometry(postW, height, postW), metalMat);
-    midPost.position.set(0, height / 2, depth / 2 - postW / 2);
-    midPost.castShadow = true;
-    g.add(midPost);
-  }
 
   return g;
 }
@@ -497,7 +437,7 @@ export function buildBrickApartment(
   const mats = getBrickMaterials();
   const group = new THREE.Group();
 
-  const variantIndex = Math.abs(floorIndex) % 3; // 0 = Variant A, 1 = Variant B, 2 = Variant C
+  const variantIndex = Math.abs(floorIndex) % 3; // 0 = A, 1 = B, 2 = C
   const variantLetter = ['A', 'B', 'C'][variantIndex];
   group.name = `Floor_${floorIndex}_BRICK_APARTMENT_${variantLetter}`;
 
@@ -508,543 +448,335 @@ export function buildBrickApartment(
     mesh.receiveShadow = true;
   };
 
-  // Thinner slab bands (0.08m instead of 0.14m) to eliminate continuous white horizontal stripes
-  const slabH = 0.08;
+  // Structural Floor Slabs: clean, continuous, warm limestone
+  const slabH = 0.12;
   const wallH = h - slabH * 2;
 
-  // Deterministic 15-20% warm interior distribution across major windows (no Math.random())
-  const isWindowWarm = (slotId: number) =>
-    Math.abs(floorIndex * 13 + slotId * 7 + 5) % 6 === 0;
+  // Lintel line alignment:
+  // In real buildings, all window and door heads align on the same horizontal datum line.
+  // floor level Y = -h/2 + slabH
+  // lintel Y = floor level + 1.96m
+  const floorY = -h / 2 + slabH;
+  const lintelY = floorY + 1.96;
+
+  // Standard residential heights:
+  const doorH = 1.96;
+  const doorCenterY = floorY + doorH / 2; // top aligns at lintelY
+
+  const bedWinH = 1.25;
+  const bedWinCenterY = lintelY - bedWinH / 2; // top aligns at lintelY, sill sits at human waist level
+
+  const livingWinH = 1.65;
+  const livingWinCenterY = lintelY - livingWinH / 2; // panoramic low-sill living room window
+
+  // Railing height
+  const railH = 0.85;
+
+  // Deterministic lived-in lamplight (~20% of rooms)
+  const isLit = (slot: number) => Math.abs(floorIndex * 7 + slot * 13 + 3) % 5 === 0;
 
   // =========================================================================
-  // BRICK VARIANT A: THE PROJECTING BRICK BAY (BURNT CLAY PALETTE)
-  // Major Silhouette Feature:
-  // - Large heavy brick bay window projecting forward by 0.95m (width 2.20m)
-  // - Front masonry window + Left/Right reveal windows
-  // - Opposite front corner has compact balcony with simplified metal railing
-  // - Reads unmistakably as a forward-projecting volume from 3/4 camera
+  // COMMON STRUCTURAL FLOOR SEPARATION: CLEAN BOTTOM & TOP SLABS
+  // Replaces all arbitrary floating facade strips with two clean, restrained slab edges.
+  // =========================================================================
+  const botSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), mats.stoneSlab);
+  botSlab.position.y = -h / 2 + slabH / 2;
+  setupMesh(botSlab);
+  group.add(botSlab);
+
+  const topSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), mats.stoneSlab);
+  topSlab.position.y = h / 2 - slabH / 2;
+  setupMesh(topSlab);
+  group.add(topSlab);
+
+  // =========================================================================
+  // VARIANT A: LIVING ROOM + PROJECTING SIDE BALCONY
+  // Facade Logic:
+  // - Left side (bedroom zone): Solid brick wall with two residential bedroom windows.
+  // - Right side (living room zone): Large living room with a true usable projecting balcony
+  //   and a wide sliding glass door directly leading to it.
   // =========================================================================
   if (variantIndex === 0) {
     const brickMat = mats.brickWallA;
-    const stoneMat = mats.stoneA;
-    const frameMat = mats.frameA;
-    const metalMat = mats.metalA;
-    const glassMat = mats.glassA;
+    const wallFaceZ = d / 2 - 0.02;
+    const wallLeftX = -w / 2 + 0.02;
+    const wallRightX = w / 2 - 0.02;
+    const wallRearZ = -d / 2 + 0.02;
 
-    // 1. BASE AND TOP SLABS (Muted warm stone grey, thin profile)
-    const botSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), stoneMat);
-    botSlab.position.y = -h / 2 + slabH / 2;
-    setupMesh(botSlab);
-    group.add(botSlab);
-
-    const topSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), stoneMat);
-    topSlab.position.y = h / 2 - slabH / 2;
-    setupMesh(topSlab);
-    group.add(topSlab);
-
-    // 2. MAIN BRICK CORE VOLUME
+    // 1. Solid Brick Exterior Body
     const core = new THREE.Mesh(new THREE.BoxGeometry(w - 0.04, wallH, d - 0.04), brickMat);
     setupMesh(core);
     group.add(core);
 
-    // 3. SIGNATURE MAJOR PROJECTING BRICK BAY (Width: 2.20m, Forward Projection: 0.95m)
-    const bayW = 2.20;
-    const bayProj = 0.95;
-    const bayCenterX = -0.55;
-    const bayCenterZ = d / 2 + bayProj / 2;
+    // 2. Bedroom Windows on Left Facade Zone (mounted directly on wall surface)
+    const winBed1 = createResidentialWindow(0.85, bedWinH, mats, isLit(0), true);
+    winBed1.position.set(-1.35, bedWinCenterY, wallFaceZ);
+    group.add(winBed1);
 
-    // Bay bottom and top stone slabs
-    const bayBotSlab = new THREE.Mesh(new THREE.BoxGeometry(bayW, slabH, bayProj), stoneMat);
-    bayBotSlab.position.set(bayCenterX, -h / 2 + slabH / 2, bayCenterZ);
-    setupMesh(bayBotSlab);
-    group.add(bayBotSlab);
+    const winBed2 = createResidentialWindow(0.85, bedWinH, mats, isLit(1), true);
+    winBed2.position.set(-0.35, bedWinCenterY, wallFaceZ);
+    group.add(winBed2);
 
-    const bayTopSlab = new THREE.Mesh(new THREE.BoxGeometry(bayW, slabH, bayProj), stoneMat);
-    bayTopSlab.position.set(bayCenterX, h / 2 - slabH / 2, bayCenterZ);
-    setupMesh(bayTopSlab);
-    group.add(bayTopSlab);
+    // 3. Living Room Glazed Balcony Door on Right Facade Zone
+    const balcCenterX = 1.20;
+    const livingDoor = createBalconyDoor(1.35, doorH, mats, isLit(2));
+    livingDoor.position.set(balcCenterX, doorCenterY, wallFaceZ);
+    group.add(livingDoor);
 
-    // Heavy solid brick side piers of the bay
-    const pierW = 0.28;
-    const bayPierL = new THREE.Mesh(new THREE.BoxGeometry(pierW, wallH, bayProj), brickMat);
-    bayPierL.position.set(bayCenterX - bayW / 2 + pierW / 2, 0, bayCenterZ);
-    setupMesh(bayPierL);
-    group.add(bayPierL);
-
-    const bayPierR = new THREE.Mesh(new THREE.BoxGeometry(pierW, wallH, bayProj), brickMat);
-    bayPierR.position.set(bayCenterX + bayW / 2 - pierW / 2, 0, bayCenterZ);
-    setupMesh(bayPierR);
-    group.add(bayPierR);
-
-    // Brick parapet/fascia above and below bay window
-    const bayFasciaH = 0.22;
-    const bayTopFascia = new THREE.Mesh(
-      new THREE.BoxGeometry(bayW - pierW * 2, bayFasciaH, 0.12),
-      brickMat
-    );
-    bayTopFascia.position.set(bayCenterX, wallH / 2 - bayFasciaH / 2, d / 2 + bayProj - 0.06);
-    setupMesh(bayTopFascia);
-    group.add(bayTopFascia);
-
-    const bayBotFascia = new THREE.Mesh(
-      new THREE.BoxGeometry(bayW - pierW * 2, bayFasciaH, 0.12),
-      brickMat
-    );
-    bayBotFascia.position.set(bayCenterX, -wallH / 2 + bayFasciaH / 2, d / 2 + bayProj - 0.06);
-    setupMesh(bayBotFascia);
-    group.add(bayBotFascia);
-
-    // Bay Front Deep Masonry Window
-    const bayFrontW = bayW - pierW * 2;
-    const bayFrontWin = createMasonryWindow(
-      bayFrontW,
-      wallH - bayFasciaH * 2,
-      0.16,
-      stoneMat,
-      frameMat,
-      glassMat,
-      isWindowWarm(0)
-    );
-    bayFrontWin.position.set(bayCenterX, 0, d / 2 + bayProj - 0.08);
-    group.add(bayFrontWin);
-
-    // Bay Left and Right Reveal Glazing (looking sideways out of the projecting bay)
-    const sideWinL = createMasonryWindow(
-      bayProj - 0.18,
-      wallH * 0.78,
-      0.12,
-      stoneMat,
-      frameMat,
-      glassMat,
-      false
-    );
-    sideWinL.rotation.y = -Math.PI / 2;
-    sideWinL.position.set(bayCenterX - bayW / 2 + 0.05, 0, bayCenterZ);
-    group.add(sideWinL);
-
-    const sideWinR = createMasonryWindow(
-      bayProj - 0.18,
-      wallH * 0.78,
-      0.12,
-      stoneMat,
-      frameMat,
-      glassMat,
-      false
-    );
-    sideWinR.rotation.y = Math.PI / 2;
-    sideWinR.position.set(bayCenterX + bayW / 2 - 0.05, 0, bayCenterZ);
-    group.add(sideWinR);
-
-    // 4. FRONT RIGHT: COMPACT URBAN BALCONY WITH SIMPLIFIED RAILING
-    const balcW = 1.15;
-    const balcD = 0.70;
-    const balcCenterX = 1.25;
+    // 4. Usable Projecting Balcony
+    const balcW = 1.60;
+    const balcD = 1.00;
     const balcCenterZ = d / 2 + balcD / 2;
 
-    const balcSlab = new THREE.Mesh(new THREE.BoxGeometry(balcW, slabH, balcD), stoneMat);
-    balcSlab.position.set(balcCenterX, -h / 2 + slabH / 2, balcCenterZ);
+    // Balcony Slab (aligns with floor level)
+    const balcSlab = new THREE.Mesh(new THREE.BoxGeometry(balcW, slabH, balcD), mats.stoneSlab);
+    balcSlab.position.set(balcCenterX, floorY - slabH / 2, balcCenterZ);
     setupMesh(balcSlab);
     group.add(balcSlab);
 
-    const balcRailH = 0.85;
-    const balcRail = createUrbanMetalBalcony(balcW, balcD, balcRailH, metalMat);
-    balcRail.position.set(balcCenterX, -h / 2 + slabH, balcCenterZ);
-    group.add(balcRail);
+    // Balcony Railing
+    const balcRailing = createResidentialRailing(balcW, balcD, railH, mats.metalRailing);
+    balcRailing.position.set(balcCenterX, floorY, balcCenterZ);
+    group.add(balcRailing);
 
-    // Deep French Doorway leading onto Balcony
-    const balcDoor = createMasonryWindow(
-      balcW - 0.20,
-      wallH * 0.90,
-      0.18,
-      stoneMat,
-      frameMat,
-      glassMat,
-      isWindowWarm(1)
-    );
-    balcDoor.position.set(balcCenterX, 0, d / 2 - 0.06);
-    group.add(balcDoor);
-
-    // 5. LEFT FACADE: Two deeply punched masonry windows
-    const leftWin1 = createMasonryWindow(0.85, wallH * 0.76, 0.18, stoneMat, frameMat, glassMat, false);
+    // 5. Left Facade: 2 Bedroom Windows
+    const leftWin1 = createResidentialWindow(0.85, bedWinH, mats, false, true);
     leftWin1.rotation.y = -Math.PI / 2;
-    leftWin1.position.set(-w / 2 + 0.06, 0, 0.85);
+    leftWin1.position.set(wallLeftX, bedWinCenterY, 0.85);
     group.add(leftWin1);
 
-    const leftWin2 = createMasonryWindow(0.85, wallH * 0.76, 0.18, stoneMat, frameMat, glassMat, isWindowWarm(2));
+    const leftWin2 = createResidentialWindow(0.85, bedWinH, mats, isLit(3), true);
     leftWin2.rotation.y = -Math.PI / 2;
-    leftWin2.position.set(-w / 2 + 0.06, 0, -0.85);
+    leftWin2.position.set(wallLeftX, bedWinCenterY, -0.85);
     group.add(leftWin2);
 
-    // 6. RIGHT FACADE: Deep masonry window on rear half
-    const rightWin = createMasonryWindow(0.95, wallH * 0.76, 0.18, stoneMat, frameMat, glassMat, false);
+    // 6. Right Facade: Living Room Side Window
+    const rightWin = createResidentialWindow(1.05, livingWinH, mats, isLit(2), true);
     rightWin.rotation.y = Math.PI / 2;
-    rightWin.position.set(w / 2 - 0.06, 0, -0.75);
+    rightWin.position.set(wallRightX, livingWinCenterY, -0.60);
     group.add(rightWin);
 
-    // 7. REAR FACADE: Two robust masonry windows + 1 wall-mounted AC unit
-    const rearWin1 = createMasonryWindow(0.95, wallH * 0.74, 0.18, stoneMat, frameMat, glassMat, false);
+    // 7. Rear Facade: Kitchen/Bedroom Windows + AC compressor
+    const rearWin1 = createResidentialWindow(0.85, bedWinH, mats, false, true);
     rearWin1.rotation.y = Math.PI;
-    rearWin1.position.set(-0.85, 0, -d / 2 + 0.06);
+    rearWin1.position.set(-0.85, bedWinCenterY, wallRearZ);
     group.add(rearWin1);
 
-    const rearWin2 = createMasonryWindow(0.95, wallH * 0.74, 0.18, stoneMat, frameMat, glassMat, isWindowWarm(3));
+    const rearWin2 = createResidentialWindow(0.85, bedWinH, mats, isLit(4), true);
     rearWin2.rotation.y = Math.PI;
-    rearWin2.position.set(0.85, 0, -d / 2 + 0.06);
+    rearWin2.position.set(0.85, bedWinCenterY, wallRearZ);
     group.add(rearWin2);
 
-    const ac = createBrickAcUnit(mats);
-    ac.position.set(-w / 2 + 0.55, 0.15, -d / 2 - 0.18);
+    const ac = createUtilityAcUnit(mats);
+    ac.position.set(-w / 2 + 0.55, floorY + 0.40, -d / 2 - 0.16);
     group.add(ac);
   }
 
   // =========================================================================
-  // BRICK VARIANT B: DEEP RECESSED BALCONY / CORNER CUT (DARK BROWN BRICK)
-  // Major Silhouette Feature:
-  // - True negative-space feature: front-left corner is completely carved out (2.10m x 1.90m)
-  // - Missing corner clearly visible from 3/4 gameplay camera (NO outer corner post)
-  // - Balcony floor sits inside the recess with simplified dark metal railing
-  // - Brick back wall with deep French door, inner reveal window
-  // - Solid right wing (2.10m wide) with deeply punched masonry windows
+  // VARIANT B: RECESSED LOGGIA / COVERED BALCONY
+  // Facade Logic:
+  // - Left side: Recessed loggia carved into the building mass (usable covered outdoor room).
+  //   Inside sits the balcony deck, tall balcony door, and living room window.
+  //   Outer perimeter is framed by solid brick walls and a clean dark railing.
+  // - Right side: Solid brick facade with two residential bedroom windows.
   // =========================================================================
   else if (variantIndex === 1) {
     const brickMat = mats.brickWallB;
-    const stoneMat = mats.stoneB;
-    const frameMat = mats.frameB;
-    const metalMat = mats.metalB;
-    const glassMat = mats.glassB;
+    const wallFaceZ = d / 2 - 0.02;
+    const wallLeftX = -w / 2 + 0.02;
+    const wallRightX = w / 2 - 0.02;
+    const wallRearZ = -d / 2 + 0.02;
 
-    const cutW = 2.10; // Exact half of width
-    const cutD = 1.90; // Deep corner recess
-    const solidW = w - cutW; // 2.10m
-    const solidRearD = d - cutD; // 2.30m
+    const loggiaW = 1.75;
+    const loggiaD = 1.15;
+    const solidW = w - loggiaW; // 2.45m
+    const solidRearD = d - loggiaD;
 
-    // 1. BASE AND TOP SLABS
-    const botSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), stoneMat);
-    botSlab.position.y = -h / 2 + slabH / 2;
-    setupMesh(botSlab);
-    group.add(botSlab);
-
-    const topSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), stoneMat);
-    topSlab.position.y = h / 2 - slabH / 2;
-    setupMesh(topSlab);
-    group.add(topSlab);
-
-    // 2. MAIN SOLID BRICK WING (Right side, full depth)
-    const rightMassGeo = new THREE.BoxGeometry(solidW, wallH, d - 0.04);
-    const rightMass = new THREE.Mesh(rightMassGeo, brickMat);
+    // 1. Solid Right Wing (Bedroom Zone)
+    const rightMass = new THREE.Mesh(
+      new THREE.BoxGeometry(solidW, wallH, d - 0.04),
+      brickMat
+    );
     rightMass.position.set(w / 2 - solidW / 2, 0, 0);
     setupMesh(rightMass);
     group.add(rightMass);
 
-    // 3. REAR BRICK MASS (Left-rear quadrant behind the recessed balcony)
-    const rearMassGeo = new THREE.BoxGeometry(cutW, wallH, solidRearD);
-    const rearMass = new THREE.Mesh(rearMassGeo, brickMat);
-    rearMass.position.set(-w / 2 + cutW / 2, 0, -d / 2 + solidRearD / 2);
+    // 2. Rear Mass Behind the Loggia
+    const rearMass = new THREE.Mesh(
+      new THREE.BoxGeometry(loggiaW, wallH, solidRearD),
+      brickMat
+    );
+    rearMass.position.set(-w / 2 + loggiaW / 2, 0, -d / 2 + solidRearD / 2);
     setupMesh(rearMass);
     group.add(rearMass);
 
-    // 4. DEEP RECESSED CORNER BALCONY (Front-left quadrant)
-    const recessCenterX = -w / 2 + cutW / 2;
-    const recessCenterZ = d / 2 - cutD / 2;
-
-    // Dark finish for the recessed ceiling so the entire corner looks hollow from below
-    const ceilingRecess = new THREE.Mesh(
-      new THREE.BoxGeometry(cutW - 0.04, 0.02, cutD - 0.04),
-      mats.interiorDark
+    // 3. Loggia Outer Brick Flank Wall (Left side of the building)
+    const flankW = 0.25;
+    const flankWall = new THREE.Mesh(
+      new THREE.BoxGeometry(flankW, wallH, loggiaD),
+      brickMat
     );
-    ceilingRecess.position.set(recessCenterX, h / 2 - slabH - 0.01, recessCenterZ);
-    group.add(ceilingRecess);
+    flankWall.position.set(-w / 2 + flankW / 2, 0, d / 2 - loggiaD / 2);
+    setupMesh(flankWall);
+    group.add(flankWall);
 
-    // Balcony stone floor deck inside recess
-    const deckGeo = new THREE.BoxGeometry(cutW - 0.04, 0.04, cutD - 0.04);
-    const deck = new THREE.Mesh(deckGeo, stoneMat);
-    deck.position.set(recessCenterX, -h / 2 + slabH + 0.02, recessCenterZ);
-    setupMesh(deck);
-    group.add(deck);
+    // 4. Loggia Interior: Railing across front opening
+    // (Note: botSlab already provides the stone floor at floorY, eliminating redundant coplanar deck box)
+    const loggiaCenterX = -w / 2 + flankW + (loggiaW - flankW) / 2;
+    const openW = loggiaW - flankW;
 
-    // Open Corner Railing:
-    // Follows the front and left perimeter of the recess. NO thick outer corner brick post.
-    // This leaves the corner visually completely carved out!
-    const railH = 0.85;
-    const railPostW = 0.04;
+    const loggiaRailing = createResidentialRailing(openW, 0, railH, mats.metalRailing);
+    loggiaRailing.position.set(loggiaCenterX, floorY, d / 2);
+    group.add(loggiaRailing);
 
-    // Front railing segment (from -w/2 to -w/2 + cutW)
-    const frontRailW = cutW - 0.08;
-    const frontRailX = -w / 2 + cutW / 2;
-    const frontRailZ = d / 2 - 0.04;
-
-    const railTopFront = new THREE.Mesh(new THREE.BoxGeometry(frontRailW, 0.05, 0.05), metalMat);
-    railTopFront.position.set(frontRailX, -h / 2 + slabH + railH, frontRailZ);
-    railTopFront.castShadow = true;
-    group.add(railTopFront);
-
-    const railMidFront = new THREE.Mesh(new THREE.BoxGeometry(frontRailW, 0.025, 0.025), metalMat);
-    railMidFront.position.set(frontRailX, -h / 2 + slabH + railH * 0.45, frontRailZ);
-    group.add(railMidFront);
-
-    // Corner post at the front-left edge of the floor
-    const postCorner = new THREE.Mesh(new THREE.BoxGeometry(railPostW, railH, railPostW), metalMat);
-    postCorner.position.set(-w / 2 + railPostW, -h / 2 + slabH + railH / 2, frontRailZ);
-    postCorner.castShadow = true;
-    group.add(postCorner);
-
-    // Intermediate post along front rail
-    const postMid = new THREE.Mesh(new THREE.BoxGeometry(railPostW, railH, railPostW), metalMat);
-    postMid.position.set(frontRailX, -h / 2 + slabH + railH / 2, frontRailZ);
-    postMid.castShadow = true;
-    group.add(postMid);
-
-    // Side railing segment along outer left edge
-    const sideRailD = cutD - 0.08;
-    const sideRailX = -w / 2 + railPostW;
-    const sideRailZ = d / 2 - cutD / 2;
-
-    const railTopSide = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, sideRailD), metalMat);
-    railTopSide.position.set(sideRailX, -h / 2 + slabH + railH, sideRailZ);
-    railTopSide.castShadow = true;
-    group.add(railTopSide);
-
-    const railMidSide = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, sideRailD), metalMat);
-    railMidSide.position.set(sideRailX, -h / 2 + slabH + railH * 0.45, sideRailZ);
-    group.add(railMidSide);
-
-    const postSideBack = new THREE.Mesh(new THREE.BoxGeometry(railPostW, railH, railPostW), metalMat);
-    postSideBack.position.set(sideRailX, -h / 2 + slabH + railH / 2, d / 2 - cutD + 0.04);
-    postSideBack.castShadow = true;
-    group.add(postSideBack);
-
-    // Deep French Door in back wall of the recess
-    const doorW = cutW * 0.65;
-    const loggiaDoor = createMasonryWindow(
-      doorW,
-      wallH * 0.88,
-      0.16,
-      stoneMat,
-      frameMat,
-      glassMat,
-      isWindowWarm(0)
-    );
-    loggiaDoor.position.set(recessCenterX, 0, d / 2 - cutD + 0.06);
+    // 5. Back Wall of the Loggia: Glazed Balcony Door + Living Room Window
+    // Mounted directly on the front face of rearMass (d / 2 - loggiaD)
+    const loggiaBackWallZ = d / 2 - loggiaD;
+    const loggiaDoor = createBalconyDoor(0.85, doorH, mats, isLit(0));
+    loggiaDoor.position.set(loggiaCenterX - 0.25, doorCenterY, loggiaBackWallZ);
     group.add(loggiaDoor);
 
-    // Side Reveal Window on inner brick wall facing the balcony
-    const innerSideWin = createMasonryWindow(
-      cutD * 0.55,
-      wallH * 0.74,
-      0.14,
-      stoneMat,
-      frameMat,
-      glassMat,
-      isWindowWarm(1)
-    );
-    innerSideWin.rotation.y = -Math.PI / 2;
-    innerSideWin.position.set(w / 2 - solidW + 0.06, 0, recessCenterZ);
-    group.add(innerSideWin);
+    const loggiaWin = createResidentialWindow(0.55, bedWinH, mats, isLit(1), false);
+    loggiaWin.position.set(loggiaCenterX + 0.45, bedWinCenterY, loggiaBackWallZ);
+    group.add(loggiaWin);
 
-    // 5. SOLID RIGHT WING FACADE: Two deeply punched masonry windows
-    const rightFrontWin1 = createMasonryWindow(
-      0.85,
-      wallH * 0.76,
-      0.18,
-      stoneMat,
-      frameMat,
-      glassMat,
-      false
-    );
-    rightFrontWin1.position.set(w / 2 - solidW + 0.55, 0, d / 2 - 0.06);
-    group.add(rightFrontWin1);
+    // 6. Right Facade Zone: Two Bedroom Windows
+    const winBed1 = createResidentialWindow(0.85, bedWinH, mats, isLit(2), true);
+    winBed1.position.set(w / 2 - solidW + 0.65, bedWinCenterY, wallFaceZ);
+    group.add(winBed1);
 
-    const rightFrontWin2 = createMasonryWindow(
-      0.85,
-      wallH * 0.76,
-      0.18,
-      stoneMat,
-      frameMat,
-      glassMat,
-      isWindowWarm(2)
-    );
-    rightFrontWin2.position.set(w / 2 - 0.55, 0, d / 2 - 0.06);
-    group.add(rightFrontWin2);
+    const winBed2 = createResidentialWindow(0.85, bedWinH, mats, false, true);
+    winBed2.position.set(w / 2 - 0.60, bedWinCenterY, wallFaceZ);
+    group.add(winBed2);
 
-    // 6. RIGHT FACADE: Deep masonry window
-    const rightSideWin = createMasonryWindow(1.05, wallH * 0.76, 0.18, stoneMat, frameMat, glassMat, false);
-    rightSideWin.rotation.y = Math.PI / 2;
-    rightSideWin.position.set(w / 2 - 0.06, 0, 0);
-    group.add(rightSideWin);
+    // 7. Right Facade: Deep Bedroom Window
+    const rightWin = createResidentialWindow(1.00, bedWinH, mats, false, true);
+    rightWin.rotation.y = Math.PI / 2;
+    rightWin.position.set(wallRightX, bedWinCenterY, 0);
+    group.add(rightWin);
 
-    // 7. LEFT FACADE: Masonry window on rear solid section
-    const leftSideWin = createMasonryWindow(1.05, wallH * 0.76, 0.18, stoneMat, frameMat, glassMat, false);
-    leftSideWin.rotation.y = -Math.PI / 2;
-    leftSideWin.position.set(-w / 2 + 0.06, 0, -d / 2 + solidRearD / 2);
-    group.add(leftSideWin);
+    // 8. Left Facade: Solid rear bedroom window
+    const leftWin = createResidentialWindow(0.90, bedWinH, mats, isLit(3), true);
+    leftWin.rotation.y = -Math.PI / 2;
+    leftWin.position.set(wallLeftX, bedWinCenterY, -d / 2 + solidRearD / 2);
+    group.add(leftWin);
 
-    // 8. BACK FACADE: Two robust masonry windows + 1 AC unit
-    const backWin1 = createMasonryWindow(0.95, wallH * 0.74, 0.18, stoneMat, frameMat, glassMat, false);
-    backWin1.rotation.y = Math.PI;
-    backWin1.position.set(-0.85, 0, -d / 2 + 0.06);
-    group.add(backWin1);
+    // 9. Rear Facade: Two Windows + AC compressor
+    const rearWin1 = createResidentialWindow(0.85, bedWinH, mats, false, true);
+    rearWin1.rotation.y = Math.PI;
+    rearWin1.position.set(-0.85, bedWinCenterY, wallRearZ);
+    group.add(rearWin1);
 
-    const backWin2 = createMasonryWindow(0.95, wallH * 0.74, 0.18, stoneMat, frameMat, glassMat, isWindowWarm(3));
-    backWin2.rotation.y = Math.PI;
-    backWin2.position.set(0.85, 0, -d / 2 + 0.06);
-    group.add(backWin2);
+    const rearWin2 = createResidentialWindow(0.85, bedWinH, mats, isLit(4), true);
+    rearWin2.rotation.y = Math.PI;
+    rearWin2.position.set(0.85, bedWinCenterY, wallRearZ);
+    group.add(rearWin2);
 
-    const acB = createBrickAcUnit(mats);
-    acB.position.set(w / 2 - 0.55, 0.15, -d / 2 - 0.18);
+    const acB = createUtilityAcUnit(mats);
+    acB.position.set(w / 2 - 0.55, floorY + 0.40, -d / 2 - 0.16);
     group.add(acB);
   }
 
   // =========================================================================
-  // BRICK VARIANT C: STEPPED DUAL-MASS BRICK (WEATHERED TERRACOTTA)
-  // Major Silhouette Feature:
-  // - Composed of TWO offset large brick masses with dramatic depth difference (1.10m step)
-  // - Mass 1 (Left Block, 2.30m wide) projects forward by +0.90m beyond base depth
-  // - Mass 2 (Right Block, 1.90m wide) sits recessed by -0.20m behind base depth
-  // - Stepped side seam with masonry reveal window
-  // - Massive geometric step readable in solid black silhouette
+  // VARIANT C: CORNER LIVING ROOM WITH BALCONY
+  // Facade Logic:
+  // - Left side (bedroom wing): Solid brick wall with two bedroom windows.
+  // - Right side (corner living room wing): Articulated living zone with panoramic
+  //   living room window, corner-oriented balcony, and glazed balcony door.
+  // - Dual-aspect corner glazing brings natural light into the living space.
   // =========================================================================
   else {
-    const brickMat = mats.brickWallC;
-    const stoneMat = mats.stoneC;
-    const frameMat = mats.frameC;
-    const glassMat = mats.glassC;
+    const brickMat = mats.brickWallA;
+    const wallFaceZ = d / 2 - 0.02;
+    const wallLeftX = -w / 2 + 0.02;
+    const wallRightX = w / 2 - 0.02;
+    const wallRearZ = -d / 2 + 0.02;
 
-    const stepW1 = 2.30; // Primary forward projecting block
-    const stepW2 = w - stepW1; // 1.90m recessed secondary block
-    const stepProj = 0.90; // Mass 1 forward projection
-    const stepIndent = 0.20; // Mass 2 recessed depth
+    // Slight architectural articulation (0.25m step) separating living wing from bedroom wing
+    const bedW = 2.20;
+    const livingW = w - bedW; // 2.00m
 
-    // 1. BASE AND TOP SLABS (Follow the structural perimeter)
-    const botSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), stoneMat);
-    botSlab.position.y = -h / 2 + slabH / 2;
-    setupMesh(botSlab);
-    group.add(botSlab);
-
-    const topSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), stoneMat);
-    topSlab.position.y = h / 2 - slabH / 2;
-    setupMesh(topSlab);
-    group.add(topSlab);
-
-    // 2. PRIMARY FORWARD BRICK MASS (Left Side: projects forward by stepProj = 0.90m)
-    const mass1D = d + stepProj;
-    const mass1Geo = new THREE.BoxGeometry(stepW1, wallH, mass1D);
-    const mass1 = new THREE.Mesh(mass1Geo, brickMat);
-    const mass1CenterX = -w / 2 + stepW1 / 2;
-    const mass1CenterZ = stepProj / 2;
-    mass1.position.set(mass1CenterX, 0, mass1CenterZ);
-    setupMesh(mass1);
-    group.add(mass1);
-
-    // Projecting stone cap slabs for Mass 1
-    const capGeo = new THREE.BoxGeometry(stepW1, slabH, stepProj);
-    const capBot = new THREE.Mesh(capGeo, stoneMat);
-    capBot.position.set(mass1CenterX, -h / 2 + slabH / 2, d / 2 + stepProj / 2);
-    setupMesh(capBot);
-    group.add(capBot);
-
-    const capTop = new THREE.Mesh(capGeo, stoneMat);
-    capTop.position.set(mass1CenterX, h / 2 - slabH / 2, d / 2 + stepProj / 2);
-    setupMesh(capTop);
-    group.add(capTop);
-
-    // 3. SECONDARY RECESSED BRICK MASS (Right Side: recessed by stepIndent = 0.20m)
-    const mass2D = d - stepIndent;
-    const mass2Geo = new THREE.BoxGeometry(stepW2, wallH, mass2D);
-    const mass2 = new THREE.Mesh(mass2Geo, brickMat);
-    const mass2CenterX = w / 2 - stepW2 / 2;
-    const mass2CenterZ = -stepIndent / 2;
-    mass2.position.set(mass2CenterX, 0, mass2CenterZ);
-    setupMesh(mass2);
-    group.add(mass2);
-
-    // 4. WINDOWS ON PRIMARY FORWARD BRICK MASS (Front Z = d/2 + stepProj)
-    const frontZ1 = d / 2 + stepProj - 0.06;
-
-    // Narrow vertical masonry slit window
-    const narrowWin = createMasonryWindow(
-      0.55,
-      wallH * 0.80,
-      0.18,
-      stoneMat,
-      frameMat,
-      glassMat,
-      false
+    // 1. Bedroom Wing Core
+    const bedCore = new THREE.Mesh(
+      new THREE.BoxGeometry(bedW, wallH, d - 0.04),
+      brickMat
     );
-    narrowWin.position.set(mass1CenterX - stepW1 * 0.25, 0, frontZ1);
-    group.add(narrowWin);
+    bedCore.position.set(-w / 2 + bedW / 2, 0, 0);
+    setupMesh(bedCore);
+    group.add(bedCore);
 
-    // Wide masonry opening with stone sill & lintel
-    const wideWin = createMasonryWindow(
-      1.10,
-      wallH * 0.80,
-      0.18,
-      stoneMat,
-      frameMat,
-      glassMat,
-      isWindowWarm(0)
+    // 2. Living Room Wing Core
+    const livingCore = new THREE.Mesh(
+      new THREE.BoxGeometry(livingW, wallH, d - 0.04),
+      brickMat
     );
-    wideWin.position.set(mass1CenterX + stepW1 * 0.22, 0, frontZ1);
-    group.add(wideWin);
+    livingCore.position.set(w / 2 - livingW / 2, 0, 0);
+    setupMesh(livingCore);
+    group.add(livingCore);
 
-    // Reveal window along the 1.10m step transition seam (facing +X)
-    const totalStepOffset = stepProj + stepIndent; // 1.10m step!
-    const seamWin = createMasonryWindow(
-      totalStepOffset * 0.60,
-      wallH * 0.72,
-      0.12,
-      stoneMat,
-      frameMat,
-      glassMat,
-      false
-    );
-    seamWin.rotation.y = Math.PI / 2;
-    seamWin.position.set(mass1CenterX + stepW1 / 2 - 0.04, 0, d / 2 + stepProj / 2);
-    group.add(seamWin);
+    // 3. Bedroom Zone: Two Clean Residential Windows
+    const winBed1 = createResidentialWindow(0.85, bedWinH, mats, false, true);
+    winBed1.position.set(-w / 2 + 0.60, bedWinCenterY, wallFaceZ);
+    group.add(winBed1);
 
-    // 5. WINDOWS ON RECESSED BRICK MASS (Front Z = d/2 - stepIndent)
-    const frontZ2 = d / 2 - stepIndent - 0.06;
-    const recessedWin = createMasonryWindow(
-      stepW2 * 0.70,
-      wallH * 0.78,
-      0.18,
-      stoneMat,
-      frameMat,
-      glassMat,
-      isWindowWarm(1)
-    );
-    recessedWin.position.set(mass2CenterX, 0, frontZ2);
-    group.add(recessedWin);
+    const winBed2 = createResidentialWindow(0.85, bedWinH, mats, isLit(0), true);
+    winBed2.position.set(-w / 2 + 1.60, bedWinCenterY, wallFaceZ);
+    group.add(winBed2);
 
-    // 6. LEFT FACADE: Two deeply set masonry windows
-    const leftWin1 = createMasonryWindow(0.95, wallH * 0.76, 0.18, stoneMat, frameMat, glassMat, false);
+    // 4. Living Room Zone: Large Window + Glazed Balcony Door
+    const winLiving = createResidentialWindow(0.90, livingWinH, mats, isLit(1), true);
+    winLiving.position.set(w / 2 - livingW + 0.55, livingWinCenterY, wallFaceZ);
+    group.add(winLiving);
+
+    const livingDoor = createBalconyDoor(0.90, doorH, mats, isLit(1));
+    livingDoor.position.set(w / 2 - 0.55, doorCenterY, wallFaceZ);
+    group.add(livingDoor);
+
+    // 5. Usable Corner-Adjacent Balcony
+    const balcW = 1.30;
+    const balcD = 0.95;
+    const balcCenterX = w / 2 - 0.65;
+    const balcCenterZ = d / 2 + balcD / 2;
+
+    const balcSlab = new THREE.Mesh(new THREE.BoxGeometry(balcW, slabH, balcD), mats.stoneSlab);
+    balcSlab.position.set(balcCenterX, floorY - slabH / 2, balcCenterZ);
+    setupMesh(balcSlab);
+    group.add(balcSlab);
+
+    const balcRailing = createResidentialRailing(balcW, balcD, railH, mats.metalRailing);
+    balcRailing.position.set(balcCenterX, floorY, balcCenterZ);
+    group.add(balcRailing);
+
+    // 6. Right Side Facade: Living Room Corner Window (dual-aspect light)
+    const cornerWin = createResidentialWindow(1.20, livingWinH, mats, isLit(2), true);
+    cornerWin.rotation.y = Math.PI / 2;
+    cornerWin.position.set(wallRightX, livingWinCenterY, 0.60);
+    group.add(cornerWin);
+
+    // 7. Left Side Facade: Two Bedroom Windows
+    const leftWin1 = createResidentialWindow(0.85, bedWinH, mats, false, true);
     leftWin1.rotation.y = -Math.PI / 2;
-    leftWin1.position.set(-w / 2 + 0.06, 0, 0.85);
+    leftWin1.position.set(wallLeftX, bedWinCenterY, 0.85);
     group.add(leftWin1);
 
-    const leftWin2 = createMasonryWindow(0.95, wallH * 0.76, 0.18, stoneMat, frameMat, glassMat, isWindowWarm(2));
+    const leftWin2 = createResidentialWindow(0.85, bedWinH, mats, isLit(3), true);
     leftWin2.rotation.y = -Math.PI / 2;
-    leftWin2.position.set(-w / 2 + 0.06, 0, -0.85);
+    leftWin2.position.set(wallLeftX, bedWinCenterY, -0.85);
     group.add(leftWin2);
 
-    // 7. RIGHT FACADE: Deep masonry window
-    const rightWin = createMasonryWindow(1.05, wallH * 0.76, 0.18, stoneMat, frameMat, glassMat, false);
-    rightWin.rotation.y = Math.PI / 2;
-    rightWin.position.set(w / 2 - 0.06, 0, -stepIndent / 2);
-    group.add(rightWin);
-
-    // 8. REAR FACADE: Two robust masonry windows + 1 AC unit
-    const rearWin1 = createMasonryWindow(0.95, wallH * 0.74, 0.18, stoneMat, frameMat, glassMat, false);
+    // 8. Rear Facade: Two Windows + AC compressor
+    const rearWin1 = createResidentialWindow(0.85, bedWinH, mats, false, true);
     rearWin1.rotation.y = Math.PI;
-    rearWin1.position.set(-0.85, 0, -d / 2 + 0.06);
+    rearWin1.position.set(-0.85, bedWinCenterY, wallRearZ);
     group.add(rearWin1);
 
-    const rearWin2 = createMasonryWindow(0.95, wallH * 0.74, 0.18, stoneMat, frameMat, glassMat, isWindowWarm(3));
+    const rearWin2 = createResidentialWindow(0.85, bedWinH, mats, isLit(4), true);
     rearWin2.rotation.y = Math.PI;
-    rearWin2.position.set(0.85, 0, -d / 2 + 0.06);
+    rearWin2.position.set(0.85, bedWinCenterY, wallRearZ);
     group.add(rearWin2);
 
-    const acC = createBrickAcUnit(mats);
-    acC.position.set(-w / 2 + 0.55, 0.15, -d / 2 - 0.18);
+    const acC = createUtilityAcUnit(mats);
+    acC.position.set(-w / 2 + 0.55, floorY + 0.40, -d / 2 - 0.16);
     group.add(acC);
   }
 
