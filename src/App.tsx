@@ -9,6 +9,8 @@ import { FeedbackEvent, GameState, GameStats } from './types';
 import { GameHUD } from './components/GameHUD';
 import { GameOverModal } from './components/GameOverModal';
 import { PauseModal } from './components/PauseModal';
+// TEMP DEV: Environment region testing
+import { DevEnvTestPanel } from './components/DevEnvTestPanel';
 
 export default function App() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -111,6 +113,18 @@ export default function App() {
         isPaused={gameState === 'PAUSED'}
         onPauseToggle={handlePauseToggle}
         onDropFloor={handleDrop}
+      />
+
+      {/* TEMP DEV: Environment region testing */}
+      <DevEnvTestPanel
+        currentFloor={stats.currentFloor}
+        regionName={stats.regionName}
+        onJumpToFloor={(floor) => {
+          engineRef.current?.jumpToFloorForTesting(floor);
+          if (gameState === 'PAUSED') {
+            engineRef.current?.resume();
+          }
+        }}
       />
 
       {/* Pause Modal */}

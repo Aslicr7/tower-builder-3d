@@ -4,7 +4,8 @@ import { FeedbackEvent, FloorDimensions, FloorModuleStyle, GameState, GameStats 
 import { sounds } from '../audio/sound';
 import { CityScenery } from './cityScenery';
 import { CraneSystem } from './crane';
-import { createFloorModule, createTowerFoundation, PLAYABLE_FLOOR_STYLES } from './floorGenerator';
+import { createFloorModule, createTowerFoundation } from './floorGenerator';
+import { selectFloorModule } from './moduleSelector';
 import { PhysicsWorld } from './physicsWorld';
 import { GAME_CONFIG } from './constants';
 
@@ -276,29 +277,17 @@ export class GameEngine {
   }
 
   /**
-   * Selects the next floor archetype randomly from the 6 approved archetypes
-   * with equal probability and enforces the anti-repetition rule:
-   * The same archetype cannot appear 3 times in a row.
+   * Selects the next floor archetype using the module selector:
+   * - Queries the current environment region from EnvironmentManager (Single Source of Truth)
+   * - Biases 82% towards environment-compatible module archetypes and 18% towards UNIVERSAL modules
+   * - Preserves the anti-3-in-a-row rule (no archetype can appear 3 times in a row)
+   * - Gracefully falls back to UNIVERSAL modules when an environment has no specialized module
    */
   private selectNextFloorStyle(): FloorModuleStyle {
-    const historyLen = this.floorStyleHistory.length;
-    let allowedStyles = [...PLAYABLE_FLOOR_STYLES];
-
-    // Check if the previous two floors were the same archetype
-    if (
-      historyLen >= 2 &&
-      this.floorStyleHistory[historyLen - 1] === this.floorStyleHistory[historyLen - 2]
-    ) {
-      const repeatedStyle = this.floorStyleHistory[historyLen - 1];
-      // Disallow the 3rd consecutive occurrence
-      allowedStyles = allowedStyles.filter((s) => s !== repeatedStyle);
-    }
-
-    // Uniform random selection from allowed pool
-    const selected = allowedStyles[Math.floor(Math.random() * allowedStyles.length)];
-    this.floorStyleHistory.push(selected);
-    console.log(`[Floor Spawn] ${selected}`);
-    return selected;
+    const nextFloorNumber = this.floorCount + 1;
+    const selection = selectFloorModule(nextFloorNumber, this.floorStyleHistory);
+    this.floorStyleHistory.push(selection.style);
+    return selection.style;
   }
 
   private spawnNextFloorImmediately() {
@@ -407,7 +396,7 @@ export class GameEngine {
     this.craneRotVelY = delta > 0 ? (this.craneRotY - prevRot) / delta : 0;
 
     // Smooth continuous crane body elevation (crane boom at top edge of screen)
-    const towerTopY = this.physics.getTowerTopY();
+    const towerTopY = Math.max(this.physics.getTowerTopY(), this.floorCount * 2.3);
     const activeFloorH = this.hangingFloorDims ? this.hangingFloorDims.height : 2.3;
     const floorY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + activeFloorH / 2;
     const floorTopY = floorY + activeFloorH / 2;
@@ -766,9 +755,17 @@ export class GameEngine {
 
   /**
    * Diagnostic / Testing tool: Allows instant warp to any target floor
-   * to immediately verify all 10 environment regions (e.g. Floors 5, 16, 25, 38, 45, 65, 85, 105, 125, 145, 165, 185).
+   * to immediately verify all 10 environment regions (e.g. Floors 5, 15, 25, 34, 41, 48, 55, 62, 69, 76, 85).
    */
   public jumpToFloorForTesting(targetFloor: number) {
+    if (this.state === 'GAMEOVER' || this.state === 'COLLAPSING') {
+      this.state = 'PLAYING';
+      this.gameOverTriggered = false;
+      this.missedFloorFailureDuration = 0;
+      this.collapseFailureDuration = 0;
+      this.callbacks.onStateChange(this.state);
+    }
+
     this.floorCount = Math.max(0, targetFloor);
     const towerTopY = this.floorCount * 2.3;
     const initialTargetY = Math.max(towerTopY - 3.2, 3.2);
@@ -785,6 +782,11 @@ export class GameEngine {
     const floorTopY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + 2.3;
     this.currentCraneY = floorTopY + 9.4;
     this.currentHookY = floorTopY + 4.85;
+
+    if (this.hangingFloorGroup && this.hangingFloorDims) {
+      const hangingY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + this.hangingFloorDims.height / 2;
+      this.hangingFloorGroup.position.set(0, hangingY, 0);
+    }
 
     // Immediately trigger scenery update
     const regionState = this.scenery.update(

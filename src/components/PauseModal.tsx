@@ -8,18 +8,17 @@ interface PauseModalProps {
 }
 
 const TEST_FLOORS = [
-  { floor: 5, label: 'Floor 5: City Ground' },
-  { floor: 16, label: 'Floor 16: Mountain Transition' },
-  { floor: 25, label: 'Floor 25: High Mountains' },
-  { floor: 38, label: 'Floor 38: Cloud Approach' },
-  { floor: 45, label: 'Floor 45: Cloud World' },
-  { floor: 65, label: 'Floor 65: Above Clouds' },
-  { floor: 85, label: 'Floor 85: High Atmosphere' },
-  { floor: 105, label: 'Floor 105: Edge of Space' },
-  { floor: 125, label: 'Floor 125: Space / Earth' },
-  { floor: 145, label: 'Floor 145: Orbital Station' },
-  { floor: 165, label: 'Floor 165: Moon Approach' },
-  { floor: 185, label: 'Floor 185: Moon Region' },
+  { floor: 5, label: 'Floor 5: City / Ground' },
+  { floor: 15, label: 'Floor 15: High Mountains' },
+  { floor: 25, label: 'Floor 25: Cloud World' },
+  { floor: 34, label: 'Floor 34: Above the Clouds' },
+  { floor: 41, label: 'Floor 41: High Atmosphere' },
+  { floor: 48, label: 'Floor 48: Edge of Space' },
+  { floor: 55, label: 'Floor 55: Space / Earth Below' },
+  { floor: 62, label: 'Floor 62: Orbital Region' },
+  { floor: 69, label: 'Floor 69: Moon Approach' },
+  { floor: 76, label: 'Floor 76: Moon Region' },
+  { floor: 85, label: 'Floor 85: Endless Space' },
 ];
 
 export const PauseModal: React.FC<PauseModalProps> = ({ onResume, onRestart, onJumpToFloor }) => {

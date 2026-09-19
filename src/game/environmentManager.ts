@@ -184,7 +184,7 @@ function getSlateTexture(): THREE.CanvasTexture {
   return slateTexture;
 }
 
-// Procedural Earth surface texture with blue oceans, landmasses, and swirling clouds
+// Procedural Earth surface texture with muted blue oceans, stylized landmasses, and soft cloud bands
 function getEarthTexture(): THREE.CanvasTexture {
   if (earthTexture) return earthTexture;
   const canvas = document.createElement('canvas');
@@ -192,49 +192,56 @@ function getEarthTexture(): THREE.CanvasTexture {
   canvas.height = 256;
   const ctx = canvas.getContext('2d')!;
 
-  // Ocean base
-  ctx.fillStyle = '#09254d';
+  // Ocean base - deep muted blue (#0c2340)
+  ctx.fillStyle = '#0c2340';
   ctx.fillRect(0, 0, 512, 256);
 
-  // Continents (stylized curved landmasses)
-  ctx.fillStyle = '#1e4828';
+  // Stylized continents (restrained muted olive & forest tones #1b382b)
+  ctx.fillStyle = '#1b382b';
   // North America shape
   ctx.beginPath();
-  ctx.ellipse(120, 80, 55, 35, 0.2, 0, Math.PI * 2);
+  ctx.ellipse(120, 80, 50, 32, 0.2, 0, Math.PI * 2);
   ctx.fill();
   // South America
   ctx.beginPath();
-  ctx.ellipse(150, 165, 35, 55, -0.2, 0, Math.PI * 2);
+  ctx.ellipse(150, 165, 32, 48, -0.2, 0, Math.PI * 2);
   ctx.fill();
   // Eurasia
   ctx.beginPath();
-  ctx.ellipse(320, 75, 110, 45, 0, 0, Math.PI * 2);
+  ctx.ellipse(320, 75, 100, 42, 0, 0, Math.PI * 2);
   ctx.fill();
   // Africa
   ctx.beginPath();
-  ctx.ellipse(280, 150, 45, 60, 0.1, 0, Math.PI * 2);
+  ctx.ellipse(280, 150, 42, 55, 0.1, 0, Math.PI * 2);
   ctx.fill();
   // Australia
   ctx.beginPath();
-  ctx.ellipse(420, 185, 35, 25, 0, 0, Math.PI * 2);
+  ctx.ellipse(420, 185, 30, 22, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Swirling white clouds bands
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-  for (let i = 0; i < 16; i++) {
+  // Subtle topography layer (#284832)
+  ctx.fillStyle = '#284832';
+  ctx.beginPath();
+  ctx.ellipse(330, 70, 70, 25, 0, 0, Math.PI * 2);
+  ctx.ellipse(125, 75, 35, 20, 0.1, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Soft stylized cloud swirls (translucent off-white, not harsh)
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+  for (let i = 0; i < 14; i++) {
     ctx.beginPath();
-    ctx.arc(i * 35 + 20, 60 + Math.sin(i) * 25, 22, 0, Math.PI * 2);
-    ctx.arc(i * 35 + 20, 130 + Math.cos(i) * 30, 28, 0, Math.PI * 2);
-    ctx.arc(i * 35 + 20, 190 + Math.sin(i * 2) * 20, 18, 0, Math.PI * 2);
+    ctx.ellipse(i * 38 + 20, 65 + Math.sin(i * 1.3) * 20, 24, 8, 0.12, 0, Math.PI * 2);
+    ctx.ellipse(i * 38 + 20, 130 + Math.cos(i * 1.4) * 25, 28, 10, -0.08, 0, Math.PI * 2);
+    ctx.ellipse(i * 38 + 20, 185 + Math.sin(i * 1.8) * 18, 18, 7, 0.08, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // Night side city lights in amber
-  ctx.fillStyle = 'rgba(254, 240, 138, 0.7)';
-  for (let i = 0; i < 180; i++) {
-    const x = Math.random() * 512;
-    const y = Math.random() * 256;
-    ctx.fillRect(x, y, 1.5, 1.5);
+  // Faint warm city cluster lights on night quadrant
+  ctx.fillStyle = 'rgba(253, 230, 138, 0.35)';
+  for (let i = 0; i < 100; i++) {
+    const x = (i * 37) % 512;
+    const y = 40 + (i * 19) % 180;
+    ctx.fillRect(x, y, 1.0, 1.0);
   }
 
   earthTexture = new THREE.CanvasTexture(canvas);
@@ -282,26 +289,40 @@ function getMoonTexture(): THREE.CanvasTexture {
   return moonTexture;
 }
 
+export type EnvironmentRegionId =
+  | 'CITY'
+  | 'HIGH_MOUNTAINS'
+  | 'CLOUD_WORLD'
+  | 'ABOVE_THE_CLOUDS'
+  | 'HIGH_ATMOSPHERE'
+  | 'EDGE_OF_SPACE'
+  | 'SPACE_EARTH_BELOW'
+  | 'ORBITAL_REGION'
+  | 'MOON_APPROACH'
+  | 'MOON_REGION'
+  | 'ENDLESS_SPACE';
+
 export interface RegionState {
   regionIndex: number;
+  regionId: EnvironmentRegionId;
   regionName: string;
   nextRegionName: string;
   transitionProgress: number; // 0.0 to 1.0 (smooth blend)
 }
 
 /**
- * Continuous Environment Manager powering the full 10-region vertical journey:
- * - FLOORS 1–20: CITY / GROUND WORLD
- * - FLOORS 21–40: HIGH MOUNTAINS (Reference Images 3 & 4)
- * - FLOORS 41–60: CLOUD WORLD (Reference Image 2)
- * - FLOORS 61–80: ABOVE THE CLOUDS
- * - FLOORS 81–100: HIGH ATMOSPHERE
- * - FLOORS 101–120: EDGE OF SPACE (Reference Image 1)
- * - FLOORS 121–140: SPACE / EARTH BELOW (Reference Image 1)
- * - FLOORS 141–160: ORBITAL REGION (Reference Image 1)
- * - FLOORS 161–180: MOON APPROACH
- * - FLOORS 181–200: MOON REGION
- * - FLOOR 200+: ENDLESS SPACE
+ * Continuous Environment Manager powering the retimed vertical journey:
+ * - FLOORS 0–10: CITY / GROUND WORLD
+ * - FLOORS 11–20: HIGH MOUNTAINS
+ * - FLOORS 21–30: CLOUD WORLD
+ * - FLOORS 31–37: ABOVE THE CLOUDS
+ * - FLOORS 38–44: HIGH ATMOSPHERE
+ * - FLOORS 45–51: EDGE OF SPACE
+ * - FLOORS 52–58: SPACE / EARTH BELOW
+ * - FLOORS 59–65: ORBITAL REGION
+ * - FLOORS 66–72: MOON APPROACH
+ * - FLOORS 73–80: MOON REGION
+ * - FLOOR 81+: ENDLESS SPACE
  */
 export class EnvironmentManager {
   public group: THREE.Group;
@@ -328,7 +349,9 @@ export class EnvironmentManager {
   private satelliteMesh: THREE.Group | null = null;
   private spaceStationGroup: THREE.Group | null = null;
   private earthMesh: THREE.Mesh | null = null;
+  private earthLimb: THREE.Mesh | null = null;
   private moonMesh: THREE.Mesh | null = null;
+  private lunarCragsGroup: THREE.Group | null = null;
   private starsMesh: THREE.Points | null = null;
   private mountainEagles: THREE.Group | null = null;
 
@@ -344,6 +367,7 @@ export class EnvironmentManager {
     this.cityGroup = new THREE.Group();
     this.mountainGroup = new THREE.Group();
     this.cloudWorldGroup = new THREE.Group();
+    this.cloudWorldGroup.position.y = -50; // Aligns cloud formations with Floors 21–30
     this.aboveCloudSeaGroup = new THREE.Group();
     this.highAtmoGroup = new THREE.Group();
     this.spaceGroup = new THREE.Group();
@@ -836,184 +860,359 @@ export class EnvironmentManager {
   }
 
   // ========================================================================
-  // 4. REGION 3: CLOUD WORLD (FLOORS 41–60) — Reference Image 2
+  // 4. REGION 3: CLOUD WORLD (FLOORS 41–60) — Low-Poly Layered Cloud Formations
   // ========================================================================
   private buildCloudWorld() {
     const cloudPuffMat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      roughness: 0.95,
+      roughness: 0.88,
       metalness: 0.0,
       transparent: true,
-      opacity: 0.88,
+      opacity: 0.92,
       flatShading: true,
     });
 
-    // Stylized volumetric clouds clustered into flanking banks
-    // Placed at Y = 90m to 140m (Floors 38 to 60)
-    for (let c = 0; c < 24; c++) {
-      const puffGroup = new THREE.Group();
-      const numSpheres = 6;
-      for (let s = 0; s < numSpheres; s++) {
-        const rad = 7.0 + (s % 4) * 2.5;
-        const sphere = new THREE.Mesh(new THREE.DodecahedronGeometry(rad, 1), cloudPuffMat);
-        sphere.position.set(
-          ((s % 3) - 1) * 9,
-          (s % 2) * 3.5,
-          ((s % 4) - 1.5) * 8
-        );
-        puffGroup.add(sphere);
-      }
+    const farCloudMat = new THREE.MeshStandardMaterial({
+      color: 0xf0f9ff,
+      roughness: 0.95,
+      metalness: 0.0,
+      transparent: true,
+      opacity: 0.72,
+      flatShading: true,
+    });
 
-      // Arrange around the perimeter so the center gameplay zone stays crystal clear
-      const angle = (c / 24) * Math.PI * 2;
-      const radius = 55 + (c % 4) * 22;
-      const altitude = 92 + (c % 6) * 8;
-      puffGroup.position.set(Math.cos(angle) * radius, altitude, Math.sin(angle) * radius);
-      this.cloudWorldGroup.add(puffGroup);
+    // Helper: builds an asymmetric, stylized low-poly cumulus cluster with controlled bounds
+    const createCloudCluster = (
+      coreRadius: number,
+      numLobes: number,
+      mat: THREE.Material,
+      spreadX = 1.25,
+      spreadZ = 1.1
+    ) => {
+      const cluster = new THREE.Group();
+      const core = new THREE.Mesh(new THREE.DodecahedronGeometry(coreRadius, 1), mat);
+      core.scale.set(1.0, 0.72, 1.0);
+      cluster.add(core);
+
+      for (let i = 0; i < numLobes; i++) {
+        const r = coreRadius * (0.55 + (i % 3) * 0.15);
+        const lobe = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 1), mat);
+        const ang = (i / numLobes) * Math.PI * 2 + (i % 2) * 0.4;
+        const dist = coreRadius * 0.75;
+        lobe.position.set(
+          Math.cos(ang) * dist * spreadX,
+          ((i % 3) - 1) * (coreRadius * 0.22),
+          Math.sin(ang) * dist * spreadZ
+        );
+        lobe.scale.set(1.0, 0.68, 1.0);
+        cluster.add(lobe);
+      }
+      return cluster;
+    };
+
+    // DEPTH LAYER 1: NEAR CLOUDS (Flanking outer viewport edges only; never close to camera or blocking gameplay)
+    // Left lateral framing
+    const nearLeft = createCloudCluster(3.6, 3, cloudPuffMat, 1.2, 1.0);
+    nearLeft.position.set(-68, 102, -25);
+    this.cloudWorldGroup.add(nearLeft);
+
+    // Right lateral framing
+    const nearRight = createCloudCluster(3.5, 3, cloudPuffMat, 1.2, 1.1);
+    nearRight.position.set(38, 106, -30);
+    this.cloudWorldGroup.add(nearRight);
+
+    // Lower-left edge accent
+    const nearLowerLeft = createCloudCluster(3.2, 3, cloudPuffMat, 1.3, 1.0);
+    nearLowerLeft.position.set(-58, 92, -35);
+    this.cloudWorldGroup.add(nearLowerLeft);
+
+    // DEPTH LAYER 2: MID-DISTANCE CLOUDS (Scenic flanking cloud banks leaving the central corridor X: [-30, +15] open)
+    const midCloudSpecs = [
+      // Left side formations
+      { x: -85, y: 96, z: -85, rad: 3.8, lobes: 4 },
+      { x: -65, y: 106, z: -110, rad: 3.5, lobes: 3 },
+      { x: -52, y: 114, z: -125, rad: 4.0, lobes: 4 },
+      { x: -92, y: 118, z: -95, rad: 3.4, lobes: 3 },
+      { x: -75, y: 110, z: -75, rad: 3.6, lobes: 3 },
+      // Right side formations
+      { x: 32, y: 102, z: -80, rad: 3.5, lobes: 3 },
+      { x: 55, y: 112, z: -105, rad: 3.8, lobes: 4 },
+      { x: 75, y: 98, z: -75, rad: 3.6, lobes: 3 },
+      { x: 65, y: 118, z: -90, rad: 3.4, lobes: 3 },
+      { x: 88, y: 115, z: -110, rad: 3.6, lobes: 4 },
+    ];
+
+    midCloudSpecs.forEach((spec) => {
+      const cluster = createCloudCluster(spec.rad, spec.lobes, cloudPuffMat);
+      cluster.position.set(spec.x, spec.y, spec.z);
+      this.cloudWorldGroup.add(cluster);
+    });
+
+    // DEPTH LAYER 3: DISTANT CLOUDS (Smaller, soft low-opacity wisps creating atmospheric depth)
+    for (let f = 0; f < 14; f++) {
+      const fAng = (f / 14) * Math.PI * 1.5 + 0.85;
+      const fDist = 180 + (f % 5) * 18;
+      const fAlt = 86 + (f % 6) * 7;
+      const fCluster = createCloudCluster(2.2 + (f % 3) * 0.4, 3, farCloudMat, 1.4, 1.2);
+      fCluster.position.set(Math.cos(fAng) * fDist, fAlt, Math.sin(fAng) * fDist - 60);
+      this.cloudWorldGroup.add(fCluster);
     }
 
-    // Floating classical sky pavilion / temple ruin in the clouds (Ref 2)
+    // Floating classical sky pavilion / temple ruin nestled in the distant right clouds
     const templeGroup = new THREE.Group();
     const marbleMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.4 });
     const blueTileMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.3 });
     const goldMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.2, metalness: 0.8 });
 
-    // Temple platform
-    const platform = new THREE.Mesh(new THREE.BoxGeometry(22, 2.5, 16), marbleMat);
+    const platform = new THREE.Mesh(new THREE.BoxGeometry(14, 1.8, 11), marbleMat);
     templeGroup.add(platform);
 
-    // Columns
-    for (let colX of [-8, 0, 8]) {
-      for (let colZ of [-5, 5]) {
-        const column = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 9, 8), marbleMat);
-        column.position.set(colX, 5.75, colZ);
+    for (let colX of [-5.0, 0, 5.0]) {
+      for (let colZ of [-3.5, 3.5]) {
+        const column = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.45, 6.5, 8), marbleMat);
+        column.position.set(colX, 4.2, colZ);
         templeGroup.add(column);
       }
     }
 
-    // Temple roof
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(14, 5, 4), blueTileMat);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(9.5, 3.8, 4), blueTileMat);
     roof.rotation.y = Math.PI / 4;
-    roof.position.set(0, 12.5, 0);
+    roof.position.set(0, 9.2, 0);
     templeGroup.add(roof);
 
-    // Golden spire
-    const spire = new THREE.Mesh(new THREE.ConeGeometry(0.8, 6, 6), goldMat);
-    spire.position.set(0, 17, 0);
+    const spire = new THREE.Mesh(new THREE.ConeGeometry(0.5, 4, 6), goldMat);
+    spire.position.set(0, 12.5, 0);
     templeGroup.add(spire);
 
-    // Nestled on a fluffy cloud base
-    const templeCloud = new THREE.Mesh(new THREE.DodecahedronGeometry(18, 1), cloudPuffMat);
-    templeCloud.position.set(0, -7, 0);
+    // Proportional cloud base for temple (radius 5.5m)
+    const templeCloud = createCloudCluster(5.5, 4, cloudPuffMat, 1.3, 1.2);
+    templeCloud.position.set(0, -3.5, 0);
     templeGroup.add(templeCloud);
 
-    templeGroup.position.set(135, 115, -120);
+    templeGroup.position.set(90, 104, -125);
     this.cloudWorldGroup.add(templeGroup);
   }
 
   // ========================================================================
-  // 5. REGION 4: ABOVE THE CLOUDS (FLOORS 61–80)
+  // 5. REGION 4: ABOVE THE CLOUDS (FLOORS 61–80) — Rolling Cloud Ocean Below
   // ========================================================================
   private buildAboveCloudSea() {
-    // Vast rolling Cloud Ocean deck stretching to horizon at Y = 138m (Floor 60 level)
-    const oceanGeo = new THREE.PlaneGeometry(800, 800, 16, 16);
-    const oceanMat = new THREE.MeshStandardMaterial({
-      color: 0xf1f5f9,
-      roughness: 0.85,
-      metalness: 0.05,
+    // Crisp sunlit cloud tops for the ocean below
+    const oceanMoundMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.76,
+      metalness: 0.02,
       flatShading: true,
     });
-    const cloudSea = new THREE.Mesh(oceanGeo, oceanMat);
-    cloudSea.rotation.x = -Math.PI / 2;
-    cloudSea.position.y = 138;
-    this.aboveCloudSeaGroup.add(cloudSea);
 
-    // Billowy cloud top mounds on the sea surface
-    for (let i = 0; i < 35; i++) {
-      const moundGeo = new THREE.DodecahedronGeometry(14 + (i % 4) * 5, 1);
-      const mound = new THREE.Mesh(moundGeo, oceanMat);
-      const ang = (i / 35) * Math.PI * 2;
-      const r = 80 + (i % 6) * 35;
-      mound.position.set(Math.cos(ang) * r, 138, Math.sin(ang) * r);
+    // Soft shading for lower cloud depth
+    const oceanDepthMat = new THREE.MeshStandardMaterial({
+      color: 0xe2e8f0,
+      roughness: 0.90,
+      flatShading: true,
+    });
+
+    // Soft misty bed underneath mounds to seal the cloud carpet
+    const hazeBedMat = new THREE.MeshStandardMaterial({
+      color: 0xf1f5f9,
+      roughness: 0.95,
+      transparent: true,
+      opacity: 0.85,
+      flatShading: true,
+    });
+
+    // LAYER 1: Distant Undulating Cloud Horizon Line (at Z = -230m to -290m, centered at X = -140m)
+    // 20 overlapping low-poly billow crests forming a distinct, undulating cloud horizon
+    for (let h = 0; h < 20; h++) {
+      const hRad = 15 + (h % 4) * 2.8;
+      const hMesh = new THREE.Mesh(new THREE.DodecahedronGeometry(hRad, 1), oceanMoundMat);
+      hMesh.scale.set(1.45, 0.42, 1.25);
+      const hX = -250 + h * 22;
+      const hZ = -245 - (h % 3) * 20;
+      const hY = Math.sin(h * 0.75) * 2.2;
+      hMesh.position.set(hX, hY, hZ);
+      this.aboveCloudSeaGroup.add(hMesh);
+    }
+
+    // LAYER 2: Rolling Cloud Ocean Mounds Below the Player (terraced downward from Y = -2m to -16m)
+    // 30 low-poly billow mounds creating a vast, undulating ocean surface
+    for (let m = 0; m < 30; m++) {
+      const mRad = 12 + (m % 5) * 2.5;
+      const mat = (m % 3 === 0) ? oceanDepthMat : oceanMoundMat;
+      const mound = new THREE.Mesh(new THREE.DodecahedronGeometry(mRad, 1), mat);
+      mound.scale.set(1.35, 0.38, 1.35);
+
+      const mAng = (m / 30) * Math.PI * 1.6 + 0.65;
+      const mDist = 80 + (m % 6) * 25;
+      const mY = -4 - (m % 4) * 2.8;
+      mound.position.set(Math.cos(mAng) * mDist - 40, mY, Math.sin(mAng) * mDist - 120);
       this.aboveCloudSeaGroup.add(mound);
     }
 
-    // Solitary extreme mountain summit piercing the cloud ocean (e.g. Everest tip)
+    // LAYER 3: Sub-bed sealing the cloud ocean carpet (placed far below at Y = -18m)
+    for (let b = 0; b < 8; b++) {
+      const bed = new THREE.Mesh(new THREE.BoxGeometry(85, 3.5, 85), hazeBedMat);
+      const bAng = (b / 8) * Math.PI * 2;
+      const bDist = 95 + (b % 3) * 30;
+      bed.position.set(Math.cos(bAng) * bDist - 40, -18, Math.sin(bAng) * bDist - 130);
+      this.aboveCloudSeaGroup.add(bed);
+    }
+
+    // LAYER 4: Solitary extreme mountain summit piercing the cloud ocean (Everest tip on far left)
     const everestTip = new THREE.Mesh(
-      new THREE.ConeGeometry(24, 38, 7),
-      new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.9, flatShading: true })
+      new THREE.ConeGeometry(18, 30, 7),
+      new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.9, flatShading: true })
     );
-    everestTip.position.set(-180, 145, -210);
+    everestTip.position.set(-160, 10, -230);
     this.aboveCloudSeaGroup.add(everestTip);
 
     const everestSnow = new THREE.Mesh(
-      new THREE.ConeGeometry(12, 18, 7),
-      new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, flatShading: true })
+      new THREE.ConeGeometry(9, 14, 7),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.45, flatShading: true })
     );
-    everestSnow.position.set(-180, 155, -210);
+    everestSnow.position.set(-160, 18, -230);
     this.aboveCloudSeaGroup.add(everestSnow);
 
-    // Distant passenger airplane crossing far in the background (Floors 70–75)
+    // LAYER 5: Distant high-altitude cirrus wisps in upper open sky
+    for (let w = 0; w < 4; w++) {
+      const wisp = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(5.0, 1),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.42 })
+      );
+      wisp.scale.set(3.0, 0.22, 0.8);
+      wisp.position.set(-130 + w * 65, 48 + (w % 2) * 6, -260);
+      this.aboveCloudSeaGroup.add(wisp);
+    }
+
+    // LAYER 6: Distant commercial passenger airplane cruising the upper sky
     this.airplaneGroup = new THREE.Group();
     const planeFuselage = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.8, 0.8, 12, 8),
+      new THREE.CylinderGeometry(0.7, 0.7, 10, 8),
       new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 })
     );
     planeFuselage.rotation.z = Math.PI / 2;
     this.airplaneGroup.add(planeFuselage);
 
     const planeWing = new THREE.Mesh(
-      new THREE.BoxGeometry(1.6, 0.2, 14),
+      new THREE.BoxGeometry(1.4, 0.18, 12),
       new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.4 })
     );
-    planeWing.position.set(0, 0, 0);
     this.airplaneGroup.add(planeWing);
 
     // Dual white contrail lines
-    const contrailGeo = new THREE.CylinderGeometry(0.2, 0.4, 60, 4);
+    const contrailGeo = new THREE.CylinderGeometry(0.18, 0.35, 55, 4);
     const contrailMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
-      opacity: 0.75,
+      opacity: 0.72,
     });
     const c1 = new THREE.Mesh(contrailGeo, contrailMat);
     c1.rotation.z = Math.PI / 2;
-    c1.position.set(-32, 0, -2.5);
+    c1.position.set(-29, 0, -2.2);
     this.airplaneGroup.add(c1);
 
     const c2 = new THREE.Mesh(contrailGeo, contrailMat);
     c2.rotation.z = Math.PI / 2;
-    c2.position.set(-32, 0, 2.5);
+    c2.position.set(-29, 0, 2.2);
     this.airplaneGroup.add(c2);
 
-    this.airplaneGroup.position.set(-240, 175, -180);
+    this.airplaneGroup.position.set(-220, 32, -200);
     this.aboveCloudSeaGroup.add(this.airplaneGroup);
   }
 
   // ========================================================================
-  // 6. REGION 5: HIGH ATMOSPHERE (FLOORS 81–100)
+  // 6. REGION 5: HIGH ATMOSPHERE (FLOORS 81–100) — Curved Atmospheric Horizon Below
   // ========================================================================
   private buildHighAtmosphere() {
-    // Curved Earth horizon glow disc at Y = 175m
-    const discGeo = new THREE.RingGeometry(220, 260, 48);
-    const discMat = new THREE.MeshBasicMaterial({
-      color: 0x60a5fa,
+    // Subtle curved atmospheric horizon arc aligned with camera optical line (X = -150m, Z = -280m)
+    // Curvature radius R = 420m, top crest at Y = -96m relative to camera target (lower 32% of screen)
+    const arcRadius = 420;
+    const segments = 52;
+    const spanAng = 0.82; // ~47 degrees horizontal field
+    const ribbonWidth = 5.5;
+
+    // Glowing cyan atmospheric fringe along the curved top edge
+    const fringeGeo = new THREE.BufferGeometry();
+    const fringeVerts: number[] = [];
+
+    for (let i = 0; i <= segments; i++) {
+      const a = -spanAng / 2 + (i / segments) * spanAng;
+      const x = Math.sin(a) * arcRadius;
+      // Center crest is at Y = -96m; drops smoothly at lateral edges
+      const yTop = -96 - (arcRadius - Math.cos(a) * arcRadius);
+      const yBottom = yTop - ribbonWidth;
+      fringeVerts.push(x, yTop, 0);
+      fringeVerts.push(x, yBottom, 0);
+    }
+
+    const fringeIndices: number[] = [];
+    for (let i = 0; i < segments; i++) {
+      const v = i * 2;
+      fringeIndices.push(v, v + 1, v + 2);
+      fringeIndices.push(v + 1, v + 3, v + 2);
+    }
+
+    fringeGeo.setAttribute('position', new THREE.Float32BufferAttribute(fringeVerts, 3));
+    fringeGeo.setIndex(fringeIndices);
+    fringeGeo.computeVertexNormals();
+
+    const fringeMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
       transparent: true,
-      opacity: 0.6,
+      opacity: 0.88,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
-    const atmoRing = new THREE.Mesh(discGeo, discMat);
-    atmoRing.rotation.x = -Math.PI / 2;
-    atmoRing.position.set(0, 175, 0);
-    this.highAtmoGroup.add(atmoRing);
+    const fringeMesh = new THREE.Mesh(fringeGeo, fringeMat);
+    fringeMesh.position.set(-150, 0, -280);
+    this.highAtmoGroup.add(fringeMesh);
+
+    // Deep atmospheric ocean body below the glowing fringe
+    const bodyGeo = new THREE.BufferGeometry();
+    const bodyVerts: number[] = [];
+    const bodyDepth = 50.0;
+
+    for (let i = 0; i <= segments; i++) {
+      const a = -spanAng / 2 + (i / segments) * spanAng;
+      const x = Math.sin(a) * arcRadius;
+      const yTop = -96 - ribbonWidth - (arcRadius - Math.cos(a) * arcRadius);
+      const yBottom = yTop - bodyDepth;
+      bodyVerts.push(x, yTop, 0);
+      bodyVerts.push(x, yBottom, 0);
+    }
+
+    bodyGeo.setAttribute('position', new THREE.Float32BufferAttribute(bodyVerts, 3));
+    bodyGeo.setIndex(fringeIndices);
+    bodyGeo.computeVertexNormals();
+
+    const bodyMat = new THREE.MeshBasicMaterial({
+      color: 0x08203c,
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+    bodyMesh.position.set(-150, 0, -280);
+    this.highAtmoGroup.add(bodyMesh);
+
+    // Subtle micro-scale cloud streaks far below the horizon curve (satellite weather view)
+    for (let s = 0; s < 6; s++) {
+      const streak = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(5, 1),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.24 })
+      );
+      streak.scale.set(3.2, 0.15, 0.8);
+      streak.position.set(-190 + s * 32, -108 + (s % 3) * 3, -290);
+      this.highAtmoGroup.add(streak);
+    }
   }
 
   // ========================================================================
-  // 7. REGION 6 & 7: EDGE OF SPACE & SPACE (FLOORS 101–140) — Ref Image 1
+  // 7. REGION 6 & 7: EDGE OF SPACE & SPACE (FLOORS 101–140) — SPACE ABOVE, EARTH BELOW
   // ========================================================================
   private buildSpaceAndEarth() {
-    // 7A. 1500+ Star Points in deep space void
+    // 7A. 1400+ Sharp Star Points in deep space void (upper hemisphere)
     const starCount = 1400;
     const starGeo = new THREE.BufferGeometry();
     const starPositions = new Float32Array(starCount * 3);
@@ -1022,16 +1221,16 @@ export class EnvironmentManager {
     for (let i = 0; i < starCount; i++) {
       const rad = 500 + Math.random() * 80;
       const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(Math.random() * 1.6 - 0.6); // mostly upper hemisphere
+      const phi = Math.acos(Math.random() * 1.5 - 0.5); // strictly upper celestial hemisphere
 
       starPositions[i * 3] = rad * Math.sin(phi) * Math.cos(theta);
-      starPositions[i * 3 + 1] = rad * Math.cos(phi) + 150; // offset upward
+      starPositions[i * 3 + 1] = rad * Math.cos(phi) + 120; // centered in upper sky
       starPositions[i * 3 + 2] = rad * Math.sin(phi) * Math.sin(theta);
 
       const isBlue = Math.random() > 0.75;
       const isWarm = Math.random() > 0.85;
-      starColors[i * 3] = isBlue ? 0.7 : 1.0;
-      starColors[i * 3 + 1] = isWarm ? 0.9 : (isBlue ? 0.85 : 1.0);
+      starColors[i * 3] = isBlue ? 0.75 : 1.0;
+      starColors[i * 3 + 1] = isWarm ? 0.9 : (isBlue ? 0.88 : 1.0);
       starColors[i * 3 + 2] = isWarm ? 0.7 : 1.0;
     }
 
@@ -1042,37 +1241,39 @@ export class EnvironmentManager {
       size: 2.2,
       vertexColors: true,
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.92,
     });
     this.starsMesh = new THREE.Points(starGeo, starMat);
     this.spaceGroup.add(this.starsMesh);
 
-    // 7B. Stylized Curved Earth Sphere below in space (Ref Image 1)
-    const earthGeo = new THREE.SphereGeometry(140, 32, 32);
+    // 7B. Stylized Curved Earth Sphere below in distance
+    // Aligned with optical center: Z = -280m, X = -150m, Radius = 180m
+    // Center at Y = -276m relative to cameraTargetY -> top crest at Y = -96m (strictly in lower 33% of screen)
+    // The upper 67% of the viewport is dark starry space; Earth forms an elegant curved arc below!
+    const earthGeo = new THREE.SphereGeometry(180, 36, 36);
     const earthTex = getEarthTexture();
     const earthMat = new THREE.MeshStandardMaterial({
       map: earthTex,
-      roughness: 0.6,
-      metalness: 0.1,
+      roughness: 0.75,
+      metalness: 0.05,
     });
     this.earthMesh = new THREE.Mesh(earthGeo, earthMat);
-    // Positioned below-left in the field of view
-    this.earthMesh.position.set(-110, 110, -180);
-    this.earthMesh.rotation.y = 0.8;
+    this.earthMesh.position.set(-150, -276, -280);
     this.spaceGroup.add(this.earthMesh);
 
-    // Glowing cyan atmospheric limb ring around Earth (Ref 1)
-    const limbGeo = new THREE.RingGeometry(139, 146, 48);
+    // 7C. Luminous cyan atmospheric limb ring hugging the top curved crest of the Earth
+    const limbGeo = new THREE.RingGeometry(179, 185, 64, 1, 0, Math.PI);
     const limbMat = new THREE.MeshBasicMaterial({
       color: 0x38bdf8,
       transparent: true,
-      opacity: 0.75,
+      opacity: 0.85,
       side: THREE.DoubleSide,
+      depthWrite: false,
     });
-    const limb = new THREE.Mesh(limbGeo, limbMat);
-    limb.position.set(-110, 110, -170);
-    limb.lookAt(0, 280, 0);
-    this.spaceGroup.add(limb);
+    this.earthLimb = new THREE.Mesh(limbGeo, limbMat);
+    this.earthLimb.position.set(-150, -276, -276);
+    this.earthLimb.rotation.x = -0.165; // Tilted ~9.5 deg to face camera elevation
+    this.spaceGroup.add(this.earthLimb);
   }
 
   // ========================================================================
@@ -1159,7 +1360,7 @@ export class EnvironmentManager {
   }
 
   // ========================================================================
-  // 9. REGION 9 & 10: MOON APPROACH & MOON REGION (FLOORS 161–200+)
+  // 9. REGION 9 & 10: MOON APPROACH & MOON REGION (FLOORS 66–80)
   // ========================================================================
   private buildMoon() {
     // Stylized 3D Moon
@@ -1175,7 +1376,8 @@ export class EnvironmentManager {
     this.moonMesh.position.set(65, 430, -160);
     this.moonGroup.add(this.moonMesh);
 
-    // Lunar mountain silhouette crags at bottom of Moon for when player reaches Floor 181–200
+    // Lunar mountain silhouette crags at bottom of Moon for Moon Region (Floors 73–80)
+    this.lunarCragsGroup = new THREE.Group();
     const lunarCragMat = new THREE.MeshStandardMaterial({
       color: 0x94a3b8,
       roughness: 0.95,
@@ -1187,11 +1389,163 @@ export class EnvironmentManager {
       const cAng = (c / 12) * Math.PI * 0.8 + 0.2;
       crag.position.set(
         Math.cos(cAng) * 60 + 20,
-        410 - (c % 3) * 4,
+        -18 - (c % 3) * 4,
         Math.sin(cAng) * 50 - 160
       );
-      this.moonGroup.add(crag);
+      this.lunarCragsGroup.add(crag);
     }
+    this.moonGroup.add(this.lunarCragsGroup);
+  }
+
+  /**
+   * Single Source of Truth for environment region progression thresholds and transition blending.
+   */
+  public static getRegionState(floorCount: number): RegionState {
+    let regionIndex = 0;
+    let regionId: EnvironmentRegionId = 'CITY';
+    let transitionProgress = 0;
+    let regionName = 'CITY / GROUND';
+    let nextRegionName = 'HIGH MOUNTAINS';
+
+    if (floorCount < 8) {
+      regionIndex = 0;
+      regionId = 'CITY';
+      transitionProgress = 0;
+      regionName = 'CITY / GROUND';
+      nextRegionName = 'HIGH MOUNTAINS';
+    } else if (floorCount <= 10) {
+      regionIndex = 0;
+      regionId = 'CITY';
+      transitionProgress = (floorCount - 7) / 3; // Floor 8: 0.33, Floor 10: 1.0
+      regionName = 'LEAVING CITY';
+      nextRegionName = 'HIGH MOUNTAINS';
+    } else if (floorCount < 18) {
+      regionIndex = 1;
+      regionId = 'HIGH_MOUNTAINS';
+      transitionProgress = 0;
+      regionName = 'HIGH MOUNTAINS';
+      nextRegionName = 'CLOUD WORLD';
+    } else if (floorCount <= 20) {
+      regionIndex = 1;
+      regionId = 'HIGH_MOUNTAINS';
+      transitionProgress = (floorCount - 17) / 3; // Floor 18: 0.33, Floor 20: 1.0
+      regionName = 'APPROACHING CLOUDS';
+      nextRegionName = 'CLOUD WORLD';
+    } else if (floorCount < 28) {
+      regionIndex = 2;
+      regionId = 'CLOUD_WORLD';
+      transitionProgress = 0;
+      regionName = 'CLOUD WORLD';
+      nextRegionName = 'ABOVE THE CLOUDS';
+    } else if (floorCount <= 30) {
+      regionIndex = 2;
+      regionId = 'CLOUD_WORLD';
+      transitionProgress = (floorCount - 27) / 3; // Floor 28: 0.33, Floor 30: 1.0
+      regionName = 'BREAKING THROUGH CLOUDS';
+      nextRegionName = 'ABOVE THE CLOUDS';
+    } else if (floorCount < 36) {
+      regionIndex = 3;
+      regionId = 'ABOVE_THE_CLOUDS';
+      transitionProgress = 0;
+      regionName = 'ABOVE THE CLOUDS';
+      nextRegionName = 'HIGH ATMOSPHERE';
+    } else if (floorCount <= 37) {
+      regionIndex = 3;
+      regionId = 'ABOVE_THE_CLOUDS';
+      transitionProgress = (floorCount - 35) / 2; // Floor 36: 0.5, Floor 37: 1.0
+      regionName = 'CLIMBING UPPER SKY';
+      nextRegionName = 'HIGH ATMOSPHERE';
+    } else if (floorCount < 43) {
+      regionIndex = 4;
+      regionId = 'HIGH_ATMOSPHERE';
+      transitionProgress = 0;
+      regionName = 'HIGH ATMOSPHERE';
+      nextRegionName = 'EDGE OF SPACE';
+    } else if (floorCount <= 44) {
+      regionIndex = 4;
+      regionId = 'HIGH_ATMOSPHERE';
+      transitionProgress = (floorCount - 42) / 2; // Floor 43: 0.5, Floor 44: 1.0
+      regionName = 'ATMOSPHERE THINNING';
+      nextRegionName = 'EDGE OF SPACE';
+    } else if (floorCount < 50) {
+      regionIndex = 5;
+      regionId = 'EDGE_OF_SPACE';
+      transitionProgress = 0;
+      regionName = 'EDGE OF SPACE';
+      nextRegionName = 'SPACE / EARTH BELOW';
+    } else if (floorCount <= 51) {
+      regionIndex = 5;
+      regionId = 'EDGE_OF_SPACE';
+      transitionProgress = (floorCount - 49) / 2; // Floor 50: 0.5, Floor 51: 1.0
+      regionName = 'ENTERING SPACE';
+      nextRegionName = 'SPACE / EARTH BELOW';
+    } else if (floorCount < 57) {
+      regionIndex = 6;
+      regionId = 'SPACE_EARTH_BELOW';
+      transitionProgress = 0;
+      regionName = 'SPACE / EARTH BELOW';
+      nextRegionName = 'ORBITAL REGION';
+    } else if (floorCount <= 58) {
+      regionIndex = 6;
+      regionId = 'SPACE_EARTH_BELOW';
+      transitionProgress = (floorCount - 56) / 2; // Floor 57: 0.5, Floor 58: 1.0
+      regionName = 'APPROACHING ORBIT';
+      nextRegionName = 'ORBITAL REGION';
+    } else if (floorCount < 64) {
+      regionIndex = 7;
+      regionId = 'ORBITAL_REGION';
+      transitionProgress = 0;
+      regionName = 'ORBITAL REGION';
+      nextRegionName = 'MOON APPROACH';
+    } else if (floorCount <= 65) {
+      regionIndex = 7;
+      regionId = 'ORBITAL_REGION';
+      transitionProgress = (floorCount - 63) / 2; // Floor 64: 0.5, Floor 65: 1.0
+      regionName = 'LEAVING ORBIT';
+      nextRegionName = 'MOON APPROACH';
+    } else if (floorCount < 71) {
+      regionIndex = 8;
+      regionId = 'MOON_APPROACH';
+      transitionProgress = 0;
+      regionName = 'MOON APPROACH';
+      nextRegionName = 'MOON REGION';
+    } else if (floorCount <= 72) {
+      regionIndex = 8;
+      regionId = 'MOON_APPROACH';
+      transitionProgress = (floorCount - 70) / 2; // Floor 71: 0.5, Floor 72: 1.0
+      regionName = 'LUNAR DESCENT';
+      nextRegionName = 'MOON REGION';
+    } else if (floorCount < 79) {
+      regionIndex = 9;
+      regionId = 'MOON_REGION';
+      transitionProgress = 0;
+      regionName = 'MOON REGION';
+      nextRegionName = 'ENDLESS SPACE';
+    } else if (floorCount <= 80) {
+      regionIndex = 9;
+      regionId = 'MOON_REGION';
+      transitionProgress = (floorCount - 78) / 2; // Floor 79: 0.5, Floor 80: 1.0
+      regionName = 'APPROACHING DEEP SPACE';
+      nextRegionName = 'ENDLESS SPACE';
+    } else {
+      regionIndex = 10;
+      regionId = 'ENDLESS_SPACE';
+      transitionProgress = Math.min(1.0, (floorCount - 80) / 3);
+      regionName = 'ENDLESS SPACE';
+      nextRegionName = 'DEEP COSMOS';
+    }
+
+    return {
+      regionIndex,
+      regionId,
+      regionName,
+      nextRegionName,
+      transitionProgress,
+    };
+  }
+
+  public getRegionState(floorCount: number): RegionState {
+    return EnvironmentManager.getRegionState(floorCount);
   }
 
   // ========================================================================
@@ -1205,166 +1559,52 @@ export class EnvironmentManager {
     sunLight?: THREE.DirectionalLight,
     ambientLight?: THREE.AmbientLight
   ): RegionState {
-    // 10A. Calculate Region & Smooth Continuous Transitions
-    // Transitions start 5 to 7 floors BEFORE boundary!
-    // Floor 1-15: City (Region 0)
-    // Floor 16-20: City -> Mountains Transition (ramp 0 to 1)
-    // Floor 21-33: Mountains (Region 1)
-    // Floor 34-40: Mountains -> Cloud World Transition (ramp 0 to 1)
-    // Floor 41-54: Cloud World (Region 2)
-    // Floor 55-60: Cloud World -> Above Clouds Transition (ramp 0 to 1)
-    // Floor 61-74: Above Clouds (Region 3)
-    // Floor 75-80: Above Clouds -> High Atmosphere Transition (ramp 0 to 1)
-    // Floor 81-94: High Atmosphere (Region 4)
-    // Floor 95-100: High Atmosphere -> Edge of Space Transition (ramp 0 to 1)
-    // Floor 101-114: Edge of Space (Region 5)
-    // Floor 115-120: Edge of Space -> Space Transition (ramp 0 to 1)
-    // Floor 121-134: Space (Region 6)
-    // Floor 135-140: Space -> Orbital Transition (ramp 0 to 1)
-    // Floor 141-154: Orbital Region (Region 7)
-    // Floor 155-160: Orbital -> Moon Approach Transition (ramp 0 to 1)
-    // Floor 161-174: Moon Approach (Region 8)
-    // Floor 175-180: Moon Approach -> Moon Region Transition (ramp 0 to 1)
-    // Floor 181-194: Moon Region (Region 9)
-    // Floor 195+: Endless Space (Region 10)
-
-    let regionIndex = 0;
-    let transitionProgress = 0;
-    let regionName = 'CITY / GROUND';
-    let nextRegionName = 'HIGH MOUNTAINS';
-
-    if (floorCount < 16) {
-      regionIndex = 0;
-      transitionProgress = 0;
-      regionName = 'CITY / GROUND';
-      nextRegionName = 'HIGH MOUNTAINS';
-    } else if (floorCount <= 20) {
-      regionIndex = 0;
-      transitionProgress = (floorCount - 15) / 5; // Floor 16: 0.2, Floor 20: 1.0
-      regionName = 'LEAVING CITY';
-      nextRegionName = 'HIGH MOUNTAINS';
-    } else if (floorCount < 34) {
-      regionIndex = 1;
-      transitionProgress = 0;
-      regionName = 'HIGH MOUNTAINS';
-      nextRegionName = 'CLOUD WORLD';
-    } else if (floorCount <= 40) {
-      regionIndex = 1;
-      transitionProgress = (floorCount - 33) / 7; // Floor 34: 0.14, Floor 40: 1.0
-      regionName = 'APPROACHING CLOUDS';
-      nextRegionName = 'CLOUD WORLD';
-    } else if (floorCount < 55) {
-      regionIndex = 2;
-      transitionProgress = 0;
-      regionName = 'CLOUD WORLD';
-      nextRegionName = 'ABOVE THE CLOUDS';
-    } else if (floorCount <= 60) {
-      regionIndex = 2;
-      transitionProgress = (floorCount - 54) / 6;
-      regionName = 'BREAKING THROUGH CLOUDS';
-      nextRegionName = 'ABOVE THE CLOUDS';
-    } else if (floorCount < 75) {
-      regionIndex = 3;
-      transitionProgress = 0;
-      regionName = 'ABOVE THE CLOUDS';
-      nextRegionName = 'HIGH ATMOSPHERE';
-    } else if (floorCount <= 80) {
-      regionIndex = 3;
-      transitionProgress = (floorCount - 74) / 6;
-      regionName = 'CLIMBING UPPER SKY';
-      nextRegionName = 'HIGH ATMOSPHERE';
-    } else if (floorCount < 95) {
-      regionIndex = 4;
-      transitionProgress = 0;
-      regionName = 'HIGH ATMOSPHERE';
-      nextRegionName = 'EDGE OF SPACE';
-    } else if (floorCount <= 100) {
-      regionIndex = 4;
-      transitionProgress = (floorCount - 94) / 6;
-      regionName = 'ATMOSPHERE THINNING';
-      nextRegionName = 'EDGE OF SPACE';
-    } else if (floorCount < 115) {
-      regionIndex = 5;
-      transitionProgress = 0;
-      regionName = 'EDGE OF SPACE';
-      nextRegionName = 'SPACE / EARTH BELOW';
-    } else if (floorCount <= 120) {
-      regionIndex = 5;
-      transitionProgress = (floorCount - 114) / 6;
-      regionName = 'ENTERING SPACE';
-      nextRegionName = 'SPACE / EARTH BELOW';
-    } else if (floorCount < 135) {
-      regionIndex = 6;
-      transitionProgress = 0;
-      regionName = 'SPACE / EARTH BELOW';
-      nextRegionName = 'ORBITAL REGION';
-    } else if (floorCount <= 140) {
-      regionIndex = 6;
-      transitionProgress = (floorCount - 134) / 6;
-      regionName = 'APPROACHING ORBIT';
-      nextRegionName = 'ORBITAL REGION';
-    } else if (floorCount < 155) {
-      regionIndex = 7;
-      transitionProgress = 0;
-      regionName = 'ORBITAL REGION';
-      nextRegionName = 'MOON APPROACH';
-    } else if (floorCount <= 160) {
-      regionIndex = 7;
-      transitionProgress = (floorCount - 154) / 6;
-      regionName = 'LEAVING ORBIT';
-      nextRegionName = 'MOON APPROACH';
-    } else if (floorCount < 175) {
-      regionIndex = 8;
-      transitionProgress = 0;
-      regionName = 'MOON APPROACH';
-      nextRegionName = 'MOON REGION';
-    } else if (floorCount <= 180) {
-      regionIndex = 8;
-      transitionProgress = (floorCount - 174) / 6;
-      regionName = 'LUNAR DESCENT';
-      nextRegionName = 'MOON REGION';
-    } else if (floorCount < 195) {
-      regionIndex = 9;
-      transitionProgress = 0;
-      regionName = 'MOON REGION';
-      nextRegionName = 'ENDLESS SPACE';
-    } else {
-      regionIndex = 10;
-      transitionProgress = Math.min(1.0, (floorCount - 194) / 6);
-      regionName = 'ENDLESS SPACE';
-      nextRegionName = 'DEEP COSMOS';
-    }
+    // 10A. Calculate Region & Smooth Continuous Transitions from Single Source of Truth
+    const state = EnvironmentManager.getRegionState(floorCount);
+    const { regionIndex, transitionProgress } = state;
 
     this.currentRegion = regionIndex;
     this.transitionT = transitionProgress;
 
     // 10B. Stream and Cull Scenery based on altitude:
     // "OLD ENVIRONMENT MUST MOVE BELOW"
-    // Ground city stays at Y = -6m. When floor > 32, it's far below and culled for performance.
-    this.cityGroup.visible = floorCount <= 35;
-    // Mountains are visible from Floor 12 (distant view) up to Floor 62 (far below in clouds)
-    this.mountainGroup.visible = floorCount >= 10 && floorCount <= 65;
-    // Cloud world is visible from Floor 32 up to Floor 72
-    this.cloudWorldGroup.visible = floorCount >= 32 && floorCount <= 72;
-    // Above cloud ocean is visible from Floor 54 up to Floor 110
-    this.aboveCloudSeaGroup.visible = floorCount >= 54 && floorCount <= 110;
-    // High atmosphere ring
-    this.highAtmoGroup.visible = floorCount >= 74 && floorCount <= 125;
-    // Space & Earth globe are visible from Floor 95 onward
-    this.spaceGroup.visible = floorCount >= 95;
-    // Orbital station is visible from Floor 135 to 175
-    this.orbitalGroup.visible = floorCount >= 135 && floorCount <= 175;
-    // Moon is visible from Floor 155 onward
-    this.moonGroup.visible = floorCount >= 155;
+    // Ground city stays at Y = 0. When floor > 18, it's far below and culled for performance.
+    this.cityGroup.visible = floorCount <= 18;
+    // Mountains are visible from Floor 7 (distant peaks) up to Floor 32 (far below in clouds)
+    this.mountainGroup.visible = floorCount >= 7 && floorCount <= 32;
+    // Cloud world is visible from Floor 18 up to Floor 34
+    this.cloudWorldGroup.visible = floorCount >= 18 && floorCount <= 34;
+    // Above cloud ocean is visible from Floor 28 up to Floor 46
+    this.aboveCloudSeaGroup.visible = floorCount >= 28 && floorCount <= 46;
+    // High atmosphere curved horizon is visible from Floor 36 up to Floor 52
+    this.highAtmoGroup.visible = floorCount >= 36 && floorCount <= 52;
+    // Space & Earth globe are visible from Floor 44 onward
+    this.spaceGroup.visible = floorCount >= 44;
+    // Orbital station is visible from Floor 57 to Floor 74
+    this.orbitalGroup.visible = floorCount >= 57 && floorCount <= 74;
+    // Moon is visible from Floor 64 onward
+    this.moonGroup.visible = floorCount >= 64;
 
     // 10C. Dynamic Parallax Tracking:
     // Old scenery remains at world altitude; celestial / sky elements follow smoothly
     this.skyGroup.position.y = cameraTargetY * 0.95;
 
+    if (this.aboveCloudSeaGroup.visible) {
+      // Dynamic vertical climbing parallax for the cloud ocean below
+      this.aboveCloudSeaGroup.position.y = cameraTargetY - 32 - (floorCount - 31) * 1.5;
+    }
+
+    if (this.highAtmoGroup.visible) {
+      this.highAtmoGroup.position.y = cameraTargetY;
+    }
+
     if (this.spaceGroup.visible && this.earthMesh) {
-      // Earth remains below the player as they climb in space
-      this.earthMesh.position.y = cameraTargetY - 80;
-      this.earthMesh.rotation.y += delta * 0.02;
+      // Earth remains in distant background below the player (strictly lower 33% of view)
+      this.earthMesh.position.set(-150, cameraTargetY - 276, -280);
+      this.earthMesh.rotation.y += delta * 0.012;
+      if (this.earthLimb) {
+        this.earthLimb.position.set(-150, cameraTargetY - 276, -276);
+      }
     }
 
     if (this.starsMesh) {
@@ -1373,14 +1613,18 @@ export class EnvironmentManager {
 
     if (this.moonMesh) {
       // Moon approach scaling:
-      // Floor 161: scale 0.25 (small Moon disc)
-      // Floor 165: scale 0.45
-      // Floor 175: scale 0.8
-      // Floor 180+: scale 1.15 (visually dominant)
-      const moonProg = Math.max(0, Math.min(1.0, (floorCount - 155) / 25));
-      const moonScale = THREE.MathUtils.lerp(0.25, 1.2, moonProg);
+      // Floor 66: scale 0.3 (small Moon disc)
+      // Floor 72: scale 0.75 (approaching Moon)
+      // Floor 76+: scale 1.2 (dominates view in Moon Region)
+      const moonProg = Math.max(0, Math.min(1.0, (floorCount - 65) / 15));
+      const moonScale = THREE.MathUtils.lerp(0.3, 1.2, moonProg);
       this.moonMesh.scale.set(moonScale, moonScale, moonScale);
       this.moonMesh.position.y = cameraTargetY + 45;
+    }
+
+    if (this.lunarCragsGroup) {
+      this.lunarCragsGroup.position.y = cameraTargetY - 25;
+      this.lunarCragsGroup.visible = floorCount >= 71;
     }
 
     if (this.spaceStationGroup && this.spaceStationGroup.visible) {
@@ -1430,12 +1674,7 @@ export class EnvironmentManager {
     // 10E. Update Sky Shader, Fog, and Sun/Ambient Lighting
     this.updateLightingAndSky(floorCount, regionIndex, transitionProgress, scene, sunLight, ambientLight);
 
-    return {
-      regionIndex,
-      regionName,
-      nextRegionName,
-      transitionProgress,
-    };
+    return state;
   }
 
   private updateLightingAndSky(
@@ -1502,90 +1741,99 @@ export class EnvironmentManager {
         scene.fog.density = THREE.MathUtils.lerp(0.0035, 0.006, t);
       }
     } else if (regionIndex === 2) {
-      // Cloud World -> breakthrough
+      // Cloud World -> breakthrough into upper sky
       const t = transitionProgress;
       uniforms.topColor.value.setRGB(
-        THREE.MathUtils.lerp(0.58, 0.01, t),
-        THREE.MathUtils.lerp(0.76, 0.45, t),
-        THREE.MathUtils.lerp(0.99, 0.75, t)
+        THREE.MathUtils.lerp(0.22, 0.06, t),
+        THREE.MathUtils.lerp(0.65, 0.35, t),
+        THREE.MathUtils.lerp(0.98, 0.85, t)
       );
       uniforms.horizonColor.value.setRGB(
-        THREE.MathUtils.lerp(0.99, 0.95, t),
-        THREE.MathUtils.lerp(0.95, 0.98, t),
-        THREE.MathUtils.lerp(0.82, 1.0, t)
+        THREE.MathUtils.lerp(0.96, 0.92, t),
+        THREE.MathUtils.lerp(0.98, 0.96, t),
+        THREE.MathUtils.lerp(1.0, 1.0, t)
       );
+      uniforms.groundHaze.value.setRGB(0.94, 0.97, 1.0);
       uniforms.starIntensity.value = 0.0;
       uniforms.spaceDarkness.value = 0.0;
 
       if (scene && scene.fog instanceof THREE.FogExp2) {
-        scene.fog.color.setRGB(0.98, 0.98, 1.0);
-        scene.fog.density = THREE.MathUtils.lerp(0.006, 0.002, t);
+        scene.fog.color.setRGB(0.95, 0.98, 1.0);
+        scene.fog.density = THREE.MathUtils.lerp(0.005, 0.0015, t);
       }
     } else if (regionIndex === 3) {
-      // Above the Clouds -> High Atmosphere
+      // Above the Clouds (Floors 61-80) -> High Atmosphere
       const t = transitionProgress;
       uniforms.topColor.value.setRGB(
-        THREE.MathUtils.lerp(0.01, 0.11, t),
-        THREE.MathUtils.lerp(0.45, 0.31, t),
-        THREE.MathUtils.lerp(0.75, 0.85, t)
+        THREE.MathUtils.lerp(0.06, 0.02, t),
+        THREE.MathUtils.lerp(0.35, 0.08, t),
+        THREE.MathUtils.lerp(0.85, 0.35, t)
       );
       uniforms.horizonColor.value.setRGB(
-        THREE.MathUtils.lerp(0.95, 0.38, t),
-        THREE.MathUtils.lerp(0.98, 0.65, t),
+        THREE.MathUtils.lerp(0.92, 0.42, t),
+        THREE.MathUtils.lerp(0.96, 0.78, t),
         THREE.MathUtils.lerp(1.0, 0.98, t)
+      );
+      uniforms.groundHaze.value.setRGB(
+        THREE.MathUtils.lerp(0.92, 0.15, t),
+        THREE.MathUtils.lerp(0.95, 0.28, t),
+        THREE.MathUtils.lerp(0.99, 0.55, t)
       );
       uniforms.starIntensity.value = 0.0;
       uniforms.spaceDarkness.value = t * 0.25;
 
       if (scene && scene.fog instanceof THREE.FogExp2) {
-        scene.fog.color.setRGB(0.72, 0.88, 0.99);
-        scene.fog.density = THREE.MathUtils.lerp(0.002, 0.0008, t);
+        scene.fog.color.setRGB(0.82, 0.92, 0.99);
+        scene.fog.density = THREE.MathUtils.lerp(0.0015, 0.0006, t);
       }
     } else if (regionIndex === 4) {
-      // High Atmosphere -> Edge of space
+      // High Atmosphere (Floors 81-100) -> Edge of space
       const t = transitionProgress;
       uniforms.topColor.value.setRGB(
-        THREE.MathUtils.lerp(0.11, 0.03, t),
-        THREE.MathUtils.lerp(0.31, 0.07, t),
-        THREE.MathUtils.lerp(0.85, 0.25, t)
+        THREE.MathUtils.lerp(0.015, 0.003, t),
+        THREE.MathUtils.lerp(0.06, 0.008, t),
+        THREE.MathUtils.lerp(0.25, 0.03, t)
       );
       uniforms.horizonColor.value.setRGB(
-        THREE.MathUtils.lerp(0.38, 0.22, t),
-        THREE.MathUtils.lerp(0.65, 0.74, t),
-        THREE.MathUtils.lerp(0.98, 0.97, t)
+        THREE.MathUtils.lerp(0.42, 0.08, t),
+        THREE.MathUtils.lerp(0.78, 0.18, t),
+        THREE.MathUtils.lerp(0.98, 0.35, t)
       );
-      uniforms.starIntensity.value = t * 0.45;
-      uniforms.spaceDarkness.value = THREE.MathUtils.lerp(0.25, 0.75, t);
+      uniforms.groundHaze.value.setRGB(
+        THREE.MathUtils.lerp(0.08, 0.01, t),
+        THREE.MathUtils.lerp(0.18, 0.02, t),
+        THREE.MathUtils.lerp(0.38, 0.04, t)
+      );
+      uniforms.starIntensity.value = THREE.MathUtils.lerp(0.25, 0.85, t);
+      uniforms.spaceDarkness.value = THREE.MathUtils.lerp(0.35, 0.88, t);
 
       if (scene && scene.fog instanceof THREE.FogExp2) {
-        scene.fog.color.setRGB(0.1, 0.18, 0.4);
-        scene.fog.density = THREE.MathUtils.lerp(0.0008, 0.0002, t);
+        scene.fog.color.setRGB(0.04, 0.08, 0.20);
+        scene.fog.density = THREE.MathUtils.lerp(0.0006, 0.0001, t);
       }
       if (sunLight) {
-        sunLight.intensity = 2.2;
+        sunLight.intensity = 2.4;
       }
       if (ambientLight) {
-        ambientLight.intensity = 0.75;
+        ambientLight.intensity = 0.7;
       }
     } else if (regionIndex === 5) {
-      // Edge of Space -> Full Space
+      // Edge of Space (Floors 101-120) -> Full Space
+      // The sky above is dark space void with stars; only the Earth below has the cyan atmospheric rim
       const t = transitionProgress;
-      uniforms.topColor.value.setRGB(
-        THREE.MathUtils.lerp(0.03, 0.005, t),
-        THREE.MathUtils.lerp(0.07, 0.008, t),
-        THREE.MathUtils.lerp(0.25, 0.02, t)
-      );
+      uniforms.topColor.value.setRGB(0.002, 0.003, 0.008);
       uniforms.horizonColor.value.setRGB(
-        THREE.MathUtils.lerp(0.22, 0.02, t),
-        THREE.MathUtils.lerp(0.74, 0.05, t),
-        THREE.MathUtils.lerp(0.97, 0.12, t)
+        THREE.MathUtils.lerp(0.012, 0.003, t),
+        THREE.MathUtils.lerp(0.025, 0.006, t),
+        THREE.MathUtils.lerp(0.06, 0.015, t)
       );
-      uniforms.starIntensity.value = THREE.MathUtils.lerp(0.45, 1.0, t);
-      uniforms.spaceDarkness.value = THREE.MathUtils.lerp(0.75, 1.0, t);
+      uniforms.groundHaze.value.setRGB(0.003, 0.005, 0.012);
+      uniforms.starIntensity.value = THREE.MathUtils.lerp(0.85, 1.0, t);
+      uniforms.spaceDarkness.value = THREE.MathUtils.lerp(0.88, 1.0, t);
 
       if (scene && scene.fog instanceof THREE.FogExp2) {
-        scene.fog.color.setRGB(0.01, 0.01, 0.02);
-        scene.fog.density = 0.00005; // clear void
+        scene.fog.color.setRGB(0.005, 0.008, 0.015);
+        scene.fog.density = 0.00003; // crystal clear cosmic void
       }
       if (sunLight) {
         sunLight.color.setHex(0xffffff);
