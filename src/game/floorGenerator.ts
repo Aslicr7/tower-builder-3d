@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { FloorDimensions, FloorModuleStyle } from '../types';
 import { GAME_CONFIG } from './constants';
+import { buildBrickApartment } from './floorVisuals/brickApartment';
 
 // Shared materials cache for high performance
 const materialCache: Record<string, THREE.Material> = {};
@@ -379,6 +380,8 @@ export function getArchMaterials() {
 }
 
 export const ALL_STYLES: FloorModuleStyle[] = [
+  'MODERN_APARTMENT_V1',
+  'BRICK_APARTMENT',
   'GLASS_MODERN',
   'BRUTALIST_CONCRETE',
   'RED_BRICK',
@@ -1234,6 +1237,11 @@ export function createFloorModule(
   // Modern Apartment V1 Archetype
   if (style === 'MODERN_APARTMENT_V1') {
     return buildModernApartmentV1(floorIndex, w, d, h);
+  }
+
+  // Brick Apartment Archetype
+  if (style === 'BRICK_APARTMENT') {
+    return buildBrickApartment(floorIndex, w, d, h);
   }
 
   const mats = getArchMaterials();
