@@ -242,29 +242,23 @@ export function evaluatePlacementQuality(
 
 /**
  * Computes the early-game slippery window factor w(floorNumber).
- * Active during Floors 1–15 with strongest penalties on inaccurate placements,
- * then smoothly fades from Floor 15 to 26 so high-floor towers retain normal stability.
+ * Active during Floors 1–15 with strongest penalties on inaccurate placements (w = 1.0),
+ * then smoothly fades from Floor 16 to 25 via cosine S-curve so high-floor towers retain normal stability.
  *
  * Curve checkpoints:
- * Floor 1:  1.000 (full early penalty)
- * Floor 5:  ~0.920 (still strong)
- * Floor 10: ~0.780 (clearly active)
- * Floor 15: ~0.607 (last floor where mechanic is strong)
- * Floor 20: ~0.241 (smoothly fading out)
- * Floor 26+: 0.000 (high-tower baseline)
- * Floor 30:  0.000
+ * Floor 1–15: 1.000 (full early-game physics penalty on inaccurate drops)
+ * Floor 16:   0.980 (smooth beginning of transition)
+ * Floor 20:   0.573 (mid-transition)
+ * Floor 25:   0.052 (transition almost complete)
+ * Floor 26+:  0.000 (standard high-tower baseline stability)
  */
 export function getEarlyGripWindowFactor(floorNumber: number): number {
-  if (floorNumber <= 1) return 1.0;
+  if (floorNumber <= 15) return 1.0;
   if (floorNumber >= 26) return 0.0;
 
-  if (floorNumber <= 10) {
-    const t = (floorNumber - 1) / 9;
-    return 1.0 - 0.22 * Math.pow(t, 1.25);
-  } else {
-    const t = (floorNumber - 10) / 16;
-    return 0.78 * 0.5 * (1 + Math.cos(Math.PI * t));
-  }
+  // Smooth cosine S-curve across Floors 16 to 25
+  const t = (floorNumber - 15) / 11;
+  return 0.5 * (1 + Math.cos(Math.PI * t));
 }
 
 /**
@@ -272,9 +266,9 @@ export function getEarlyGripWindowFactor(floorNumber: number): number {
  *
  * Target FEEL during Floors 1-15:
  * - PERFECT:   100% of normal safe assistance
- * - GREAT:     ~85-95% (calibrated base: 90%)
- * - NORMAL:    ~30-45% (calibrated base: 38%)
- * - RISKY:     ~0-20%  (calibrated base: 12%)
+ * - GREAT:     85% safe assistance
+ * - NORMAL:    0% LockConstraint early
+ * - RISKY:     0% LockConstraint early
  * - DANGEROUS: 0% at all floors
  *
  * Fades smoothly toward 100% for non-dangerous placements above Floor 15.
@@ -294,7 +288,7 @@ export function getEarlyGripFactor(
   }
 
   const qualityAssistance =
-    quality === 'PERFECT' ? 1.0 : quality === 'GREAT' ? 0.90 : quality === 'NORMAL' ? 0.38 : 0.12;
+    quality === 'PERFECT' ? 1.0 : quality === 'GREAT' ? 0.85 : 0.0;
 
   return (1.0 - w) * 1.0 + w * qualityAssistance;
 }
@@ -302,11 +296,11 @@ export function getEarlyGripFactor(
 /**
  * Returns impact momentum retention multipliers (first contact damping).
  * For Floors 1-15:
- * - PERFECT: strong impact absorption (retention ~0.65 linear, ~0.50 angular)
- * - GREAT:   good impact absorption (~0.74 linear, ~0.62 angular)
- * - NORMAL:  less absorption (~0.86 linear, ~0.74 angular) -> momentum survives contact!
- * - RISKY:   much less absorption (~0.92 linear, ~0.82 angular) -> slides easily!
- * - DANGEROUS: minimal artificial absorption (~0.97 linear, ~0.90 angular)
+ * - PERFECT: strong impact absorption (retention ~0.50 linear, ~0.45 angular)
+ * - GREAT:   good impact absorption (~0.60 linear, ~0.60 angular)
+ * - NORMAL:  less absorption (~0.85 linear, ~0.80 angular) -> release momentum survives contact!
+ * - RISKY:   much less absorption (~0.96 linear, ~0.94 angular) -> slides easily!
+ * - DANGEROUS: minimal artificial absorption (~0.98 linear, ~0.96 angular)
  */
 export function getImpactMomentumRetention(
   quality: PlacementQuality,
@@ -327,20 +321,20 @@ export function getImpactMomentumRetention(
 
   switch (quality) {
     case 'PERFECT':
-      targetLat = 0.65;
-      targetRot = 0.50;
+      targetLat = 0.50; // target ~0.45-0.55
+      targetRot = 0.45; // target ~0.40-0.50
       break;
     case 'GREAT':
-      targetLat = 0.74;
-      targetRot = 0.62;
+      targetLat = 0.60; // target ~0.55-0.65
+      targetRot = 0.60; // target ~0.55-0.65
       break;
     case 'NORMAL':
-      targetLat = 0.86;
-      targetRot = 0.74;
+      targetLat = 0.85; // target ~0.80-0.90
+      targetRot = 0.80; // target ~0.75-0.85
       break;
     case 'RISKY':
-      targetLat = 0.92;
-      targetRot = 0.82;
+      targetLat = 0.96; // target ~0.92-1.00
+      targetRot = 0.94; // target ~0.88-0.98
       break;
   }
 
@@ -353,11 +347,11 @@ export function getImpactMomentumRetention(
  * Computes the LockConstraint maxForce dynamically based on placement status, support ratio,
  * floor progression, and placement quality.
  *
- * Reverse Assistance & Early-Game Philosophy:
+ * Reverse Assistance & Early-Game Philosophy (Parts 5 & 6):
  * - DANGEROUS (<25% support): Strictly 0 at ALL floors. Real physics dictates collapse.
- * - PERFECT / GREAT: Safe and reliable grip.
- * - NORMAL (Floors 1-15): Weak stabilization (~30-45% grip early), allowing physical sliding/tilt.
- * - RISKY (Floors 1-15): Very weak or zero stabilization (~0-20% grip early).
+ * - PERFECT / GREAT: Safe and reliable grip (provided supportRatio >= 0.25).
+ * - NORMAL (Floors 1-15): STRICTLY ZERO LockConstraint (maxForce = 0).
+ * - RISKY (Floors 1-15): STRICTLY ZERO LockConstraint (maxForce = 0).
  * - High floors (30+): High tower stability returns to suppress micro-sliding and creep.
  */
 export function getStabilizationMaxForce(
@@ -365,80 +359,144 @@ export function getStabilizationMaxForce(
   difficulty: number,
   floorNumber: number,
   supportRatio?: number,
-  quality?: PlacementQuality
+  quality: PlacementQuality = 'NORMAL'
 ): number {
-  if (status === 'DANGEROUS') {
+  // Part 6: Geometric support strictly overrides safety!
+  // If supportRatio < 0.25 (or DANGEROUS status): ZERO LockConstraint at all floors!
+  if (status === 'DANGEROUS' || (supportRatio !== undefined && supportRatio < 0.25)) {
     return 0;
   }
 
+  const w = getEarlyGripWindowFactor(floorNumber);
+
+  // Baseline high-tower force calculation:
   const t = Math.min(Math.max((floorNumber - 1) / 49, 0), 1.0);
   const progressFactor = floorNumber >= 50 ? 1.0 : 0.83 + 0.17 * Math.pow(t, 0.85);
 
-  let baseForce: number;
+  let highTowerForce = 0;
   switch (status) {
     case 'VERY_STABLE':
-      baseForce = 3.6e6 * progressFactor;
+      highTowerForce = 3.6e6 * progressFactor;
       break;
-
     case 'STABLE':
-      baseForce = 2.4e6 * progressFactor;
+      highTowerForce = 2.4e6 * progressFactor;
       break;
-
     case 'RISKY': {
       const ratioT =
         supportRatio !== undefined
           ? Math.min(Math.max((supportRatio - 0.25) / 0.20, 0), 1.0)
           : 0.5;
-      baseForce = (1.5e5 + ratioT * 3.0e5) * progressFactor;
+      highTowerForce = (1.5e5 + ratioT * 3.0e5) * progressFactor;
       break;
     }
   }
 
-  if (quality) {
-    const earlyGrip = getEarlyGripFactor(quality, floorNumber, status);
-    return baseForce * earlyGrip;
+  // Early-game forces (Floors 1-15 where w = 1.0):
+  // Part 5 & 6:
+  // NORMAL: NO LockConstraint (0)
+  // RISKY: NO LockConstraint (0)
+  // DANGEROUS: NO LockConstraint (0)
+  // PERFECT / GREAT: only allowed if supportRatio >= 0.25, and scaled down if supportRatio < 0.45
+  let earlyForce = 0;
+  if (quality === 'PERFECT') {
+    if (status === 'VERY_STABLE') {
+      earlyForce = 3.0e6;
+    } else if (status === 'STABLE') {
+      earlyForce = 1.8e6;
+    } else if (status === 'RISKY') {
+      // supportRatio < 0.45: greatly reduced stabilization
+      earlyForce = 5.0e4;
+    }
+  } else if (quality === 'GREAT') {
+    if (status === 'VERY_STABLE') {
+      earlyForce = 1.8e6;
+    } else if (status === 'STABLE') {
+      earlyForce = 1.0e6;
+    } else if (status === 'RISKY') {
+      // supportRatio < 0.45: greatly reduced stabilization
+      earlyForce = 2.5e4;
+    }
+  } else {
+    // NORMAL or RISKY during Floors 1-15: STRICTLY 0 LockConstraint!
+    earlyForce = 0;
   }
 
-  return baseForce;
+  if (w >= 1.0) {
+    return earlyForce;
+  }
+  if (w <= 0.0) {
+    return highTowerForce;
+  }
+  return (1.0 - w) * highTowerForce + w * earlyForce;
 }
 
 /**
- * Returns settled linear and angular damping based on floor progression and placement quality.
+ * Returns settled linear and angular damping based on floor progression and placement quality (Part 7).
  *
  * Philosophy:
  * - Lower floors (1-15):
- *   - PERFECT/GREAT: Standard calibrated damping to settle securely.
- *   - NORMAL/RISKY: Reduced damping allows real physical sliding and tilting.
+ *   - PERFECT: linear 0.60, angular 0.75
+ *   - GREAT: linear 0.48, angular 0.62
+ *   - NORMAL: linear 0.22, angular 0.30 (allows visible sliding/tilting)
+ *   - RISKY: linear 0.12, angular 0.15 (very low damping)
+ *   - DANGEROUS: linear 0.05, angular 0.08
  * - High floors (30-50+): High damping suppresses residual creep and vibration on tall towers.
  */
 export function getSettledDampingForFloor(
   floorNumber: number,
-  quality: PlacementQuality = 'PERFECT'
+  quality: PlacementQuality = 'NORMAL',
+  status?: StabilizationStatus
 ): {
   linear: number;
   angular: number;
 } {
-  let baseLinear: number;
-  let baseAngular: number;
+  let highTowerLinear: number;
+  let highTowerAngular: number;
 
   if (floorNumber <= 50) {
     const t = Math.min(Math.max((floorNumber - 1) / 49, 0), 1.0);
-    baseLinear = 0.44 + t * (0.70 - 0.44);
-    baseAngular = 0.58 + t * (0.80 - 0.58);
+    highTowerLinear = 0.44 + t * (0.70 - 0.44);
+    highTowerAngular = 0.58 + t * (0.80 - 0.58);
   } else {
     const m = floorNumber - 50;
-    baseLinear = 0.75 - (0.75 - 0.70) * Math.exp(-0.04 * m);
-    baseAngular = 0.85 - (0.85 - 0.80) * Math.exp(-0.04 * m);
+    highTowerLinear = 0.75 - (0.75 - 0.70) * Math.exp(-0.04 * m);
+    highTowerAngular = 0.85 - (0.85 - 0.80) * Math.exp(-0.04 * m);
   }
 
   const w = getEarlyGripWindowFactor(floorNumber);
-  if (w <= 0 || quality === 'PERFECT') {
-    return { linear: baseLinear, angular: baseAngular };
+  if (w <= 0) {
+    return { linear: highTowerLinear, angular: highTowerAngular };
   }
 
-  const dampMult = quality === 'GREAT' ? 0.95 : quality === 'NORMAL' ? 0.78 : 0.55;
-  const linear = (1 - w) * baseLinear + w * (baseLinear * dampMult);
-  const angular = (1 - w) * baseAngular + w * (baseAngular * dampMult);
+  let earlyLinear: number;
+  let earlyAngular: number;
+
+  if (status === 'DANGEROUS') {
+    earlyLinear = 0.05;
+    earlyAngular = 0.08;
+  } else {
+    switch (quality) {
+      case 'PERFECT':
+        earlyLinear = 0.60;
+        earlyAngular = 0.75;
+        break;
+      case 'GREAT':
+        earlyLinear = 0.48;
+        earlyAngular = 0.62;
+        break;
+      case 'NORMAL':
+        earlyLinear = 0.22;
+        earlyAngular = 0.30;
+        break;
+      case 'RISKY':
+        earlyLinear = 0.12;
+        earlyAngular = 0.15;
+        break;
+    }
+  }
+
+  const linear = (1.0 - w) * highTowerLinear + w * earlyLinear;
+  const angular = (1.0 - w) * highTowerAngular + w * earlyAngular;
   return { linear, angular };
 }
 
