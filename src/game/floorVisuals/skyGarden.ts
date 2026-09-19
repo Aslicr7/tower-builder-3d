@@ -36,7 +36,7 @@
  */
 
 import * as THREE from 'three';
-import { FloorDimensions } from '../../types';
+import { FloorDimensions, LiftingPoint } from '../../types';
 
 // ============================================================================
 // TEXTURE & MATERIAL CACHING (MOBILE-OPTIMIZED)
@@ -297,26 +297,57 @@ export function buildSkyGarden(
   const variantLetter = ['A', 'B', 'C'][variantIndex];
   group.name = `Floor_${floorIndex}_SKY_GARDEN_${variantLetter}`;
 
-  const dimensions: FloorDimensions = { width: w, depth: d, height: h };
+  // =========================================================================
+  // COMPLETE STACKABLE STRUCTURAL MODULE ENVELOPE
+  // - Full standard module height `h` (matching ~2.3m)
+  // - Standard footprint `w` x `d` (matching ~4.2m)
+  // - Flat structural top perimeter frame at y = +h/2 for predictable stacking
+  // - Four visible structural lifting lugs at the four top corners
+  // - All garden elements contained strictly inside the module (below stacking plane)
+  // =========================================================================
+  const slabThickness = 0.28; // Solid load-bearing foundation slab
+  const slabBottomY = -h / 2;
+  const slabTopY = slabBottomY + slabThickness;
+  const slabCenterY = slabBottomY + slabThickness / 2;
+
+  // Four top corner column locations
+  const colHalfX = w * 0.44;
+  const colHalfZ = d * 0.44;
+  const colW = 0.22;
+  const colD = 0.22;
+  const colH = h - slabThickness;
+  const colCenterY = slabTopY + colH / 2; // Column tops reach exactly y = +h/2
+
+  // Top structural frame (Stacking Rim)
+  const topFrameH = 0.16;
+  const topFrameW = 0.22;
+  const topFrameCenterY = h / 2 - topFrameH / 2; // Top surface is at exactly y = +h/2
+
+  // Four structural lifting attachment points right on top of the 4 corner columns
+  const topAnchorY = h / 2 + 0.04;
+  const liftingPoints: LiftingPoint[] = [
+    { x: -colHalfX, y: topAnchorY, z: -colHalfZ },
+    { x: colHalfX, y: topAnchorY, z: -colHalfZ },
+    { x: colHalfX, y: topAnchorY, z: colHalfZ },
+    { x: -colHalfX, y: topAnchorY, z: colHalfZ },
+  ];
+
+  // Full module dimensions matching standard rectangular physics collider
+  const dimensions: FloorDimensions = {
+    width: w,
+    depth: d,
+    height: h,
+    liftingPoints,
+  };
 
   const setupMesh = (mesh: THREE.Mesh) => {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
   };
 
-  // Base Slab & Level Coordinates
-  const slabThickness = 0.32; // Thick architectural floor slab
-  const slabBottomY = -h / 2;
-  const slabTopY = slabBottomY + slabThickness; // e.g. -1.2 + 0.32 = -0.88m
-  const slabCenterY = slabBottomY + slabThickness / 2;
-  const ceilingY = h / 2; // +1.2m
-
   // =========================================================================
-  // COMMON ARCHITECTURAL BASE FOUNDATION
-  // Gives the floor module a solid grounded mass in the tower stack
+  // 1. LOAD-BEARING BASE FOUNDATION SLAB
   // =========================================================================
-
-  // 1. Thick Base Slab in Warm Concrete
   const baseSlab = new THREE.Mesh(
     new THREE.BoxGeometry(w, slabThickness - 0.06, d),
     mats.warmConcrete
@@ -325,7 +356,7 @@ export function buildSkyGarden(
   setupMesh(baseSlab);
   group.add(baseSlab);
 
-  // 2. Dark Foundation Reveal Trim at Bottom
+  // Dark foundation reveal trim underneath
   const shadowReveal = new THREE.Mesh(
     new THREE.BoxGeometry(w - 0.08, 0.06, d - 0.08),
     mats.darkCore
@@ -335,19 +366,119 @@ export function buildSkyGarden(
   group.add(shadowReveal);
 
   // =========================================================================
-  // VARIANT A: GARDEN FRAME
-  // Silhouette:
-  // - Solid base + low service core on the left (~30% footprint, lower 42% height)
-  // - Core features ONE large horizontal smoky-glass slot opening
-  // - Full-height timber pergola anchored on the left reaching top of floor (y = +h/2)
-  // - One long integrated planter running along the right edge with sculpted foliage
-  // - Generous open central pedestrian terrace giving see-through depth
+  // 2. FOUR REINFORCED VERTICAL CORNER COLUMNS
+  // Connects the base slab to the top structural stacking frame
   // =========================================================================
+  const cornerCoords: [number, number][] = [
+    [-colHalfX, -colHalfZ],
+    [colHalfX, -colHalfZ],
+    [colHalfX, colHalfZ],
+    [-colHalfX, colHalfZ],
+  ];
+
+  for (const [cx, cz] of cornerCoords) {
+    // Vertical structural column in dark architectural steel/composite
+    const col = new THREE.Mesh(
+      new THREE.BoxGeometry(colW, colH, colD),
+      mats.darkCore
+    );
+    col.position.set(cx, colCenterY, cz);
+    setupMesh(col);
+    group.add(col);
+
+    // Reinforced column base shoe on terrace slab
+    const shoe = new THREE.Mesh(
+      new THREE.BoxGeometry(colW + 0.06, 0.08, colD + 0.06),
+      mats.darkCore
+    );
+    shoe.position.set(cx, slabTopY + 0.04, cz);
+    setupMesh(shoe);
+    group.add(shoe);
+
+    // =======================================================================
+    // 3. FOUR TOP LIFTING ANCHOR BRACKETS (MOUNTED ON CORNER COLUMNS)
+    // The 4 crane slings attach directly to these 4 visible top steel lugs!
+    // =======================================================================
+    // Anchor base bracket plate
+    const bracketPlate = new THREE.Mesh(
+      new THREE.BoxGeometry(0.24, 0.04, 0.24),
+      mats.darkCore
+    );
+    bracketPlate.position.set(cx, h / 2 + 0.02, cz);
+    setupMesh(bracketPlate);
+    group.add(bracketPlate);
+
+    // Solid structural pad-eye shackle lug with center eyelet hole
+    const lug = new THREE.Mesh(
+      new THREE.BoxGeometry(0.08, 0.10, 0.16),
+      mats.darkCore
+    );
+    lug.position.set(cx, topAnchorY, cz);
+    setupMesh(lug);
+    group.add(lug);
+  }
+
+  // =========================================================================
+  // 4. TOP STRUCTURAL PERIMETER FRAME (FLAT STACKING SURFACE)
+  // Provides a continuous flat structural rim at y = +h/2 for next floor module
+  // Center remains completely open to view garden down from above
+  // =========================================================================
+  // Longitudinal perimeter beams (North and South along X)
+  const beamNorth = new THREE.Mesh(
+    new THREE.BoxGeometry(w, topFrameH, topFrameW),
+    mats.darkCore
+  );
+  beamNorth.position.set(0, topFrameCenterY, -colHalfZ);
+  setupMesh(beamNorth);
+  group.add(beamNorth);
+
+  const beamSouth = new THREE.Mesh(
+    new THREE.BoxGeometry(w, topFrameH, topFrameW),
+    mats.darkCore
+  );
+  beamSouth.position.set(0, topFrameCenterY, colHalfZ);
+  setupMesh(beamSouth);
+  group.add(beamSouth);
+
+  // Cross perimeter beams (East and West along Z)
+  const beamEast = new THREE.Mesh(
+    new THREE.BoxGeometry(topFrameW, topFrameH, d - topFrameW * 2),
+    mats.darkCore
+  );
+  beamEast.position.set(colHalfX, topFrameCenterY, 0);
+  setupMesh(beamEast);
+  group.add(beamEast);
+
+  const beamWest = new THREE.Mesh(
+    new THREE.BoxGeometry(topFrameW, topFrameH, d - topFrameW * 2),
+    mats.darkCore
+  );
+  beamWest.position.set(-colHalfX, topFrameCenterY, 0);
+  setupMesh(beamWest);
+  group.add(beamWest);
+
+  // Corner joint reinforcement caps
+  for (const [cx, cz] of cornerCoords) {
+    const jointCap = new THREE.Mesh(
+      new THREE.BoxGeometry(colW + 0.04, 0.04, colD + 0.04),
+      mats.darkCore
+    );
+    jointCap.position.set(cx, h / 2 - 0.02, cz);
+    setupMesh(jointCap);
+    group.add(jointCap);
+  }
+
+  // =========================================================================
+  // 5. OPEN GARDEN INTERIOR (ALL ELEMENTS SAFELY BELOW TOP STACKING PLANE)
+  // Internal ceiling clearance: y <= +h/2 - 0.20m (~ +0.95m max)
+  // =========================================================================
+
+  // VARIANT A: GARDEN FRAME
   if (variantIndex === 0) {
-    const coreW = 1.70;
-    const coreD = 2.80;
-    const coreH = 0.95; // Lower 40% height above slab
-    const coreX = -w / 2 + coreW / 2 + 0.20;
+    const coreW = 1.45;
+    const coreD = 2.40;
+    const coreH = 0.85;
+    const coreX = -w / 2 + coreW / 2 + 0.35;
     const coreZ = 0.0;
     const coreCenterY = slabTopY + coreH / 2;
 
@@ -369,9 +500,9 @@ export function buildSkyGarden(
     setupMesh(coreCap);
     group.add(coreCap);
 
-    // 2. One Large Opening: Horizontal Smoky Glass Slot facing central garden
+    // 2. Horizontal Smoky Glass Slot Opening
     const windowW = 0.10;
-    const windowH = 0.38;
+    const windowH = 0.35;
     const windowD = coreD - 0.60;
     const slotGlass = new THREE.Mesh(
       new THREE.BoxGeometry(windowW, windowH, windowD),
@@ -381,7 +512,6 @@ export function buildSkyGarden(
     setupMesh(slotGlass);
     group.add(slotGlass);
 
-    // Dark Frame Trim around the glass slot
     const slotFrame = new THREE.Mesh(
       new THREE.BoxGeometry(windowW + 0.02, windowH + 0.08, windowD + 0.08),
       mats.darkCore
@@ -390,24 +520,22 @@ export function buildSkyGarden(
     setupMesh(slotFrame);
     group.add(slotFrame);
 
-    // 3. Full-Height Pergola Structure (Reaches full floor ceiling y = +h/2)
-    const postW = 0.18;
-    const postH = ceilingY - slabTopY - 0.06; // ~2.02m high
+    // 3. Slender Internal Timber Pergola (Well below top frame: peak y = +0.43m)
+    const postW = 0.14;
+    const postH = 1.25;
     const postCenterY = slabTopY + postH / 2;
 
     const pX1 = coreX - coreW / 2 + postW / 2 + 0.05;
-    const pX2 = coreX + coreW / 2 + 0.35; // Posts extend out over garden terrace
+    const pX2 = coreX + coreW / 2 + 0.30;
     const pZ1 = -coreD / 2 + 0.25;
     const pZ2 = coreD / 2 - 0.25;
 
-    const postCoords = [
+    for (const [px, pz] of [
       [pX1, pZ1],
       [pX2, pZ1],
       [pX1, pZ2],
       [pX2, pZ2],
-    ];
-
-    for (const [px, pz] of postCoords) {
+    ]) {
       const post = new THREE.Mesh(
         new THREE.BoxGeometry(postW, postH, postW),
         mats.warmWood
@@ -416,52 +544,45 @@ export function buildSkyGarden(
       setupMesh(post);
       group.add(post);
 
-      // Dark structural base shoe
       const baseShoe = new THREE.Mesh(
-        new THREE.BoxGeometry(postW + 0.04, 0.10, postW + 0.04),
+        new THREE.BoxGeometry(postW + 0.04, 0.08, postW + 0.04),
         mats.darkCore
       );
-      baseShoe.position.set(px, slabTopY + 0.05, pz);
+      baseShoe.position.set(px, slabTopY + 0.04, pz);
       setupMesh(baseShoe);
       group.add(baseShoe);
     }
 
-    // Two Longitudinal Beams at Top of Pergola
-    const beamW = postW;
-    const beamH = 0.18;
-    const beamD = coreD + 0.40;
-    const beamY = slabTopY + postH - beamH / 2;
+    // Pergola longitudinal runner beams
+    const beamD = coreD + 0.20;
+    const beamY = slabTopY + postH - 0.08;
 
-    const beam1 = new THREE.Mesh(new THREE.BoxGeometry(beamW, beamH, beamD), mats.warmWood);
-    beam1.position.set(pX1, beamY, coreZ);
-    setupMesh(beam1);
-    group.add(beam1);
+    const b1 = new THREE.Mesh(new THREE.BoxGeometry(postW, 0.14, beamD), mats.warmWood);
+    b1.position.set(pX1, beamY, coreZ);
+    setupMesh(b1);
+    group.add(b1);
 
-    const beam2 = new THREE.Mesh(new THREE.BoxGeometry(beamW, beamH, beamD), mats.warmWood);
-    beam2.position.set(pX2, beamY, coreZ);
-    setupMesh(beam2);
-    group.add(beam2);
+    const b2 = new THREE.Mesh(new THREE.BoxGeometry(postW, 0.14, beamD), mats.warmWood);
+    b2.position.set(pX2, beamY, coreZ);
+    setupMesh(b2);
+    group.add(b2);
 
-    // 4 Bold Roof Slats Spanning Across Top
-    const slatW = pX2 - pX1 + 0.45;
-    const slatH = 0.12;
-    const slatD = 0.16;
-    const slatY = beamY + beamH / 2 + slatH / 2;
-    const slatGeom = new THREE.BoxGeometry(slatW, slatH, slatD);
-
+    // 4 Cross slats (Peak height: slabTopY + postH + 0.05 ≈ +0.43m)
+    const slatW = pX2 - pX1 + 0.40;
+    const slatGeom = new THREE.BoxGeometry(slatW, 0.09, 0.14);
     for (let i = 0; i < 4; i++) {
       const sz = pZ1 + (i / 3) * (pZ2 - pZ1);
       const slat = new THREE.Mesh(slatGeom, mats.woodSlat);
-      slat.position.set((pX1 + pX2) / 2, slatY, sz);
+      slat.position.set((pX1 + pX2) / 2, beamY + 0.10, sz);
       setupMesh(slat);
       group.add(slat);
     }
 
-    // 4. One Long Integrated Planter on Right Edge
-    const planW = 1.15;
-    const planD = 3.40;
-    const planH = 0.52;
-    const planX = w / 2 - planW / 2 - 0.20;
+    // 4. One Long Integrated Stone Planter on Right Edge
+    const planW = 1.05;
+    const planD = 2.80;
+    const planH = 0.44;
+    const planX = w / 2 - planW / 2 - 0.35;
     const planZ = 0.0;
 
     const planter = new THREE.Mesh(
@@ -473,14 +594,13 @@ export function buildSkyGarden(
     group.add(planter);
 
     const planterRim = new THREE.Mesh(
-      new THREE.BoxGeometry(planW + 0.04, 0.06, planD + 0.04),
+      new THREE.BoxGeometry(planW + 0.04, 0.05, planD + 0.04),
       mats.darkCore
     );
-    planterRim.position.set(planX, slabTopY + planH + 0.03, planZ);
+    planterRim.position.set(planX, slabTopY + planH + 0.025, planZ);
     setupMesh(planterRim);
     group.add(planterRim);
 
-    // Soil Bed
     const soil = new THREE.Mesh(
       new THREE.BoxGeometry(planW - 0.12, 0.08, planD - 0.12),
       mats.soil
@@ -488,32 +608,42 @@ export function buildSkyGarden(
     soil.position.set(planX, slabTopY + planH + 0.01, planZ);
     group.add(soil);
 
-    // 5. Irregular Low-Poly Sculptural Foliage (2 connected clusters along the planter)
-    const folGroup1 = createOrganicFoliageCluster(mats, planW * 0.95, 0.90, planD * 0.50, 101);
-    folGroup1.position.set(planX, slabTopY + planH, planZ - 0.75);
+    // Sculptural Faceted Foliage Clusters (Peak y ≈ +0.42m, safely below +1.15m)
+    const folGroup1 = createOrganicFoliageCluster(mats, planW * 0.95, 0.85, planD * 0.46, 101);
+    folGroup1.position.set(planX, slabTopY + planH, planZ - 0.65);
     group.add(folGroup1);
 
-    const folGroup2 = createOrganicFoliageCluster(mats, planW * 0.95, 1.05, planD * 0.50, 202);
-    folGroup2.position.set(planX, slabTopY + planH, planZ + 0.75);
+    const folGroup2 = createOrganicFoliageCluster(mats, planW * 0.95, 0.88, planD * 0.46, 202);
+    folGroup2.position.set(planX, slabTopY + planH, planZ + 0.65);
     group.add(folGroup2);
+
+    // 5. Central Terrace Timber Deck Inset & Stone Seating Bench
+    const deck = new THREE.Mesh(
+      new THREE.BoxGeometry(1.40, 0.04, 2.20),
+      mats.warmWood
+    );
+    deck.position.set(0.15, slabTopY + 0.02, 0);
+    setupMesh(deck);
+    group.add(deck);
+
+    const bench = new THREE.Mesh(
+      new THREE.BoxGeometry(0.50, 0.36, 1.20),
+      mats.planterStone
+    );
+    bench.position.set(0.15, slabTopY + 0.18, 0);
+    setupMesh(bench);
+    group.add(bench);
   }
 
-  // =========================================================================
   // VARIANT B: GREEN TERRACE
-  // Silhouette:
-  // - Central offset architectural core with deep dark recessed portal opening
-  // - Two integrated planting zones (one large front-left, one raised rear-right)
-  // - Partial overhead structural canopy connecting to top floor frame
-  // - Open terrace corridor wrapping through the floor
-  // =========================================================================
   else if (variantIndex === 1) {
-    const coreW = 1.65;
-    const coreD = 1.45;
-    const coreH = 0.98;
-    const coreX = 0.20;
-    const coreZ = -d / 2 + coreD / 2 + 0.25;
+    const coreW = 1.45;
+    const coreD = 1.35;
+    const coreH = 0.88;
+    const coreX = 0.10;
+    const coreZ = -d / 2 + coreD / 2 + 0.35;
 
-    // 1. Central/Rear Architectural Core (Warm Concrete + Dark Core Trim)
+    // 1. Central/Rear Architectural Core
     const coreMesh = new THREE.Mesh(
       new THREE.BoxGeometry(coreW, coreH, coreD),
       mats.warmConcrete
@@ -531,32 +661,31 @@ export function buildSkyGarden(
     setupMesh(woodPanel);
     group.add(woodPanel);
 
-    // 2. ONE Deep Dark Recessed Portal Opening
-    const portalW = 0.85;
-    const portalH = 0.65;
-    const portalD = 0.40;
+    // Deep Dark Recessed Portal Opening with Smoky Glass
+    const portalW = 0.75;
+    const portalH = 0.54;
+    const portalD = 0.36;
     const portal = new THREE.Mesh(
       new THREE.BoxGeometry(portalW, portalH, portalD),
       mats.darkCore
     );
-    portal.position.set(coreX, slabTopY + portalH / 2 + 0.05, coreZ + coreD / 2 - portalD / 2 + 0.03);
+    portal.position.set(coreX, slabTopY + portalH / 2 + 0.06, coreZ + coreD / 2 - portalD / 2 + 0.03);
     setupMesh(portal);
     group.add(portal);
 
-    // Smoky Glass back inside portal
     const portalGlass = new THREE.Mesh(
       new THREE.BoxGeometry(portalW - 0.10, portalH - 0.10, 0.04),
       mats.smokyGlass
     );
-    portalGlass.position.set(coreX, slabTopY + portalH / 2 + 0.05, coreZ + coreD / 2 - portalD + 0.04);
+    portalGlass.position.set(coreX, slabTopY + portalH / 2 + 0.06, coreZ + coreD / 2 - portalD + 0.04);
     group.add(portalGlass);
 
-    // 3. Planting Zone 1 (Large Front-Left Garden Planter)
-    const z1W = 1.70;
-    const z1D = 1.80;
-    const z1H = 0.50;
-    const z1X = -w / 2 + z1W / 2 + 0.25;
-    const z1Z = d / 2 - z1D / 2 - 0.25;
+    // 2. Planting Zone 1 (Front-Left Garden Planter)
+    const z1W = 1.45;
+    const z1D = 1.50;
+    const z1H = 0.44;
+    const z1X = -w / 2 + z1W / 2 + 0.35;
+    const z1Z = d / 2 - z1D / 2 - 0.35;
 
     const planter1 = new THREE.Mesh(
       new THREE.BoxGeometry(z1W, z1H, z1D),
@@ -574,16 +703,15 @@ export function buildSkyGarden(
     setupMesh(rim1);
     group.add(rim1);
 
-    // Foliage Zone 1: Organic Sculptural Low-Poly Foliage
-    const folZ1 = createOrganicFoliageCluster(mats, z1W * 0.90, 1.10, z1D * 0.90, 303);
+    const folZ1 = createOrganicFoliageCluster(mats, z1W * 0.90, 0.88, z1D * 0.90, 303);
     folZ1.position.set(z1X, slabTopY + z1H, z1Z);
     group.add(folZ1);
 
-    // 4. Planting Zone 2 (Secondary Raised Planter on Right)
-    const z2W = 1.25;
-    const z2D = 1.60;
-    const z2H = 0.65;
-    const z2X = w / 2 - z2W / 2 - 0.25;
+    // 3. Planting Zone 2 (Secondary Raised Planter on Right)
+    const z2W = 1.10;
+    const z2D = 1.40;
+    const z2H = 0.52;
+    const z2X = w / 2 - z2W / 2 - 0.35;
     const z2Z = 0.10;
 
     const planter2 = new THREE.Mesh(
@@ -602,20 +730,19 @@ export function buildSkyGarden(
     setupMesh(rim2);
     group.add(rim2);
 
-    // Foliage Zone 2: Organic Sculptural Foliage (Different height & shape)
-    const folZ2 = createOrganicFoliageCluster(mats, z2W * 0.92, 0.95, z2D * 0.92, 404);
+    const folZ2 = createOrganicFoliageCluster(mats, z2W * 0.92, 0.80, z2D * 0.92, 404);
     folZ2.position.set(z2X, slabTopY + z2H, z2Z);
     group.add(folZ2);
 
-    // 5. Overhead Structural Pergola Canopy (Full floor height y = +h/2)
-    const postW = 0.16;
-    const postH = ceilingY - slabTopY - 0.06;
+    // 4. Overhead Structural Trellis Canopy (Peak height y ≈ +0.38m)
+    const postW = 0.14;
+    const postH = 1.20;
     const postCenterY = slabTopY + postH / 2;
 
     const canPosts = [
-      [-0.45, -0.60],
-      [w / 2 - 0.35, -0.60],
-      [w / 2 - 0.35, 1.20],
+      [-0.30, -0.45],
+      [w / 2 - 0.45, -0.45],
+      [w / 2 - 0.45, 1.05],
     ];
 
     for (const [px, pz] of canPosts) {
@@ -628,43 +755,34 @@ export function buildSkyGarden(
       group.add(post);
     }
 
-    // Top Runner Beam
-    const runnerL = 1.95;
+    const runnerL = 1.70;
     const runner = new THREE.Mesh(
-      new THREE.BoxGeometry(postW, 0.18, runnerL),
+      new THREE.BoxGeometry(postW, 0.14, runnerL),
       mats.darkCore
     );
-    runner.position.set(w / 2 - 0.35, slabTopY + postH - 0.09, 0.30);
+    runner.position.set(w / 2 - 0.45, slabTopY + postH - 0.07, 0.30);
     setupMesh(runner);
     group.add(runner);
 
-    // 4 Overhead Slats in Warm Wood
-    const slatW = (w / 2 - 0.35) - (-0.45) + 0.40;
-    const slatGeom = new THREE.BoxGeometry(slatW, 0.12, 0.16);
+    const slatW = (w / 2 - 0.45) - (-0.30) + 0.30;
+    const slatGeom = new THREE.BoxGeometry(slatW, 0.09, 0.14);
     for (let i = 0; i < 4; i++) {
-      const sz = -0.50 + (i / 3) * 1.60;
+      const sz = -0.40 + (i / 3) * 1.40;
       const slat = new THREE.Mesh(slatGeom, mats.woodSlat);
-      slat.position.set(0.65, slabTopY + postH + 0.06, sz);
+      slat.position.set(0.50, slabTopY + postH + 0.04, sz);
       setupMesh(slat);
       group.add(slat);
     }
   }
 
-  // =========================================================================
   // VARIANT C: HANGING GARDEN
-  // Silhouette:
-  // - Asymmetric low core on rear-left corner
-  // - Prominent planting strip along the right edge with overhanging foliage forms
-  // - Large timber pergola frame on the opposite side reaching full ceiling height
-  // - Strongest asymmetric outdoor garden silhouette
-  // =========================================================================
   else {
     // 1. Asymmetric Low Core (Rear-Left)
-    const coreW = 1.60;
-    const coreD = 1.60;
-    const coreH = 0.90;
-    const coreX = -w / 2 + coreW / 2 + 0.20;
-    const coreZ = -d / 2 + coreD / 2 + 0.20;
+    const coreW = 1.35;
+    const coreD = 1.35;
+    const coreH = 0.85;
+    const coreX = -w / 2 + coreW / 2 + 0.35;
+    const coreZ = -d / 2 + coreD / 2 + 0.35;
 
     const coreMesh = new THREE.Mesh(
       new THREE.BoxGeometry(coreW, coreH, coreD),
@@ -674,7 +792,6 @@ export function buildSkyGarden(
     setupMesh(coreMesh);
     group.add(coreMesh);
 
-    // Core Cap
     const coreCap = new THREE.Mesh(
       new THREE.BoxGeometry(coreW + 0.04, 0.06, coreD + 0.04),
       mats.darkCore
@@ -684,7 +801,7 @@ export function buildSkyGarden(
     group.add(coreCap);
 
     // Horizontal Recessed Dark Metal Slot Opening
-    const slotW = coreW - 0.40;
+    const slotW = coreW - 0.35;
     const slotH = 0.25;
     const slotD = 0.15;
     const slot = new THREE.Mesh(
@@ -695,11 +812,11 @@ export function buildSkyGarden(
     setupMesh(slot);
     group.add(slot);
 
-    // 2. Large Planting Strip Along Right Edge with Overhang
-    const stripW = 1.15;
-    const stripD = 3.60;
-    const stripH = 0.58;
-    const stripX = w / 2 - stripW / 2 - 0.18;
+    // 2. Long Planting Strip Along Right Edge with Overhang
+    const stripW = 1.00;
+    const stripD = 3.00;
+    const stripH = 0.48;
+    const stripX = w / 2 - stripW / 2 - 0.32;
     const stripZ = 0.0;
 
     const planterStrip = new THREE.Mesh(
@@ -718,35 +835,31 @@ export function buildSkyGarden(
     setupMesh(rimStrip);
     group.add(rimStrip);
 
-    // 3. Foliage with Overhanging Drooping Forms (The "Hanging Garden" Signature)
-    // Section 1: Front foliage cluster with overhanging mass
-    const folHang1 = createOrganicFoliageCluster(mats, stripW * 0.95, 1.15, stripD * 0.45, 505, true);
-    folHang1.position.set(stripX, slabTopY + stripH, stripZ - 0.85);
+    // Foliage with Overhanging Drooping Forms (Peak height y ≈ +0.56m)
+    const folHang1 = createOrganicFoliageCluster(mats, stripW * 0.95, 0.95, stripD * 0.45, 505, true);
+    folHang1.position.set(stripX, slabTopY + stripH, stripZ - 0.75);
     group.add(folHang1);
 
-    // Section 2: Rear foliage cluster with secondary overhanging mass
-    const folHang2 = createOrganicFoliageCluster(mats, stripW * 0.95, 1.00, stripD * 0.45, 606, true);
-    folHang2.position.set(stripX, slabTopY + stripH, stripZ + 0.85);
+    const folHang2 = createOrganicFoliageCluster(mats, stripW * 0.95, 0.88, stripD * 0.45, 606, true);
+    folHang2.position.set(stripX, slabTopY + stripH, stripZ + 0.75);
     group.add(folHang2);
 
-    // 4. Large Structural Timber Pergola on Opposite Side (Full floor height y = +h/2)
-    const postW = 0.18;
-    const postH = ceilingY - slabTopY - 0.06;
+    // 3. Structural Timber Pergola on Opposite Side (Peak height y ≈ +0.43m)
+    const postW = 0.14;
+    const postH = 1.25;
     const postCenterY = slabTopY + postH / 2;
 
-    const pergX1 = -w / 2 + 0.40;
-    const pergX2 = 0.25;
-    const pergZ1 = -1.30;
-    const pergZ2 = 1.30;
+    const pergX1 = -w / 2 + 0.45;
+    const pergX2 = 0.15;
+    const pergZ1 = -1.15;
+    const pergZ2 = 1.15;
 
-    const timberPosts = [
+    for (const [px, pz] of [
       [pergX1, pergZ1],
       [pergX2, pergZ1],
       [pergX1, pergZ2],
       [pergX2, pergZ2],
-    ];
-
-    for (const [px, pz] of timberPosts) {
+    ]) {
       const post = new THREE.Mesh(
         new THREE.BoxGeometry(postW, postH, postW),
         mats.warmWood
@@ -756,35 +869,44 @@ export function buildSkyGarden(
       group.add(post);
 
       const shoe = new THREE.Mesh(
-        new THREE.BoxGeometry(postW + 0.04, 0.10, postW + 0.04),
+        new THREE.BoxGeometry(postW + 0.04, 0.08, postW + 0.04),
         mats.darkCore
       );
-      shoe.position.set(px, slabTopY + 0.05, pz);
+      shoe.position.set(px, slabTopY + 0.04, pz);
       setupMesh(shoe);
       group.add(shoe);
     }
 
-    // Heavy Girders
-    const girderGeomZ = new THREE.BoxGeometry(postW, 0.18, pergZ2 - pergZ1 + 0.40);
+    const girderGeomZ = new THREE.BoxGeometry(postW, 0.14, pergZ2 - pergZ1 + 0.30);
     const girder1 = new THREE.Mesh(girderGeomZ, mats.warmWood);
-    girder1.position.set(pergX1, slabTopY + postH - 0.09, 0);
+    girder1.position.set(pergX1, slabTopY + postH - 0.07, 0);
     setupMesh(girder1);
     group.add(girder1);
 
     const girder2 = new THREE.Mesh(girderGeomZ, mats.warmWood);
-    girder2.position.set(pergX2, slabTopY + postH - 0.09, 0);
+    girder2.position.set(pergX2, slabTopY + postH - 0.07, 0);
     setupMesh(girder2);
     group.add(girder2);
 
-    // 4 Angled/Transverse Roof Slats
-    const slatW = pergX2 - pergX1 + 0.45;
-    const slatGeom = new THREE.BoxGeometry(slatW, 0.12, 0.16);
+    const slatW = pergX2 - pergX1 + 0.35;
+    const slatGeom = new THREE.BoxGeometry(slatW, 0.09, 0.14);
     for (let i = 0; i < 4; i++) {
       const sz = pergZ1 + (i / 3) * (pergZ2 - pergZ1);
       const slat = new THREE.Mesh(slatGeom, mats.woodSlat);
-      slat.position.set((pergX1 + pergX2) / 2, slabTopY + postH + 0.06, sz);
+      slat.position.set((pergX1 + pergX2) / 2, slabTopY + postH + 0.04, sz);
       setupMesh(slat);
       group.add(slat);
+    }
+
+    // 4. Stepping Stone Paver Path across Open Terrace
+    for (let i = 0; i < 3; i++) {
+      const paver = new THREE.Mesh(
+        new THREE.BoxGeometry(0.40, 0.03, 0.40),
+        mats.planterStone
+      );
+      paver.position.set(-0.25 + i * 0.15, slabTopY + 0.015, -0.60 + i * 0.60);
+      setupMesh(paver);
+      group.add(paver);
     }
   }
 

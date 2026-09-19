@@ -6,6 +6,7 @@ import { CityScenery } from './cityScenery';
 import { CraneSystem } from './crane';
 import { createFloorModule, createTowerFoundation } from './floorGenerator';
 import { selectFloorModule } from './moduleSelector';
+import { getReleaseMomentumMultipliers } from './difficultyCurve';
 import { PhysicsWorld } from './physicsWorld';
 import { GAME_CONFIG } from './constants';
 
@@ -345,9 +346,20 @@ export class GameEngine {
     this.transitionPhase = 'IN_FLIGHT';
     this.transitionTimer = 0;
 
-    // Calculate release momentum
-    const linearVelocity = new THREE.Vector3(this.craneVelX * 0.9, 0, this.craneVelZ * 0.9);
-    const angularVelocityY = this.craneRotVelY * 0.8;
+    // Calculate release momentum based on smooth difficulty progression
+    const momentum = getReleaseMomentumMultipliers(this.floorCount + 1);
+    const linearVelocity = new THREE.Vector3(
+      this.craneVelX * momentum.linear,
+      0,
+      this.craneVelZ * momentum.linear
+    );
+    const angularVelocityY = this.craneRotVelY * momentum.angular;
+
+    if (import.meta.env.DEV) {
+      console.debug(
+        `[Difficulty] Floor: ${this.floorCount + 1} | Difficulty: ${momentum.difficulty.toFixed(2)} | LinearTransfer: ${momentum.linear.toFixed(2)} | AngularTransfer: ${momentum.angular.toFixed(2)}`
+      );
+    }
 
     // Rigid body physics takes over - zero snapping!
     this.physics.releaseFloor(
@@ -395,8 +407,8 @@ export class GameEngine {
     this.craneVelZ = delta > 0 ? (this.craneZ - prevZ) / delta : 0;
     this.craneRotVelY = delta > 0 ? (this.craneRotY - prevRot) / delta : 0;
 
-    // Smooth continuous crane body elevation (crane boom at top edge of screen)
-    const towerTopY = Math.max(this.physics.getTowerTopY(), this.floorCount * 2.3);
+    // Smooth continuous crane body elevation relative to current surviving tower top
+    const towerTopY = this.physics.getTowerTopY();
     const activeFloorH = this.hangingFloorDims ? this.hangingFloorDims.height : 2.3;
     const floorY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + activeFloorH / 2;
     const floorTopY = floorY + activeFloorH / 2;
@@ -559,7 +571,7 @@ export class GameEngine {
 
     // Apply Hidden Soft Stabilization:
     // Creates an invisible soft LockConstraint between floors (preserving exact position & rotation)
-    // and enforces the 10-floor active physics window!
+    // and enforces the active physics window (top 4 floors)!
     const { status } = this.physics.applySoftStabilization(fallenRec, this.floorCount);
 
     // Alignment evaluation against previous floor (or foundation)
@@ -854,28 +866,51 @@ export class GameEngine {
         this.missedFloorFailureDuration = 0;
       }
 
+      // Partial collapse detection and fallen module cleanup
+      const collapseResult = this.physics.processPartialCollapseAndCleanup((mesh) => {
+        this.scene.remove(mesh);
+      });
+
+      if (collapseResult.newlyDetached.length > 0 && import.meta.env.DEV) {
+        for (const detached of collapseResult.newlyDetached) {
+          const topId = collapseResult.survivingTopFloor ? collapseResult.survivingTopFloor.id : 'foundation';
+          console.debug(
+            `[Collapse] Old settled floor fell: #${detached.id} | Surviving top: #${topId} | Run continues.`
+          );
+        }
+      }
+
       // Check structural collapse (REAL_TOP_COLLAPSE):
-      // Requirement 3: Grace period (disable structural Game Over detection for 1.8s after release)
+      // Requirement: Grace period (disable structural Game Over detection for 1.8s after release)
       const inGracePeriod = performance.now() - this.lastReleaseTime < 1800;
 
       // Early game safety rule: floors 1-20 are very forgiving and cannot trigger structural collapse
       const isEarlyGame = this.floorCount <= 20;
 
       if (!inGracePeriod && !isEarlyGame) {
-        const collapseStatus = this.physics.checkActiveTopCollapse();
-        if (collapseStatus.hasCollapsed) {
-          // Requirement 4: Continuous failure for >= 0.85s
+        if (collapseResult.hasSevereCascade) {
+          // Requirement: Continuous failure for >= 0.85s before Game Over
           this.collapseFailureDuration += delta;
           if (this.collapseFailureDuration >= 0.85) {
+            if (import.meta.env.DEV) {
+              console.debug(
+                '[Collapse] Major cascade detected. Remaining supported top invalid. GAME OVER.'
+              );
+            }
             this.triggerCollapse('REAL_TOP_COLLAPSE');
           }
         } else {
-          // If structure recovers, cancel failure timer!
+          // If structure recovers or remains survivable, cancel failure timer!
           this.collapseFailureDuration = 0;
         }
       } else {
         this.collapseFailureDuration = 0;
       }
+
+      // Smooth camera framing continuously tracking the surviving tower top
+      const survivingTopY = this.physics.getTowerTopY();
+      const targetY = Math.max(survivingTopY - 3.2, 3.2);
+      this.cameraDesiredTarget.set(0, targetY, 0);
     }
 
     // 4. Smooth camera tracking

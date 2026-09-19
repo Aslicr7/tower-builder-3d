@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { FloorDimensions } from '../types';
 
 /**
  * Helper to update a 3D cylinder mesh between two arbitrary 3D endpoints.
@@ -439,7 +440,7 @@ export class CraneSystem {
     trolleyZ: number,
     hookY: number,
     floorGroup: THREE.Group | null,
-    floorDims?: { width: number; depth: number; height: number },
+    floorDims?: FloorDimensions,
     showArrows: boolean = true
   ) {
     // 1. Partial Boom at craneY
@@ -475,22 +476,27 @@ export class CraneSystem {
       this.cornerLugs.visible = true;
       this.arrowGroup.visible = showArrows;
 
-      // Attachment points at the FOUR upper corners of the building floor module
-      // Note: Floor geometry is centered at origin of floorGroup.
-      const halfW = floorDims.width * 0.44;
-      const halfD = floorDims.depth * 0.44;
-      const topY = floorDims.height / 2 + 0.04;
-
-      const cornerOffsets = [
-        [-halfW, -halfD],
-        [halfW, -halfD],
-        [halfW, halfD],
-        [-halfW, halfD],
-      ];
+      // 4 Lifting Slings Attachment Points:
+      // If the module explicitly specifies 4 top lifting points (e.g. Sky Garden, future special modules),
+      // use them directly. Otherwise, fall back to the module's standard four upper corners.
+      let cornerOffsets: Array<{ x: number; y: number; z: number }>;
+      if (floorDims.liftingPoints && floorDims.liftingPoints.length === 4) {
+        cornerOffsets = floorDims.liftingPoints;
+      } else {
+        const halfW = floorDims.width * 0.44;
+        const halfD = floorDims.depth * 0.44;
+        const topY = floorDims.height / 2 + 0.04;
+        cornerOffsets = [
+          { x: -halfW, y: topY, z: -halfD },
+          { x: halfW, y: topY, z: -halfD },
+          { x: halfW, y: topY, z: halfD },
+          { x: -halfW, y: topY, z: halfD },
+        ];
+      }
 
       for (let i = 0; i < 4; i++) {
-        const [ox, oz] = cornerOffsets[i];
-        this.cornerLocal.set(ox, topY, oz);
+        const pt = cornerOffsets[i];
+        this.cornerLocal.set(pt.x, pt.y, pt.z);
         // Transform corner from floor local space to world space:
         // This ensures the slings move, sway, and rotate naturally WITH the floor!
         this.cornerWorld.copy(this.cornerLocal).applyMatrix4(floorGroup.matrixWorld);
@@ -508,9 +514,10 @@ export class CraneSystem {
 
       // Position directional arrows above the floor
       if (showArrows) {
+        const maxY = Math.max(...cornerOffsets.map((p) => p.y));
         this.arrowGroup.position.set(
           floorGroup.position.x,
-          floorGroup.position.y + floorDims.height / 2 + 1.25,
+          floorGroup.position.y + maxY + 1.25,
           floorGroup.position.z + 1.2
         );
       }

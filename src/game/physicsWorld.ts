@@ -2,6 +2,7 @@ import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
 import { FloorDimensions } from '../types';
 import { GAME_CONFIG } from './constants';
+import { getDifficultyForFloor, getStabilizationMaxForce, StabilizationStatus } from './difficultyCurve';
 
 export interface PhysicsFloorRecord {
   id: number;
@@ -20,6 +21,8 @@ export interface PhysicsFloorRecord {
   isFrozen?: boolean;
   frozenPosition?: { x: number; y: number; z: number };
   frozenQuaternion?: { x: number; y: number; z: number; w: number };
+  isDetached?: boolean;
+  detachedTime?: number;
 }
 
 export class PhysicsWorld {
@@ -329,8 +332,18 @@ export class PhysicsWorld {
     };
     record.stableY = record.body.position.y;
 
-    // Find supporting body
-    const prevRec = this.records.length >= 2 ? this.records[this.records.length - 2] : null;
+    // Find supporting body among surviving settled floors beneath this floor
+    let prevRec: PhysicsFloorRecord | null = null;
+    let highestPrevY = -Infinity;
+    for (const r of this.records) {
+      if (r !== record && r.settled && !r.isDetached) {
+        const rTop = r.body.position.y + r.dimensions.height / 2;
+        if (rTop <= record.body.position.y + 0.1 && rTop > highestPrevY) {
+          highestPrevY = rTop;
+          prevRec = r;
+        }
+      }
+    }
 
     let supX = 0;
     let supZ = 0;
@@ -368,28 +381,31 @@ export class PhysicsWorld {
     record.supportRatio = supportRatio;
 
     // Categorize support according to rules
-    let status: 'VERY_STABLE' | 'STABLE' | 'RISKY' | 'DANGEROUS';
-    let maxForce = 0;
-
-    // Floors 1-20 are intentionally extra forgiving (User requirement #10)
-    const isEarlyGame = currentFloorCount <= 20;
+    let status: StabilizationStatus;
 
     if (supportRatio >= GAME_CONFIG.STABILIZATION_VERY_STABLE_SUPPORT) {
       // 70 - 100% supported: VERY STABLE
       status = 'VERY_STABLE';
-      maxForce = isEarlyGame ? 4e6 : 2.5e6;
     } else if (supportRatio >= GAME_CONFIG.STABILIZATION_STABLE_SUPPORT) {
       // 45 - 70% supported: STABLE (allows tiny wobble)
       status = 'STABLE';
-      maxForce = isEarlyGame ? 3e6 : 1.5e6;
     } else if (supportRatio >= GAME_CONFIG.STABILIZATION_RISKY_SUPPORT) {
       // 25 - 45% supported: RISKY (allows visible tilt, rotation and slow sliding under off-center loads, but holds)
       status = 'RISKY';
-      maxForce = isEarlyGame ? 1.5e6 : 4.5e5;
     } else {
       // Below 25%: VERY DANGEROUS
       status = 'DANGEROUS';
-      maxForce = isEarlyGame ? 6e5 : 0;
+    }
+
+    // Smooth difficulty progression (replaces binary floor <= 20 cliff)
+    const difficulty = getDifficultyForFloor(currentFloorCount);
+    const maxForce = getStabilizationMaxForce(status, difficulty);
+
+    // Development-only temporary debug log
+    if (import.meta.env.DEV) {
+      console.debug(
+        `[Stabilization] Floor: ${currentFloorCount} | Support: ${(supportRatio * 100).toFixed(1)}% | Status: ${status} | Difficulty: ${difficulty.toFixed(2)} | ConstraintForce: ${maxForce.toExponential(2)}`
+      );
     }
 
     if (maxForce > 0) {
@@ -405,8 +421,8 @@ export class PhysicsWorld {
     record.body.angularDamping = 0.75;
 
     // Enforce Active Physics Window:
-    // Only the top 10 floors remain fully dynamic. Older floors below this window
-    // become STATIC bodies (preserving their exact position, rotation, and crookedness).
+    // Only the top active floors (ACTIVE_PHYSICS_WINDOW = 4) remain fully dynamic.
+    // Older floors below this window become STATIC bodies (preserving their exact position, rotation, and crookedness).
     this.enforceActivePhysicsWindow();
 
     return { supportRatio, status };
@@ -481,19 +497,21 @@ export class PhysicsWorld {
 
   /**
    * ACTIVE PHYSICS WINDOW:
-   * Keeps the newest ~10 floors fully dynamic.
+   * Keeps the newest floors (ACTIVE_PHYSICS_WINDOW = 4) fully dynamic.
    * Older floors below this window become STATIC CANNON bodies with authoritative frozen transforms,
    * perfectly preserving their exact position, crookedness, and rotation,
    * while eliminating jitter compounding, preventing chain-reaction collapse,
    * and ensuring smooth 60fps on mobile for runs of 100-200+ floors!
    */
   public enforceActivePhysicsWindow() {
-    const activeWindowSize = GAME_CONFIG.ACTIVE_PHYSICS_WINDOW; // 10
-    const cutoff = this.records.length - activeWindowSize;
+    const activeWindowSize = GAME_CONFIG.ACTIVE_PHYSICS_WINDOW;
+    // Only count surviving settled floors for the active window cutoff
+    const survivingFloors = this.records.filter((r) => r.settled && !r.isDetached);
+    const cutoff = survivingFloors.length - activeWindowSize;
     if (cutoff <= 0) return;
 
     for (let i = 0; i < cutoff; i++) {
-      const rec = this.records[i];
+      const rec = survivingFloors[i];
       if (!rec.isFrozen) {
         // DO NOT FREEZE A FLOOR TOO EARLY:
         // A floor may enter the frozen section ONLY if settled === true,
@@ -509,13 +527,7 @@ export class PhysicsWorld {
     // Constraint Rule:
     // Do NOT leave an unstable chain of LockConstraints crossing
     // the boundary between STATIC frozen floors and DYNAMIC active floors.
-    // When a floor becomes permanently frozen, remove unnecessary LockConstraints
-    // involving deep frozen floors.
-    // The first ACTIVE floor above the frozen section (records[cutoff])
-    // should treat the frozen top floor (records[cutoff - 1]) as a stable physical support.
-    // Do NOT allow changing one body to STATIC to inject force, torque, positional correction,
-    // or solver error into the floors above.
-    const boundaryFloor = this.records[cutoff];
+    const boundaryFloor = survivingFloors[cutoff];
     if (boundaryFloor && boundaryFloor.lockConstraint) {
       this.world.removeConstraint(boundaryFloor.lockConstraint);
       const idx = this.constraints.indexOf(boundaryFloor.lockConstraint);
@@ -530,27 +542,44 @@ export class PhysicsWorld {
     }
   }
 
-  public getSettledTowerTopY(): number {
-    const settledFloors = this.records.filter((r) => r.settled);
-    if (settledFloors.length === 0) {
-      return this.getFoundationTopY();
+  /**
+   * Determines if a given floor is still structurally valid and surviving as part of the tower.
+   */
+  public isFloorSurviving(rec: PhysicsFloorRecord): boolean {
+    if (!rec.settled) return false;
+    if (rec.isDetached) return false;
+    if (rec.body.position.y < -0.5) return false;
+
+    // Permanently frozen floors are solid base structures
+    if (rec.isFrozen) return true;
+
+    // Check vertical drop from settled position
+    if (rec.stableY !== undefined) {
+      const drop = rec.stableY - rec.body.position.y;
+      const dropLimit = Math.max(2.8, rec.dimensions.height * 1.35);
+      if (drop > dropLimit) return false;
     }
-    let maxY = this.getFoundationTopY();
-    for (const rec of settledFloors) {
-      const topOfFloor = rec.body.position.y + rec.dimensions.height / 2;
-      if (topOfFloor > maxY) {
-        maxY = topOfFloor;
-      }
-    }
-    return maxY;
+
+    // Check excessive tilt angle (> 1.25 rad / ~72 deg)
+    const up = new CANNON.Vec3(0, 1, 0);
+    const bodyUp = rec.body.vectorToWorldFrame(up);
+    const tilt = Math.acos(Math.max(-1, Math.min(1, up.dot(bodyUp))));
+    if (tilt > 1.25) return false;
+
+    return true;
   }
 
-  public getTowerTopY(): number {
-    if (this.records.length === 0) {
+  /**
+   * Returns the top Y position of the highest surviving, structurally connected module.
+   * If all floors fell or no floors placed, returns the foundation top.
+   */
+  public getSurvivingTowerTopY(): number {
+    const surviving = this.records.filter((r) => this.isFloorSurviving(r));
+    if (surviving.length === 0) {
       return this.getFoundationTopY();
     }
     let maxY = this.getFoundationTopY();
-    for (const rec of this.records) {
+    for (const rec of surviving) {
       const topOfFloor = rec.body.position.y + rec.dimensions.height / 2;
       if (topOfFloor > maxY) {
         maxY = topOfFloor;
@@ -560,41 +589,182 @@ export class PhysicsWorld {
   }
 
   /**
-   * Evaluates if the ACTIVE TOP SECTION has experienced a meaningful structural collapse.
-   * Compares each settled active floor's current Y against its own recorded stableY.
-   * Requires at least 2 settled active floors to have fallen more than 1.3 floor heights (~2.5m).
-   * NO tilt angle or rotation threshold is used as a failure condition!
+   * Returns the highest surviving floor module record, or null if none.
+   */
+  public getSurvivingTopFloor(): PhysicsFloorRecord | null {
+    const surviving = this.records.filter((r) => this.isFloorSurviving(r));
+    if (surviving.length === 0) return null;
+    let highestRec: PhysicsFloorRecord | null = null;
+    let highestTop = -Infinity;
+    for (const rec of surviving) {
+      const topOfFloor = rec.body.position.y + rec.dimensions.height / 2;
+      if (topOfFloor > highestTop) {
+        highestTop = topOfFloor;
+        highestRec = rec;
+      }
+    }
+    return highestRec;
+  }
+
+  public getSettledTowerTopY(): number {
+    return this.getSurvivingTowerTopY();
+  }
+
+  public getTowerTopY(): number {
+    return this.getSurvivingTowerTopY();
+  }
+
+  /**
+   * Processes partial collapse detection, disconnects falling floors,
+   * cleanly removes out-of-bounds fallen floors from world & scene,
+   * and reports whether a catastrophic structural cascade occurred.
+   */
+  public processPartialCollapseAndCleanup(onRemoveMesh: (mesh: THREE.Group) => void): {
+    newlyDetached: PhysicsFloorRecord[];
+    hasSevereCascade: boolean;
+    survivingTopY: number;
+    survivingTopFloor: PhysicsFloorRecord | null;
+  } {
+    const newlyDetached: PhysicsFloorRecord[] = [];
+    const up = new CANNON.Vec3(0, 1, 0);
+
+    // 1. Detect any settled floors that have detached / fallen
+    for (const rec of this.records) {
+      if (!rec.settled || rec.isFrozen || rec.isDetached) continue;
+
+      const stableY = rec.stableY ?? rec.body.position.y;
+      const fallDist = stableY - rec.body.position.y;
+      const fallLimit = Math.max(2.8, rec.dimensions.height * 1.35);
+
+      const bodyUp = rec.body.vectorToWorldFrame(up);
+      const tilt = Math.acos(Math.max(-1, Math.min(1, up.dot(bodyUp))));
+
+      const isFallen = (fallDist > fallLimit || rec.body.position.y < -2.0) ||
+                       (tilt > 1.25 && rec.body.velocity.y < -0.8);
+
+      if (isFallen) {
+        rec.isDetached = true;
+        rec.detachedTime = performance.now();
+        newlyDetached.push(rec);
+
+        // Sever lock constraint immediately so it falls away cleanly
+        if (rec.lockConstraint) {
+          this.world.removeConstraint(rec.lockConstraint);
+          const idx = this.constraints.indexOf(rec.lockConstraint);
+          if (idx !== -1) this.constraints.splice(idx, 1);
+          rec.lockConstraint = undefined;
+        }
+      }
+    }
+
+    const survivingTopY = this.getSurvivingTowerTopY();
+    const survivingTopFloor = this.getSurvivingTopFloor();
+    const survivingFloors = this.records.filter((r) => this.isFloorSurviving(r));
+
+    // 2. Visible fall delay & cleanup when safely outside play area
+    const now = performance.now();
+    const recordsToKeep: PhysicsFloorRecord[] = [];
+
+    for (const rec of this.records) {
+      if (rec.isDetached) {
+        const detachedDuration = (now - (rec.detachedTime ?? now)) / 1000;
+        // Allow player to visibly see the fallen floor tumble for a short time
+        const isFarBelow = rec.body.position.y < -15.0 ||
+                           rec.body.position.y < (survivingTopY - 22.0) ||
+                           (detachedDuration > 3.0 && rec.body.position.y < survivingTopY - 6.0);
+
+        if (isFarBelow) {
+          // Cleanup body and mesh
+          if (rec.lockConstraint) {
+            this.world.removeConstraint(rec.lockConstraint);
+            const idx = this.constraints.indexOf(rec.lockConstraint);
+            if (idx !== -1) this.constraints.splice(idx, 1);
+            rec.lockConstraint = undefined;
+          }
+          this.world.removeBody(rec.body);
+          onRemoveMesh(rec.mesh);
+
+          if (import.meta.env.DEV) {
+            console.debug(`[Collapse] Cleaned up fallen floor #${rec.id}`);
+          }
+          continue; // Do not keep in records
+        }
+      }
+      recordsToKeep.push(rec);
+    }
+    this.records = recordsToKeep;
+
+    // 3. Evaluate whether collapse is SEVERE (Game Over condition)
+    // Principle: Losing 1, 2, or 3 upper floors is SURVIVABLE as long as a valid supported top remains.
+    let hasSevereCascade = false;
+
+    // Total placed floors (excluding current falling floor)
+    const placedCount = this.records.filter((r) => r.settled).length;
+
+    if (placedCount >= 3) {
+      if (survivingFloors.length === 0) {
+        // Complete obliteration down to foundation
+        hasSevereCascade = true;
+      } else if (placedCount >= 4 && survivingTopY <= this.getFoundationTopY() + 0.5) {
+        // Tower collapsed down to foundation
+        hasSevereCascade = true;
+      } else {
+        // Count how many floors are currently detached and tumbling simultaneously
+        const tumblingCount = this.records.filter((r) => r.isDetached).length;
+
+        // Check if the surviving top floor itself is in an unrecoverable state
+        if (survivingTopFloor && !survivingTopFloor.isFrozen) {
+          const bodyUp = survivingTopFloor.body.vectorToWorldFrame(up);
+          const topTilt = Math.acos(Math.max(-1, Math.min(1, up.dot(bodyUp))));
+          const topSpeedY = survivingTopFloor.body.velocity.y;
+
+          // If surviving top is tilting severely (> 66 deg) and sinking, no buildable surface remains
+          if (topTilt > 1.15 && topSpeedY < -1.0) {
+            hasSevereCascade = true;
+          }
+        }
+
+        // Catastrophic cascade: 4 or more floors tumbling simultaneously AND active top unstable
+        if (tumblingCount >= 4) {
+          if (!survivingTopFloor || !survivingTopFloor.isFrozen) {
+            hasSevereCascade = true;
+          }
+        }
+      }
+    }
+
+    return {
+      newlyDetached,
+      hasSevereCascade,
+      survivingTopY,
+      survivingTopFloor,
+    };
+  }
+
+  /**
+   * Backwards-compatible structural collapse check:
+   * Returns whether a severe structural collapse has occurred.
    */
   public checkActiveTopCollapse(): {
     hasCollapsed: boolean;
     activeFallenFloorCount: number;
   } {
-    const settledFloors = this.records.filter((r) => r.settled && r.stableY !== undefined);
-    if (settledFloors.length < 2) {
-      return { hasCollapsed: false, activeFallenFloorCount: 0 };
+    const surviving = this.records.filter((r) => this.isFloorSurviving(r));
+    const detached = this.records.filter((r) => r.isDetached);
+
+    const placedCount = this.records.filter((r) => r.settled).length;
+    if (placedCount >= 3 && surviving.length === 0) {
+      return { hasCollapsed: true, activeFallenFloorCount: detached.length };
     }
 
-    // Only examine active top section
-    const activeFloors = settledFloors.slice(-GAME_CONFIG.ACTIVE_PHYSICS_WINDOW);
-
-    let fallenCount = 0;
-    for (const rec of activeFloors) {
-      if (rec.stableY === undefined) continue;
-
-      const fallDistance = rec.stableY - rec.body.position.y;
-      const fallThreshold = Math.max(2.5, rec.dimensions.height * 1.3);
-
-      // Floor has physically fallen significantly below its stable position, or reached ground/abyss
-      if (fallDistance > fallThreshold || rec.body.position.y < -2.0) {
-        fallenCount++;
+    if (detached.length >= 4) {
+      const topFloor = this.getSurvivingTopFloor();
+      if (!topFloor || !topFloor.isFrozen) {
+        return { hasCollapsed: true, activeFallenFloorCount: detached.length };
       }
     }
 
-    // Meaningful structural collapse requires at least 2 active settled floors to have fallen
-    return {
-      hasCollapsed: fallenCount >= 2,
-      activeFallenFloorCount: fallenCount,
-    };
+    return { hasCollapsed: false, activeFallenFloorCount: detached.length };
   }
 
   /**

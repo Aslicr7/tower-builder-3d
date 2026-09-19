@@ -20,10 +20,17 @@ export type FloorModuleStyle =
   | 'CORNER_BALCONY'
   | 'DUPLEX_PLANTERS';
 
+export interface LiftingPoint {
+  x: number;
+  y: number;
+  z: number;
+}
+
 export interface FloorDimensions {
   width: number;
   depth: number;
   height: number;
+  liftingPoints?: LiftingPoint[];
 }
 
 export type FeedbackType = 'PERFECT' | 'GREAT' | 'BALANCED' | 'RISKY' | 'DANGEROUS' | null;
