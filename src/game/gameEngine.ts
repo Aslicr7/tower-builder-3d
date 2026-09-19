@@ -10,6 +10,8 @@ import { getReleaseMomentumMultipliers, getCraneKinematicsForFloor } from './dif
 import { PhysicsWorld } from './physicsWorld';
 import { GAME_CONFIG } from './constants';
 import { createMotionProfile, ModuleMotionProfile } from './motionProfile';
+import { TrolleyKinematics } from './trolleyKinematics';
+import { SuspensionSimulator } from './suspensionPhysics';
 
 export interface GameEngineCallbacks {
   onStatsUpdate: (stats: GameStats) => void;
@@ -56,13 +58,22 @@ export class GameEngine {
   private craneRotY = 0;
   private craneVelX = 0;
   private craneVelZ = 0;
+  private craneAccX = 0;
+  private craneAccZ = 0;
   private craneRotVelY = 0;
+  private trolleyKinematics: TrolleyKinematics | null = null;
+  private suspensionSimulator: SuspensionSimulator | null = null;
+  private prevTurnaroundSign = 0;
 
   // Hanging module suspension & pendulum dynamics (lag, swing, tilt, inertia)
   private moduleX = 0;
   private moduleZ = 0;
   private moduleVelX = 0;
   private moduleVelZ = 0;
+  private swingOffsetX = 0;
+  private swingOffsetZ = 0;
+  private swingVelocityX = 0;
+  private swingVelocityZ = 0;
 
   // Camera tracking & Orbit View
   private cameraTarget = new THREE.Vector3(0, 3.2, 0);
@@ -83,23 +94,26 @@ export class GameEngine {
   private missedFloorFailureDuration = 0;
   private collapseFailureDuration = 0;
 
-  // Continuous Smooth Drop & Delivery Transition State Machine
-  private transitionPhase: 'READY' | 'IN_FLIGHT' | 'SETTLING' | 'DELIVERING' | 'SUSPENDING' = 'READY';
+  // Continuous Module Entry & Suspension State Machine
+  private transitionPhase: 'READY' | 'IN_FLIGHT' | 'SETTLING' = 'READY';
   private transitionTimer = 0;
-  private readonly blendDuration = 0.45;
-  private startPitchTilt = 0;
-  private startRollTilt = 0;
-  private startYawRot = 0;
   private cranePhaseX = 0;
   private cranePhaseZ = 0;
   private cranePhaseRot = 0;
-  private loggedHandoffMilestones = new Set<number>();
-  private canDrop = true;
+  private canDrop = false;
   private currentCraneY = 0;
   private currentHookY = 0;
   private currentTrolleyX = 0;
   private currentTrolleyZ = 0;
   private currentMotionProfile: ModuleMotionProfile | null = null;
+  private lastEntrySide: 'LEFT' | 'RIGHT' | null = null;
+  private sameEntrySideStreak = 0;
+  private nextEntrySide: 'LEFT' | 'RIGHT' = 'LEFT';
+  private debugForceEntrySide: 'LEFT' | 'RIGHT' | null = null;
+  private hasLoggedCenterCrossingThisFloor = false;
+  private hasLoggedDropEnabledThisFloor = false;
+  private moduleHangingTime = 0;
+  private prevCenterCrossModX = 0;
 
   // Animation frame
   private animId: number | null = null;
@@ -326,13 +340,22 @@ export class GameEngine {
     this.moduleZ = 0;
     this.moduleVelX = 0;
     this.moduleVelZ = 0;
+    this.swingOffsetX = 0;
+    this.swingOffsetZ = 0;
+    this.swingVelocityX = 0;
+    this.swingVelocityZ = 0;
+    this.craneAccX = 0;
+    this.craneAccZ = 0;
+    this.trolleyKinematics = null;
+    this.suspensionSimulator = null;
+    this.prevTurnaroundSign = 0;
     this.cranePhaseX = 0;
     this.cranePhaseZ = 0;
     this.cranePhaseRot = 0;
-    this.startPitchTilt = 0;
-    this.startRollTilt = 0;
-    this.startYawRot = 0;
-    this.loggedHandoffMilestones.clear();
+    this.lastEntrySide = null;
+    this.sameEntrySideStreak = 0;
+    this.transitionPhase = 'READY';
+    this.nextEntrySide = this.selectNextEntrySide();
 
     // Spawn first suspended floor directly in ready position
     this.spawnNextFloorImmediately();
@@ -352,8 +375,57 @@ export class GameEngine {
     return selection.style;
   }
 
+  /**
+   * Selects the next entry side ('LEFT' or 'RIGHT') ensuring balanced frequency
+   * and enforcing the anti-3-in-a-row rule (no side can appear 4+ consecutive times).
+   */
+  private selectNextEntrySide(): 'LEFT' | 'RIGHT' {
+    if (this.debugForceEntrySide) {
+      this.lastEntrySide = this.debugForceEntrySide;
+      this.sameEntrySideStreak = 1;
+      return this.debugForceEntrySide;
+    }
+
+    if (this.sameEntrySideStreak >= 3 && this.lastEntrySide !== null) {
+      const forcedSide = this.lastEntrySide === 'LEFT' ? 'RIGHT' : 'LEFT';
+      this.lastEntrySide = forcedSide;
+      this.sameEntrySideStreak = 1;
+      return forcedSide;
+    }
+
+    const chosenSide: 'LEFT' | 'RIGHT' = Math.random() < 0.5 ? 'LEFT' : 'RIGHT';
+    if (chosenSide === this.lastEntrySide) {
+      this.sameEntrySideStreak++;
+    } else {
+      this.lastEntrySide = chosenSide;
+      this.sameEntrySideStreak = 1;
+    }
+    return chosenSide;
+  }
+
+  public setForceEntrySide(side: 'LEFT' | 'RIGHT' | null) {
+    this.debugForceEntrySide = side;
+  }
+
+  /**
+   * Computes a guaranteed off-screen horizontal coordinate (X) for the current camera viewpoint,
+   * ensuring that the entire incoming module (and hook/cables) begins completely outside the visible screen.
+   */
+  public computeOffscreenSpawnX(entrySide: 'LEFT' | 'RIGHT', yLevel: number): number {
+    // For standard camera distance and framing, an offscreen spawn of -16.0m (LEFT)
+    // or +15.0m (RIGHT) guarantees the entire module (bounding radius ~2.6m) and hook
+    // start completely outside the visible screen viewport.
+    return entrySide === 'LEFT' ? -16.0 : 15.0;
+  }
+
   private spawnNextFloorImmediately() {
     if (this.state !== 'PLAYING') return;
+
+    if (this.hangingFloorGroup) {
+      this.scene.remove(this.hangingFloorGroup);
+      this.hangingFloorGroup = null;
+      this.hangingFloorDims = null;
+    }
 
     this.hangingFloorStyle = this.selectNextFloorStyle();
 
@@ -362,51 +434,164 @@ export class GameEngine {
     this.hangingFloorDims = dimensions;
     this.scene.add(group);
 
-    // Bounded, unique motion profile for this module
-    this.currentMotionProfile = createMotionProfile(this.floorCount + 1, this.hangingFloorStyle, dimensions);
-
-    this.isFloorHanging = true;
-    this.canDrop = true;
-    this.transitionPhase = 'READY';
-    this.transitionTimer = 0;
-    this.currentTrolleyX = this.currentMotionProfile.targetEntryX;
-    this.currentTrolleyZ = this.currentMotionProfile.targetEntryZ;
-    this.moduleX = this.currentMotionProfile.targetEntryX;
-    this.moduleZ = this.currentMotionProfile.targetEntryZ;
-    this.moduleVelX = 0;
-    this.moduleVelZ = 0;
-    this.cranePhaseX = this.currentMotionProfile.startPhaseX;
-    this.cranePhaseZ = this.currentMotionProfile.startPhaseZ;
-    this.cranePhaseRot = this.currentMotionProfile.startPhaseRot;
+    const entrySide = this.nextEntrySide || this.selectNextEntrySide();
 
     // Crane height: above highest placed floor
     const towerTopY = this.physics.getTowerTopY();
     const floorH = dimensions.height;
     const hangingY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + floorH / 2;
 
+    // Guaranteed off-screen spawn point calculated from active camera view
+    const spawnX = this.computeOffscreenSpawnX(entrySide, hangingY);
+
+    // Bounded, unique motion profile for this module
+    this.currentMotionProfile = createMotionProfile(
+      this.floorCount + 1,
+      this.hangingFloorStyle,
+      entrySide,
+      dimensions,
+      spawnX
+    );
+
+    this.isFloorHanging = true;
+    this.canDrop = false; // Enabled once within active gameplay boundary (|moduleX| <= dropBoundary)
+    this.transitionPhase = 'READY';
+    this.transitionTimer = 0;
+    this.moduleHangingTime = 0;
+    this.hasLoggedCenterCrossingThisFloor = false;
+    this.hasLoggedDropEnabledThisFloor = false;
+
+    const kinematics = getCraneKinematicsForFloor(this.floorCount + 1);
+
+    // Initialize deterministic, smooth TrolleyKinematics
+    this.trolleyKinematics = new TrolleyKinematics(
+      this.currentMotionProfile.entrySpawnX,
+      entrySide,
+      kinematics.ampX,
+      kinematics.ampZ,
+      kinematics.speedMult,
+      this.currentMotionProfile.speedVariation
+    );
+
+    // Initialize causal SuspensionSimulator
+    const normDiff = Math.min(Math.max(this.floorCount / 50, 0), 1.0);
+    const maxSwingDist = THREE.MathUtils.lerp(0.75, 1.45, normDiff);
+    const suspensionHeight = 4.80;
+
+    this.suspensionSimulator = new SuspensionSimulator({
+      springKX: this.currentMotionProfile.swingSpringKX,
+      springKZ: this.currentMotionProfile.swingSpringKZ,
+      damping: this.currentMotionProfile.swingDamping,
+      inertiaFactor: this.currentMotionProfile.inertiaFactor,
+      rotSpring: this.currentMotionProfile.rotSpring,
+      rotDamping: this.currentMotionProfile.rotDamping,
+      rotCoupling: this.currentMotionProfile.rotCoupling,
+      suspensionHeight,
+      maxSwingDist,
+      initialAngularOffset: this.currentMotionProfile.initialAngularOffset,
+    });
+
+    const initTrolley = this.trolleyKinematics.evaluate(0);
+    this.craneX = initTrolley.x;
+    this.craneZ = initTrolley.z;
+    this.craneVelX = initTrolley.vx;
+    this.craneVelZ = initTrolley.vz;
+    this.craneAccX = initTrolley.ax;
+    this.craneAccZ = initTrolley.az;
+
+    this.currentTrolleyX = initTrolley.x;
+    this.currentTrolleyZ = initTrolley.z;
+    this.moduleX = initTrolley.x;
+    this.prevCenterCrossModX = initTrolley.x;
+    this.moduleZ = initTrolley.z;
+    this.moduleVelX = initTrolley.vx;
+    this.moduleVelZ = initTrolley.vz;
+    this.swingOffsetX = 0;
+    this.swingOffsetZ = 0;
+    this.swingVelocityX = 0;
+    this.swingVelocityZ = 0;
+    this.craneRotY = this.currentMotionProfile.initialAngularOffset;
+    this.craneRotVelY = 0;
+    this.prevTurnaroundSign = 0;
+
     this.hangingFloorGroup.position.set(this.moduleX, hangingY, this.moduleZ);
+    this.hangingFloorGroup.rotation.set(0, this.craneRotY, 0);
 
     const targetY = Math.max(towerTopY - 3.2, 3.2);
     this.cameraDesiredTarget.set(0, targetY, 0);
 
+    console.log(
+      `[ModuleEntry] Floor ${this.floorCount + 1}: Entry Side: ${entrySide} | ` +
+      `SpawnX: ${this.moduleX.toFixed(2)}m (Off-Screen) | ` +
+      `TargetAmpX: ${kinematics.ampX.toFixed(2)}m | ` +
+      `SpeedMult: ${this.currentMotionProfile.speedMultiplier.toFixed(2)}`
+    );
+
+    this.logFloorMovementSpeed();
+    this.logSuspensionPhysics('SPAWN_ENTRY');
     this.logMotionProfile(this.currentMotionProfile);
+  }
+
+  public static readonly DROP_ZONE_X_MAX = 8.5;
+  public static readonly DROP_ZONE_Z_MAX = 6.0;
+
+  public isInsideDropZone(): boolean {
+    return (
+      Math.abs(this.moduleX) <= GameEngine.DROP_ZONE_X_MAX &&
+      Math.abs(this.moduleZ) <= GameEngine.DROP_ZONE_Z_MAX
+    );
   }
 
   /**
    * The player's ONLY gameplay action:
    * CLICK / TAP / SPACE = RELEASE THE FLOOR.
+   * Logs complete [DropInput] diagnostics as requested.
    */
-  public releaseCurrentFloor() {
-    if (
-      !this.canDrop ||
-      this.transitionPhase !== 'READY' ||
-      this.state !== 'PLAYING' ||
-      !this.isFloorHanging ||
-      !this.hangingFloorGroup ||
-      !this.hangingFloorDims
-    ) {
-      return;
+  public releaseCurrentFloor(pointerTarget: string = 'unknown'): boolean {
+    const insideDropZone = this.isInsideDropZone();
+    const entrySide = this.currentMotionProfile?.entrySide || 'UNKNOWN';
+
+    // Temporary input debugging as specified in Requirement 8
+    let blockedReason = 'NONE (Floor released successfully)';
+    let isBlocked = false;
+
+    if (this.state !== 'PLAYING') {
+      blockedReason = `Game state is ${this.state} (not PLAYING)`;
+      isBlocked = true;
+    } else if (!this.isFloorHanging || !this.hangingFloorGroup || !this.hangingFloorDims) {
+      blockedReason = 'No floor is currently hanging';
+      isBlocked = true;
+    } else if (this.transitionPhase !== 'READY') {
+      blockedReason = `Transition phase is ${this.transitionPhase} (not READY)`;
+      isBlocked = true;
+    } else if (!this.canDrop) {
+      blockedReason = !insideDropZone
+        ? `Outside valid drop zone (|X|=${Math.abs(this.moduleX).toFixed(2)} > ${GameEngine.DROP_ZONE_X_MAX})`
+        : 'canDrop flag is false';
+      isBlocked = true;
     }
+
+    console.log(
+      `[DropInput]\n` +
+      `  Floor: ${this.floorCount + 1}\n` +
+      `  EntrySide: ${entrySide}\n` +
+      `  CurrentState: ${this.state}\n` +
+      `  CanDrop: ${this.canDrop}\n` +
+      `  IsEntering: ${this.trolleyKinematics ? (this.moduleHangingTime < this.trolleyKinematics.T_entryTotal) : false}\n` +
+      `  IsReady: ${this.transitionPhase === 'READY'}\n` +
+      `  LoadX: ${this.moduleX.toFixed(3)}\n` +
+      `  LoadZ: ${this.moduleZ.toFixed(3)}\n` +
+      `  InsideDropZone: ${insideDropZone}\n` +
+      `  PointerTarget: ${pointerTarget}\n` +
+      `  BlockedReason: ${blockedReason}`
+    );
+
+    if (isBlocked || !this.hangingFloorGroup || !this.hangingFloorDims) {
+      return false;
+    }
+
+    const hangingGroup = this.hangingFloorGroup;
+    const hangingDims = this.hangingFloorDims;
 
     sounds.playRelease();
 
@@ -432,6 +617,14 @@ export class GameEngine {
     );
     const angularVelocityY = this.craneRotVelY * momentum.angular;
 
+    console.log(
+      `[ModuleRelease] Floor ${this.floorCount + 1}: Released at X = ${this.moduleX.toFixed(2)}m, Z = ${this.moduleZ.toFixed(2)}m | ` +
+      `LinearVel: (${linearVelocity.x.toFixed(2)}, ${linearVelocity.z.toFixed(2)}) m/s | ` +
+      `AngVel: ${(angularVelocityY * 180 / Math.PI).toFixed(1)}°/s`
+    );
+
+    this.logSuspensionPhysics('RELEASE_DROP');
+
     if (import.meta.env.DEV) {
       console.debug('[CraneKinematics]', {
         Floor: this.floorCount + 1,
@@ -448,56 +641,51 @@ export class GameEngine {
     // Rigid body physics takes over - zero snapping!
     this.physics.releaseFloor(
       this.floorCount + 1,
-      this.hangingFloorGroup,
-      this.hangingFloorDims,
+      hangingGroup,
+      hangingDims,
       linearVelocity,
       angularVelocityY
     );
 
     this.hangingFloorGroup = null;
     this.hangingFloorDims = null;
+    return true;
   }
 
   private updateCraneMotion(delta: number) {
     this.swingTime += delta;
 
-    // Single source of truth: Crane kinematics from difficulty curve
     const kinematics = getCraneKinematicsForFloor(this.floorCount + 1);
     const swingXRange = kinematics.ampX;
-    const swingZRange = kinematics.ampZ;
-    const rotYRange = kinematics.rotY;
 
-    const profile = this.currentMotionProfile;
+    if (this.isFloorHanging) {
+      this.moduleHangingTime += delta;
+    }
 
-    // Subtle slow speed modulation drift (±3%, non-synchronized slow wave ~28-36s period)
-    const slowWave = profile
-      ? profile.speedModulationAmp * Math.sin(this.swingTime * profile.speedModulationFreq + profile.speedModulationPhase)
-      : 0;
-    const speedMod = 1.0 + slowWave;
+    // 1. Evaluate causal trolley kinematics
+    if (this.trolleyKinematics) {
+      const trolleyState = this.trolleyKinematics.evaluate(this.moduleHangingTime);
+      this.craneX = trolleyState.x;
+      this.craneZ = trolleyState.z;
+      this.craneVelX = trolleyState.vx;
+      this.craneVelZ = trolleyState.vz;
+      this.craneAccX = trolleyState.ax;
+      this.craneAccZ = trolleyState.az;
 
-    const prevX = this.craneX;
-    const prevZ = this.craneZ;
-    const prevRot = this.craneRotY;
-
-    // 1. Advance crane oscillation phases using independent, incommensurable frequencies
-    const freqX = (profile ? profile.freqX : GAME_CONFIG.CRANE_MIN_SPEED * kinematics.speedMult) * speedMod;
-    this.cranePhaseX += delta * freqX;
-    this.craneX = Math.sin(this.cranePhaseX) * swingXRange;
-
-    // 2. Movement along depth/Z axis (independent frequency & phase)
-    const freqZ = (profile ? profile.freqZ : GAME_CONFIG.CRANE_MIN_SPEED * kinematics.speedMult * 0.73) * speedMod;
-    this.cranePhaseZ += delta * freqZ;
-    this.craneZ = Math.cos(this.cranePhaseZ) * swingZRange;
-
-    // 3. Rotation around vertical Y axis (independent frequency & phase)
-    const freqRot = (profile ? profile.freqRot : GAME_CONFIG.CRANE_MIN_SPEED * kinematics.speedMult * 0.59) * speedMod;
-    this.cranePhaseRot += delta * freqRot;
-    this.craneRotY = Math.sin(this.cranePhaseRot) * rotYRange;
-
-    // Calculate velocities for momentum preservation
-    this.craneVelX = delta > 0 ? (this.craneX - prevX) / delta : 0;
-    this.craneVelZ = delta > 0 ? (this.craneZ - prevZ) / delta : 0;
-    this.craneRotVelY = delta > 0 ? (this.craneRotY - prevRot) / delta : 0;
+      // Detect turnaround event for physics logging
+      if (trolleyState.isTurning && Math.abs(trolleyState.ax) > 0.5) {
+        const turnSign = Math.sign(trolleyState.ax);
+        if (this.prevTurnaroundSign !== 0 && this.prevTurnaroundSign !== turnSign) {
+          this.logSuspensionPhysics('TURNAROUND');
+        }
+        this.prevTurnaroundSign = turnSign;
+      }
+    } else {
+      this.craneVelX = 0;
+      this.craneVelZ = 0;
+      this.craneAccX = 0;
+      this.craneAccZ = 0;
+    }
 
     // Smooth continuous crane body elevation relative to current surviving tower top
     const towerTopY = this.physics.getTowerTopY();
@@ -505,7 +693,6 @@ export class GameEngine {
     const floorY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + activeFloorH / 2;
     const floorTopY = floorY + activeFloorH / 2;
 
-    // Crane boom elevation: raised so hook has ample vertical cable travel
     const targetCraneY = floorTopY + 12.0;
     if (this.currentCraneY === 0) {
       this.currentCraneY = targetCraneY;
@@ -514,14 +701,11 @@ export class GameEngine {
       this.currentCraneY = THREE.MathUtils.lerp(this.currentCraneY, targetCraneY, craneAlpha);
     }
 
-    // Increased visible distance between hook and module (Requirement 5 & 9):
-    // Hook saddle hangs at floorTopY + 4.80m; hook block center is at saddle + 1.76m = floorTopY + 6.56m
     const suspensionHeight = 4.80;
     const saddleOffsetY = 1.76;
     const defaultHookY = floorTopY + suspensionHeight + saddleOffsetY;
 
     if (this.transitionPhase === 'IN_FLIGHT') {
-      // Floor in flight: Hook stays suspended above, retracting slightly clear of falling floor
       const targetRetractY = defaultHookY + 0.8;
       const hookAlpha = 1.0 - Math.exp(-4.0 * delta);
       this.currentHookY = THREE.MathUtils.lerp(this.currentHookY, targetRetractY, hookAlpha);
@@ -533,20 +717,21 @@ export class GameEngine {
         this.currentTrolleyX,
         this.currentTrolleyZ,
         this.currentHookY,
-        null, // Slings release from falling floor!
+        null,
         undefined,
         false
       );
     } else if (this.transitionPhase === 'SETTLING') {
-      // PHASE 1 -> PHASE 2: Allow visible settling (0.45s) while camera gently drifts upward
       this.transitionTimer += delta;
 
-      const pickupX = CraneSystem.MAST_X - 2.5;
-      const trolleyAlpha = 1.0 - Math.exp(-3.5 * delta);
-      this.currentTrolleyX = THREE.MathUtils.lerp(this.currentTrolleyX, pickupX, trolleyAlpha);
-      this.currentTrolleyZ = THREE.MathUtils.lerp(this.currentTrolleyZ, CraneSystem.MAST_Z, trolleyAlpha);
+      const nextSide = this.nextEntrySide || 'LEFT';
+      const targetTrolleyX = this.computeOffscreenSpawnX(nextSide, floorTopY + 2.0);
 
-      const targetRetractY = defaultHookY + 0.5;
+      const trolleyAlpha = 1.0 - Math.exp(-5.5 * delta);
+      this.currentTrolleyX = THREE.MathUtils.lerp(this.currentTrolleyX, targetTrolleyX, trolleyAlpha);
+      this.currentTrolleyZ = THREE.MathUtils.lerp(this.currentTrolleyZ, 0, trolleyAlpha);
+
+      const targetRetractY = defaultHookY + 0.6;
       this.currentHookY = THREE.MathUtils.lerp(this.currentHookY, targetRetractY, trolleyAlpha);
 
       this.crane.updatePosition(
@@ -560,269 +745,84 @@ export class GameEngine {
       );
 
       if (this.transitionTimer >= 0.45 && this.state === 'PLAYING') {
-        // Transition to PHASE 3: NEXT FLOOR ARRIVAL
-        this.transitionPhase = 'DELIVERING';
-        this.transitionTimer = 0;
-
-        // Pre-create next floor module at crane jib pickup position
-        this.hangingFloorStyle = this.selectNextFloorStyle();
-
-        const { group, dimensions } = createFloorModule(this.hangingFloorStyle, this.floorCount + 1);
-        this.hangingFloorGroup = group;
-        this.hangingFloorDims = dimensions;
-        this.scene.add(group);
-
-        // Generate bounded per-module motion profile for the newly created module
-        this.currentMotionProfile = createMotionProfile(this.floorCount + 1, this.hangingFloorStyle, dimensions);
-
-        const pickupFloorY = floorY + 1.2;
-        this.hangingFloorGroup.position.set(pickupX, pickupFloorY, CraneSystem.MAST_Z);
-        this.hangingFloorGroup.rotation.set(0, 0, 0);
-
-        this.currentTrolleyX = pickupX;
-        this.currentTrolleyZ = CraneSystem.MAST_Z;
-        this.currentHookY = pickupFloorY + dimensions.height / 2 + suspensionHeight + saddleOffsetY;
-        this.moduleX = pickupX;
-        this.moduleZ = CraneSystem.MAST_Z;
-        this.moduleVelX = 0;
-        this.moduleVelZ = 0;
+        this.spawnNextFloorImmediately();
       }
-    } else if (this.transitionPhase === 'DELIVERING' && this.hangingFloorGroup && this.hangingFloorDims) {
-      // PHASE 3: NEXT FLOOR TRANSPORT
-      // Trolley smoothly glides along crane boom into active gameplay area over 0.85s
-      this.transitionTimer += delta;
-      const deliveryDuration = 0.85;
-      const p = Math.min(this.transitionTimer / deliveryDuration, 1.0);
-      const ease = p * p * (3 - 2 * p); // Smoothstep easing
-
-      const pickupX = CraneSystem.MAST_X - 2.5;
-      const pickupZ = CraneSystem.MAST_Z;
-      const pickupFloorY = floorY + 1.2;
-      const targetFloorY = floorY;
-      const entryX = this.currentMotionProfile ? this.currentMotionProfile.targetEntryX : 0;
-      const entryZ = this.currentMotionProfile ? this.currentMotionProfile.targetEntryZ : 0;
-
-      const prevTrolleyX = this.currentTrolleyX;
-      const prevTrolleyZ = this.currentTrolleyZ;
-      this.currentTrolleyX = THREE.MathUtils.lerp(pickupX, entryX, ease);
-      this.currentTrolleyZ = THREE.MathUtils.lerp(pickupZ, entryZ, ease);
-
-      const curFloorY = THREE.MathUtils.lerp(pickupFloorY, targetFloorY, ease);
-
-      // Instantaneous trolley velocity derived from actual delta
-      const tVelX = delta > 0 ? (this.currentTrolleyX - prevTrolleyX) / delta : 0;
-      const tVelZ = delta > 0 ? (this.currentTrolleyZ - prevTrolleyZ) / delta : 0;
-
-      // Suspended module lags naturally behind the moving trolley (small natural lag, 1°–3° tilt)
-      const lagTime = 0.035;
-      const targetModX = this.currentTrolleyX - tVelX * lagTime;
-      const targetModZ = this.currentTrolleyZ - tVelZ * lagTime;
-      const followAlpha = 1.0 - Math.exp(-12.0 * delta);
-      const prevModX = this.moduleX;
-      const prevModZ = this.moduleZ;
-      this.moduleX = THREE.MathUtils.lerp(this.moduleX, targetModX, followAlpha);
-      this.moduleZ = THREE.MathUtils.lerp(this.moduleZ, targetModZ, followAlpha);
-      this.moduleVelX = delta > 0 ? (this.moduleX - prevModX) / delta : 0;
-      this.moduleVelZ = delta > 0 ? (this.moduleZ - prevModZ) / delta : 0;
-
-      // Natural tilt from suspension sling angle during transport
-      const curRollTilt = -(this.moduleX - this.currentTrolleyX) / suspensionHeight;
-      const curPitchTilt = (this.moduleZ - this.currentTrolleyZ) / suspensionHeight;
-
-      this.hangingFloorGroup.position.set(this.moduleX, curFloorY, this.moduleZ);
-      this.hangingFloorGroup.rotation.set(curPitchTilt, 0, curRollTilt);
-
-      this.currentHookY = curFloorY + this.hangingFloorDims.height / 2 + suspensionHeight + saddleOffsetY;
-
-      // Central hook block has subtle lead between trolley and load
-      const hookX = this.currentTrolleyX + 0.12 * (this.moduleX - this.currentTrolleyX);
-      const hookZ = this.currentTrolleyZ + 0.12 * (this.moduleZ - this.currentTrolleyZ);
-
-      this.crane.updatePosition(
-        this.currentCraneY,
-        this.currentTrolleyX,
-        this.currentTrolleyZ,
-        this.currentHookY,
-        this.hangingFloorGroup,
-        this.hangingFloorDims,
-        false,
-        hookX,
-        hookZ
-      );
-
-      if (p >= 1.0) {
-        // Seamless handoff into 0.45s suspension blend (Phase 4: SUSPENDING)
-        this.transitionPhase = 'SUSPENDING';
-        this.transitionTimer = 0;
-        this.startRollTilt = curRollTilt;
-        this.startPitchTilt = curPitchTilt;
-        this.startYawRot = 0;
-
-        // Phase synchronization: establish oscillation phases from motion profile - zero positional or velocity discontinuity!
-        this.cranePhaseX = this.currentMotionProfile ? this.currentMotionProfile.startPhaseX : Math.PI;
-        this.cranePhaseZ = this.currentMotionProfile ? this.currentMotionProfile.startPhaseZ : -Math.PI / 2;
-        this.cranePhaseRot = this.currentMotionProfile ? this.currentMotionProfile.startPhaseRot : 0;
-        this.loggedHandoffMilestones.clear();
-      }
-    } else if (this.transitionPhase === 'SUSPENDING' && this.hangingFloorGroup && this.hangingFloorDims) {
-      // PHASE 4: SUSPENSION BLEND (0.45s)
-      // Smoothly blend transport influence (1.0 -> 0.0) into full suspension influence (0.0 -> 1.0)
-      this.transitionTimer += delta;
-      const u = Math.min(this.transitionTimer / this.blendDuration, 1.0);
-      const blendAlpha = u * u * (3 - 2 * u); // Smoothstep 0.0 -> 1.0
-      const swingStrength = blendAlpha; // 0% -> 20% -> 50% -> 80% -> 100%
-
+    } else if (this.isFloorHanging && this.hangingFloorGroup && this.hangingFloorDims && this.suspensionSimulator) {
+      // ACTIVE CAUSAL SUSPENSION SIMULATION
       this.currentTrolleyX = this.craneX;
       this.currentTrolleyZ = this.craneZ;
       this.currentHookY = defaultHookY;
 
-      // Natural pendulum simulation parameters smoothly ramping into motion profile values:
-      const targetSpringKX = this.currentMotionProfile ? this.currentMotionProfile.swingSpringKX : 5.2;
-      const targetSpringKZ = this.currentMotionProfile ? this.currentMotionProfile.swingSpringKZ : 5.2;
-      const targetDamping = this.currentMotionProfile ? this.currentMotionProfile.swingDamping : 1.35;
-
-      const springKX = THREE.MathUtils.lerp(3.2, targetSpringKX, swingStrength);
-      const springKZ = THREE.MathUtils.lerp(3.0, targetSpringKZ, swingStrength);
-      const damping = THREE.MathUtils.lerp(2.2, targetDamping, swingStrength);
-
-      const normDiff = Math.min(Math.max(this.floorCount / 50, 0), 1.0);
-      const maxSwingDist = THREE.MathUtils.lerp(0.75, 1.45, normDiff);
-
-      const dispX = this.moduleX - this.craneX;
-      const dispZ = this.moduleZ - this.craneZ;
-      const relVelX = this.moduleVelX - this.craneVelX;
-      const relVelZ = this.moduleVelZ - this.craneVelZ;
-
-      const accX = -springKX * dispX - damping * relVelX;
-      const accZ = -springKZ * dispZ - damping * relVelZ;
-
-      const stepDt = Math.min(delta, 0.05);
-      this.moduleVelX += accX * stepDt;
-      this.moduleVelZ += accZ * stepDt;
-      this.moduleX += this.moduleVelX * stepDt;
-      this.moduleZ += this.moduleVelZ * stepDt;
-
-      const curDispX = this.moduleX - this.craneX;
-      const curDispZ = this.moduleZ - this.craneZ;
-      const curDist = Math.sqrt(curDispX * curDispX + curDispZ * curDispZ);
-
-      if (curDist > maxSwingDist && curDist > 0.0001) {
-        const scale = maxSwingDist / curDist;
-        this.moduleX = this.craneX + curDispX * scale;
-        this.moduleZ = this.craneZ + curDispZ * scale;
-        const normX = curDispX / curDist;
-        const normZ = curDispZ / curDist;
-        const vDotN = this.moduleVelX * normX + this.moduleVelZ * normZ;
-        if (vDotN > 0) {
-          this.moduleVelX -= vDotN * normX;
-          this.moduleVelZ -= vDotN * normZ;
-        }
-      }
-
-      const hookX = this.craneX + 0.12 * (this.moduleX - this.craneX);
-      const hookZ = this.craneZ + 0.12 * (this.moduleZ - this.craneZ);
-
-      // Smoothly blend tilt from transport starting tilt to full suspension sling tilt
-      const targetRollTilt = -(this.moduleX - this.craneX) / suspensionHeight;
-      const targetPitchTilt = (this.moduleZ - this.craneZ) / suspensionHeight;
-      const rollTilt = THREE.MathUtils.lerp(this.startRollTilt, targetRollTilt, swingStrength);
-      const pitchTilt = THREE.MathUtils.lerp(this.startPitchTilt, targetPitchTilt, swingStrength);
-
-      // Smoothly blend yaw rotation from 0 to full crane rotation oscillation
-      const yawRot = THREE.MathUtils.lerp(this.startYawRot, this.craneRotY, blendAlpha);
-
-      const liftY = (curDispX * curDispX + curDispZ * curDispZ) / (2 * suspensionHeight);
-
-      this.hangingFloorGroup.position.set(this.moduleX, floorY + liftY, this.moduleZ);
-      this.hangingFloorGroup.rotation.set(pitchTilt, yawRot, rollTilt);
-
-      this.crane.updatePosition(
-        this.currentCraneY,
+      const suspension = this.suspensionSimulator.step(
+        delta,
         this.craneX,
         this.craneZ,
-        defaultHookY,
-        this.hangingFloorGroup,
-        this.hangingFloorDims,
-        false,
-        hookX,
-        hookZ
+        this.craneVelX,
+        this.craneVelZ,
+        this.craneAccX,
+        this.craneAccZ
       );
 
-      // Section 28 Dev Debug Log around handoff
-      this.logHandoffState(u, pitchTilt, rollTilt, yawRot);
+      this.moduleX = suspension.loadX;
+      this.moduleZ = suspension.loadZ;
+      this.moduleVelX = suspension.loadVelX;
+      this.moduleVelZ = suspension.loadVelZ;
+      this.swingOffsetX = suspension.swingOffsetX;
+      this.swingOffsetZ = suspension.swingOffsetZ;
+      this.swingVelocityX = suspension.swingVelocityX;
+      this.swingVelocityZ = suspension.swingVelocityZ;
+      this.craneRotY = suspension.yawRot;
+      this.craneRotVelY = suspension.yawRotVel;
 
-      if (u >= 1.0) {
-        this.transitionPhase = 'READY';
-        this.isFloorHanging = true;
-        this.canDrop = true; // Player input safely re-enabled in active play area
-        if (this.currentMotionProfile) {
-          this.logMotionProfile(this.currentMotionProfile);
+      // Check physical drop boundary:
+      // Drop input is enabled as soon as the load is inside the active gameplay area (|X| <= 8.5m, |Z| <= 6.0m)
+      // Symmetric and identical for BOTH LEFT and RIGHT entry directions!
+      if (!this.canDrop) {
+        if (this.isInsideDropZone()) {
+          this.canDrop = true;
+          if (!this.hasLoggedDropEnabledThisFloor) {
+            this.hasLoggedDropEnabledThisFloor = true;
+            console.log(
+              `[ModuleEntry] Floor ${this.floorCount + 1}: DROP ENABLED inside playfield at X = ${this.moduleX.toFixed(2)}m, Z = ${this.moduleZ.toFixed(2)}m (Moving ${this.moduleVelX >= 0 ? 'RIGHT' : 'LEFT'})`
+            );
+            this.logSuspensionPhysics('DROP_ENABLED');
+          }
         }
       }
-    } else if (this.isFloorHanging && this.hangingFloorGroup && this.hangingFloorDims) {
-      // PHASE 5 / SUSPENDED LOAD PENDULUM SIMULATION (Full Gameplay Suspension)
-      // The module has its own independent suspension state; the trolley acts as the moving anchor.
-      this.currentTrolleyX = this.craneX;
-      this.currentTrolleyZ = this.craneZ;
-      this.currentHookY = defaultHookY;
 
-      // Natural pendulum simulation parameters from active module's motion profile:
-      const springKX = this.currentMotionProfile ? this.currentMotionProfile.swingSpringKX : 5.2;
-      const springKZ = this.currentMotionProfile ? this.currentMotionProfile.swingSpringKZ : 5.2;
-      const damping = this.currentMotionProfile ? this.currentMotionProfile.swingDamping : 1.35;
-
-      // Clamped swing angle/displacement based on floor difficulty (Requirement 23: 10°–17.5° max)
-      const normDiff = Math.min(Math.max(this.floorCount / 50, 0), 1.0);
-      const maxSwingDist = THREE.MathUtils.lerp(0.75, 1.45, normDiff);
-
-      // Relative displacement and velocity between suspended module and trolley anchor
-      const dispX = this.moduleX - this.craneX;
-      const dispZ = this.moduleZ - this.craneZ;
-      const relVelX = this.moduleVelX - this.craneVelX;
-      const relVelZ = this.moduleVelZ - this.craneVelZ;
-
-      // Dynamic acceleration on the suspended module
-      const accX = -springKX * dispX - damping * relVelX;
-      const accZ = -springKZ * dispZ - damping * relVelZ;
-
-      const stepDt = Math.min(delta, 0.05);
-      this.moduleVelX += accX * stepDt;
-      this.moduleVelZ += accZ * stepDt;
-      this.moduleX += this.moduleVelX * stepDt;
-      this.moduleZ += this.moduleVelZ * stepDt;
-
-      // Soft clamp displacement so the suspended load remains safe and predictable
-      const curDispX = this.moduleX - this.craneX;
-      const curDispZ = this.moduleZ - this.craneZ;
-      const curDist = Math.sqrt(curDispX * curDispX + curDispZ * curDispZ);
-
-      if (curDist > maxSwingDist && curDist > 0.0001) {
-        const scale = maxSwingDist / curDist;
-        this.moduleX = this.craneX + curDispX * scale;
-        this.moduleZ = this.craneZ + curDispZ * scale;
-        const normX = curDispX / curDist;
-        const normZ = curDispZ / curDist;
-        const vDotN = this.moduleVelX * normX + this.moduleVelZ * normZ;
-        if (vDotN > 0) {
-          this.moduleVelX -= vDotN * normX;
-          this.moduleVelZ -= vDotN * normZ;
-        }
+      // Center Crossing logging:
+      // Verifies high horizontal velocity, zero pause, zero hesitation, and continuous physics
+      if (
+        this.prevCenterCrossModX !== 0 &&
+        this.prevCenterCrossModX * this.moduleX <= 0
+      ) {
+        const direction = this.moduleVelX >= 0 ? 'RIGHT' : 'LEFT';
+        console.log(
+          `[CenterCross]\n` +
+          `  Floor: ${this.floorCount + 1}\n` +
+          `  Direction: ${direction}\n` +
+          `  X: ${this.moduleX.toFixed(3)}\n` +
+          `  VelocityX: ${this.moduleVelX.toFixed(3)}\n` +
+          `  Z: ${this.moduleZ.toFixed(3)}\n` +
+          `  VelocityZ: ${this.moduleVelZ.toFixed(3)}\n` +
+          `  SwingOffsetX: ${this.swingOffsetX.toFixed(3)}\n` +
+          `  SwingOffsetZ: ${this.swingOffsetZ.toFixed(3)}\n` +
+          `  SwingVelocityX: ${this.swingVelocityX.toFixed(3)}\n` +
+          `  SwingVelocityZ: ${this.swingVelocityZ.toFixed(3)}\n` +
+          `  RotationY: ${(this.craneRotY * 180 / Math.PI).toFixed(2)}°\n` +
+          `  AngularVelocityY: ${(this.craneRotVelY * 180 / Math.PI).toFixed(2)}°/s\n` +
+          `  CurrentState: ${this.state}/${this.transitionPhase}`
+        );
+        this.logSuspensionPhysics('CENTER_CROSSING');
       }
+      this.prevCenterCrossModX = this.moduleX;
 
       // Central hook block hangs between trolley and load with subtle cable lead
-      const hookX = this.craneX + 0.12 * (this.moduleX - this.craneX);
-      const hookZ = this.craneZ + 0.12 * (this.moduleZ - this.craneZ);
+      const hookX = this.craneX + 0.12 * this.swingOffsetX;
+      const hookZ = this.craneZ + 0.12 * this.swingOffsetZ;
 
-      // Visual roll and pitch tilt resulting from sling angle
-      const rollTilt = -(this.moduleX - this.craneX) / suspensionHeight;
-      const pitchTilt = (this.moduleZ - this.craneZ) / suspensionHeight;
-      const yawRot = this.craneRotY;
-
-      // Subtle vertical arc lift during lateral swing
-      const liftY = (curDispX * curDispX + curDispZ * curDispZ) / (2 * suspensionHeight);
-
-      this.hangingFloorGroup.position.set(this.moduleX, floorY + liftY, this.moduleZ);
-      this.hangingFloorGroup.rotation.set(pitchTilt, yawRot, rollTilt);
+      this.hangingFloorGroup.position.set(this.moduleX, floorY + suspension.liftY, this.moduleZ);
+      this.hangingFloorGroup.rotation.set(suspension.pitchTilt, suspension.yawRot, suspension.rollTilt);
 
       this.crane.updatePosition(
         this.currentCraneY,
@@ -850,39 +850,44 @@ export class GameEngine {
 
   private logMotionProfile(profile: ModuleMotionProfile) {
     console.log(
-      `[MotionProfile] Floor: ${profile.floor} | Difficulty: ${profile.difficulty.toFixed(2)} | ` +
-      `XFrequency: ${profile.freqX.toFixed(3)} | ZFrequency: ${profile.freqZ.toFixed(3)} | ` +
-      `XPhase: ${profile.startPhaseX.toFixed(2)} | ZPhase: ${profile.startPhaseZ.toFixed(2)} | ` +
-      `SwingXFactor: ${(profile.swingSpringKX / 5.2).toFixed(2)} | ` +
-      `SwingZFactor: ${(profile.swingSpringKZ / 5.2).toFixed(2)} | ` +
-      `RotationFrequency: ${profile.freqRot.toFixed(3)} | ` +
-      `RotationPhase: ${profile.startPhaseRot.toFixed(2)} | ` +
-      `SpeedMultiplier: ${profile.speedMultiplier.toFixed(2)}`
+      `[MotionProfile] Floor: ${profile.floor} | EntrySide: ${profile.entrySide} | SpawnX: ${profile.entrySpawnX.toFixed(2)}m | ` +
+      `Difficulty: ${profile.difficulty.toFixed(2)} | ` +
+      `SpeedMult: ${profile.speedMultiplier.toFixed(2)} | SpeedVar: ${profile.speedVariation.toFixed(3)} | ` +
+      `SpringKX: ${profile.swingSpringKX.toFixed(2)} | SpringKZ: ${profile.swingSpringKZ.toFixed(2)} | ` +
+      `Damping: ${profile.swingDamping.toFixed(2)} | InertiaFactor: ${profile.inertiaFactor.toFixed(2)} | ` +
+      `AmpX: ${profile.ampX.toFixed(2)}m | AmpZ: ${profile.ampZ.toFixed(2)}m`
     );
   }
 
-  private logHandoffState(u: number, pitch: number, roll: number, yaw: number) {
-    const milestones = [0.0, 0.25, 0.5, 0.75, 1.0];
-    for (const m of milestones) {
-      if (u >= m && !this.loggedHandoffMilestones.has(m)) {
-        this.loggedHandoffMilestones.add(m);
-        const swingOffsetX = this.moduleX - this.currentTrolleyX;
-        const swingOffsetZ = this.moduleZ - this.currentTrolleyZ;
-        const swingVelX = this.moduleVelX - this.craneVelX;
-        const swingVelZ = this.moduleVelZ - this.craneVelZ;
-        console.log(
-          `[SuspensionHandoff] State: ${this.transitionPhase} | Blend: ${u.toFixed(2)} | ` +
-          `ModulePosition: (${this.moduleX.toFixed(3)}, ${this.moduleZ.toFixed(3)}) | ` +
-          `ModuleVelocity: (${this.moduleVelX.toFixed(3)}, ${this.moduleVelZ.toFixed(3)}) | ` +
-          `SwingOffsetX: ${swingOffsetX.toFixed(3)} | SwingOffsetZ: ${swingOffsetZ.toFixed(3)} | ` +
-          `SwingVelocityX: ${swingVelX.toFixed(3)} | SwingVelocityZ: ${swingVelZ.toFixed(3)} | ` +
-          `Rotation: (P:${(pitch * 180 / Math.PI).toFixed(1)}°, Y:${(yaw * 180 / Math.PI).toFixed(1)}°, R:${(roll * 180 / Math.PI).toFixed(1)}°) | ` +
-          `TrolleyPosition: (${this.currentTrolleyX.toFixed(3)}, ${this.currentTrolleyZ.toFixed(3)}) | ` +
-          `TrolleyVelocity: (${this.craneVelX.toFixed(3)}, ${this.craneVelZ.toFixed(3)})`
-        );
-        break;
-      }
-    }
+  public logSuspensionPhysics(eventLabel: string) {
+    console.log(
+      `[SuspensionPhysics] Event: ${eventLabel} (Floor ${this.floorCount + 1})\n` +
+      `  TrolleyVelocityX:     ${this.craneVelX.toFixed(3)} m/s\n` +
+      `  TrolleyAccelerationX: ${this.craneAccX.toFixed(3)} m/s²\n` +
+      `  LoadVelocityX:        ${this.moduleVelX.toFixed(3)} m/s\n` +
+      `  SwingOffsetX:         ${this.swingOffsetX.toFixed(3)} m\n` +
+      `  SwingVelocityX:       ${this.swingVelocityX.toFixed(3)} m/s\n` +
+      `  TrolleyVelocityZ:     ${this.craneVelZ.toFixed(3)} m/s\n` +
+      `  TrolleyAccelerationZ: ${this.craneAccZ.toFixed(3)} m/s²\n` +
+      `  LoadVelocityZ:        ${this.moduleVelZ.toFixed(3)} m/s\n` +
+      `  SwingOffsetZ:         ${this.swingOffsetZ.toFixed(3)} m\n` +
+      `  SwingVelocityZ:       ${this.swingVelocityZ.toFixed(3)} m/s`
+    );
+  }
+
+  public logFloorMovementSpeed() {
+    if (!this.currentMotionProfile || !this.trolleyKinematics) return;
+    const kinematics = getCraneKinematicsForFloor(this.floorCount + 1);
+    console.log(
+      `[FloorMovementSpeed]\n` +
+      `  Floor: ${this.floorCount + 1}\n` +
+      `  BaseSpeed: ${GAME_CONFIG.CRANE_MIN_SPEED.toFixed(3)}\n` +
+      `  FloorSpeedMultiplier: ${kinematics.speedMult.toFixed(3)}\n` +
+      `  ModuleVariation: ${this.currentMotionProfile.speedVariation.toFixed(3)}\n` +
+      `  FinalMovementSpeed: ${(kinematics.speedMult * this.currentMotionProfile.speedVariation).toFixed(3)}\n` +
+      `  Acceleration: ${this.trolleyKinematics.a_peak_osc.toFixed(3)}\n` +
+      `  MaxVelocity: ${this.trolleyKinematics.maxVelocity.toFixed(3)}`
+    );
   }
 
   private handleLandedFloor(tiltAngle: number) {
@@ -992,6 +997,9 @@ export class GameEngine {
     const towerTopY = this.physics.getTowerTopY();
     const targetY = Math.max(towerTopY - 3.2, 3.2);
     this.cameraDesiredTarget.set(0, targetY, 0);
+
+    // Pre-select next entry side so crane trolley can reposition during settling
+    this.nextEntrySide = this.selectNextEntrySide();
 
     // Begin settling delay in game loop before next floor delivery
     this.transitionPhase = 'SETTLING';
@@ -1121,71 +1129,6 @@ export class GameEngine {
       gameOverReason: this.gameOverReason,
       regionName: this.currentRegionName,
     });
-  }
-
-  /**
-   * Diagnostic / Testing tool: Allows instant warp to any target floor
-   * to immediately verify all 10 environment regions (e.g. Floors 5, 15, 25, 34, 41, 48, 55, 62, 69, 76, 85).
-   */
-  public jumpToFloorForTesting(targetFloor: number) {
-    if (this.state === 'GAMEOVER' || this.state === 'COLLAPSING') {
-      this.state = 'PLAYING';
-      this.gameOverTriggered = false;
-      this.missedFloorFailureDuration = 0;
-      this.collapseFailureDuration = 0;
-      this.callbacks.onStateChange(this.state);
-    }
-
-    this.floorCount = Math.max(0, targetFloor);
-    this.score = this.floorCount * GAME_CONFIG.BASE_FLOOR_SCORE;
-    const towerTopY = this.floorCount * 2.3;
-    const initialTargetY = Math.max(towerTopY - 3.2, 3.2);
-
-    this.cameraDesiredTarget.set(0, initialTargetY, 0);
-    this.cameraTarget.set(0, initialTargetY, 0);
-    this.camera.position.set(
-      this.cameraTarget.x + this.cameraOffset.x,
-      this.cameraTarget.y + this.cameraOffset.y,
-      this.cameraTarget.z + this.cameraOffset.z
-    );
-    this.camera.lookAt(this.cameraTarget);
-
-    const floorTopY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + 2.3;
-    this.currentCraneY = floorTopY + 12.0;
-    this.currentHookY = floorTopY + 6.56;
-    this.moduleX = 0;
-    this.moduleZ = 0;
-    this.moduleVelX = 0;
-    this.moduleVelZ = 0;
-    this.transitionPhase = 'READY';
-    this.canDrop = true;
-    this.isFloorHanging = true;
-    this.cranePhaseX = 0;
-    this.cranePhaseZ = 0;
-    this.cranePhaseRot = 0;
-    this.startPitchTilt = 0;
-    this.startRollTilt = 0;
-    this.startYawRot = 0;
-    this.loggedHandoffMilestones.clear();
-
-    if (this.hangingFloorGroup && this.hangingFloorDims) {
-      const hangingY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + this.hangingFloorDims.height / 2;
-      this.hangingFloorGroup.position.set(0, hangingY, 0);
-    }
-
-    // Immediately trigger scenery update
-    const regionState = this.scenery.update(
-      0.016,
-      this.cameraTarget.y,
-      this.floorCount,
-      this.scene,
-      this.sunLight,
-      this.ambientLight
-    );
-    if (regionState) {
-      this.currentRegionName = regionState.regionName;
-    }
-    this.updateStatsUI();
   }
 
   private loop = (time: number) => {

@@ -61,15 +61,49 @@ export const DIFFICULTY_KNOTS: DifficultyKnot[] = [
 ];
 
 /**
+ * Calculates the strictly continuous, monotonic speed multiplier based on the placed floor count.
+ * Every successfully placed floor increases the speed of the next floor:
+ * S(N + 1) > S(N) for all N >= 1.
+ * 
+ * Progression:
+ * - Floors 1 to 50: Smooth quadratic ramp matching calibrated difficulty targets:
+ *   Floor 1: 1.000x, Floor 5: 1.059x, Floor 10: 1.137x, Floor 20: 1.304x,
+ *   Floor 30: 1.487x, Floor 40: 1.686x, Floor 50: 1.900x.
+ * - Floors 50+: Continuous diminishing asymptotic approach toward a soft cap of 2.45x.
+ *   C^1 continuous derivative at Floor 50 (no sudden slope change or hard plateau).
+ */
+export function getSpeedMultiplierForFloor(floorNumber: number): number {
+  const n = Math.max(floorNumber - 1, 0);
+  if (n <= 49) {
+    return 1.0 + n * (0.0145 + 0.0000789 * n);
+  } else {
+    const s50 = 1.900;
+    const sCap = 2.45;
+    const k = 0.02223 / (sCap - s50);
+    const m = n - 49;
+    return sCap - (sCap - s50) * Math.exp(-k * m);
+  }
+}
+
+/**
  * Returns interpolated DifficultyKnot for any floor number.
  */
 export function getDifficultyKnotForFloor(floorNumber: number): DifficultyKnot {
+  const speedMult = getSpeedMultiplierForFloor(floorNumber);
+
   if (floorNumber <= DIFFICULTY_KNOTS[0].floor) {
-    return DIFFICULTY_KNOTS[0];
+    return {
+      ...DIFFICULTY_KNOTS[0],
+      speedMult,
+    };
   }
   const lastKnot = DIFFICULTY_KNOTS[DIFFICULTY_KNOTS.length - 1];
   if (floorNumber >= lastKnot.floor) {
-    return lastKnot;
+    return {
+      ...lastKnot,
+      floor: floorNumber,
+      speedMult,
+    };
   }
 
   for (let i = 0; i < DIFFICULTY_KNOTS.length - 1; i++) {
@@ -82,7 +116,7 @@ export function getDifficultyKnotForFloor(floorNumber: number): DifficultyKnot {
       return {
         floor: floorNumber,
         difficulty: k0.difficulty + t * (k1.difficulty - k0.difficulty),
-        speedMult: k0.speedMult + t * (k1.speedMult - k0.speedMult),
+        speedMult,
         ampX: k0.ampX + t * (k1.ampX - k0.ampX),
         ampZ: k0.ampZ + t * (k1.ampZ - k0.ampZ),
         rotY: k0.rotY + t * (k1.rotY - k0.rotY),
@@ -93,7 +127,11 @@ export function getDifficultyKnotForFloor(floorNumber: number): DifficultyKnot {
     }
   }
 
-  return lastKnot;
+  return {
+    ...lastKnot,
+    floor: floorNumber,
+    speedMult,
+  };
 }
 
 /**

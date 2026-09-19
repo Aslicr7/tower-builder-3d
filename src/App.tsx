@@ -9,8 +9,6 @@ import { FeedbackEvent, GameState, GameStats } from './types';
 import { GameHUD } from './components/GameHUD';
 import { GameOverModal } from './components/GameOverModal';
 import { PauseModal } from './components/PauseModal';
-// TEMP DEV: Environment region testing
-import { DevEnvTestPanel } from './components/DevEnvTestPanel';
 
 export default function App() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -52,12 +50,20 @@ export default function App() {
     };
   }, []);
 
-  // Drop action
-  const handleDrop = useCallback(() => {
-    if (gameState === 'PLAYING' && engineRef.current) {
-      engineRef.current.releaseCurrentFloor();
+  // Drop action with tap deduplication to prevent double-drops from pointerdown + click
+  const lastDropTimeRef = useRef(0);
+  const handleDrop = useCallback((pointerTarget: string = 'viewport') => {
+    const now = performance.now();
+    if (now - lastDropTimeRef.current < 250) {
+      return;
     }
-  }, [gameState]);
+    if (engineRef.current) {
+      const success = engineRef.current.releaseCurrentFloor(pointerTarget);
+      if (success) {
+        lastDropTimeRef.current = now;
+      }
+    }
+  }, []);
 
   // Camera rotation (visual 45° orbit)
   const handleRotateCamera = useCallback((direction: number = 1) => {
@@ -71,7 +77,7 @@ export default function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
         e.preventDefault();
-        handleDrop();
+        handleDrop('spacebar');
       } else if (e.code === 'KeyQ') {
         e.preventDefault();
         handleRotateCamera(-1);
@@ -111,8 +117,16 @@ export default function App() {
   return (
     <div
       id="game-viewport"
-      className="relative w-screen h-screen overflow-hidden bg-slate-900 select-none"
-      onClick={handleDrop}
+      className="relative w-screen h-screen overflow-hidden bg-slate-900 select-none cursor-pointer"
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        const target = (e.target as HTMLElement)?.id || (e.target as HTMLElement)?.tagName || 'game-viewport';
+        handleDrop(target);
+      }}
+      onClick={(e) => {
+        const target = (e.target as HTMLElement)?.id || (e.target as HTMLElement)?.tagName || 'game-viewport';
+        handleDrop(target);
+      }}
     >
       {/* 3D WebGL Canvas Container */}
       <div
@@ -132,27 +146,11 @@ export default function App() {
         onRotateCameraRight={() => handleRotateCamera(1)}
       />
 
-      {/* TEMP DEV: Environment region testing */}
-      <DevEnvTestPanel
-        currentFloor={stats.currentFloor}
-        regionName={stats.regionName}
-        onJumpToFloor={(floor) => {
-          engineRef.current?.jumpToFloorForTesting(floor);
-          if (gameState === 'PAUSED') {
-            engineRef.current?.resume();
-          }
-        }}
-      />
-
       {/* Pause Modal */}
       {gameState === 'PAUSED' && (
         <PauseModal
           onResume={() => engineRef.current?.resume()}
           onRestart={handleRestart}
-          onJumpToFloor={(floor) => {
-            engineRef.current?.jumpToFloorForTesting(floor);
-            engineRef.current?.resume();
-          }}
         />
       )}
 

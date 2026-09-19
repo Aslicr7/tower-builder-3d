@@ -144,7 +144,7 @@ export class CraneSystem {
     boom.name = 'CraneBoom';
 
     // Longitudinal chord tubes spanning horizontally across upper frame
-    const chordGeo = new THREE.CylinderGeometry(0.12, 0.12, 54, 8);
+    const chordGeo = new THREE.CylinderGeometry(0.12, 0.12, 140, 8);
     chordGeo.rotateZ(Math.PI / 2);
 
     // Top chord
@@ -164,7 +164,7 @@ export class CraneSystem {
     // Lattice diagonal struts along the boom
     const strutMat = yellowMat;
     const strutGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.85, 6);
-    for (let x = -24; x <= 24; x += 3.0) {
+    for (let x = -66; x <= 66; x += 3.0) {
       // Front face diagonals
       const strutF1 = new THREE.Mesh(strutGeo, strutMat);
       strutF1.position.set(x + 0.75, 0.8, 0.38);
