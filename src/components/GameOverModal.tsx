@@ -37,14 +37,13 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({ stats, onRestart }
           {stats.gameOverReason === 'MISSED_FLOOR' ? 'MISSED FLOOR' : 'TOWER COLLAPSED'}
         </h2>
 
-        {/* Height Display matching prompt: HEIGHT 12,482 m */}
+        {/* Score Display */}
         <div className="my-6">
           <div className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-1">
-            HEIGHT
+            SCORE
           </div>
           <div className="text-4xl sm:text-5xl font-black text-white font-display tracking-tight">
-            {stats.currentHeight.toLocaleString()}{' '}
-            <span className="text-2xl font-bold text-sky-400">m</span>
+            {stats.score.toLocaleString()}
           </div>
           <div className="text-sm font-medium text-slate-400 mt-2">
             {stats.currentFloor} {stats.currentFloor === 1 ? 'Floor Placed' : 'Floors Placed'}
@@ -52,9 +51,9 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({ stats, onRestart }
         </div>
 
         <div className="w-full bg-slate-800/60 rounded-2xl p-3 mb-6 border border-white/10 flex justify-between items-center px-5">
-          <span className="text-sm text-slate-400 font-medium">Record</span>
+          <span className="text-sm text-slate-400 font-medium">Best Score</span>
           <span className="text-lg font-bold text-amber-300 font-display">
-            {stats.bestHeight.toLocaleString()} m
+            {stats.bestScore.toLocaleString()}
           </span>
         </div>
 

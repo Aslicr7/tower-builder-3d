@@ -1419,7 +1419,7 @@ export class EnvironmentManager {
       transitionProgress = (floorCount - 7) / 3; // Floor 8: 0.33, Floor 10: 1.0
       regionName = 'LEAVING CITY';
       nextRegionName = 'HIGH MOUNTAINS';
-    } else if (floorCount < 18) {
+    } else if (floorCount < 16) {
       regionIndex = 1;
       regionId = 'HIGH_MOUNTAINS';
       transitionProgress = 0;
@@ -1428,7 +1428,9 @@ export class EnvironmentManager {
     } else if (floorCount <= 20) {
       regionIndex = 1;
       regionId = 'HIGH_MOUNTAINS';
-      transitionProgress = (floorCount - 17) / 3; // Floor 18: 0.33, Floor 20: 1.0
+      // Smooth 5-floor transition window across floors 16 to 20
+      // Floor 16: 0.2, Floor 17: 0.4, Floor 18: 0.6, Floor 19: 0.8, Floor 20: 1.0
+      transitionProgress = (floorCount - 15) / 5;
       regionName = 'APPROACHING CLOUDS';
       nextRegionName = 'CLOUD WORLD';
     } else if (floorCount < 28) {
@@ -1566,24 +1568,57 @@ export class EnvironmentManager {
     this.currentRegion = regionIndex;
     this.transitionT = transitionProgress;
 
-    // 10B. Stream and Cull Scenery based on altitude:
+    // 10B. Stream and Cull Scenery with smooth overlapping transitions:
     // "OLD ENVIRONMENT MUST MOVE BELOW"
-    // Ground city stays at Y = 0. When floor > 18, it's far below and culled for performance.
-    this.cityGroup.visible = floorCount <= 18;
-    // Mountains are visible from Floor 7 (distant peaks) up to Floor 32 (far below in clouds)
-    this.mountainGroup.visible = floorCount >= 7 && floorCount <= 32;
-    // Cloud world is visible from Floor 18 up to Floor 34
-    this.cloudWorldGroup.visible = floorCount >= 18 && floorCount <= 34;
-    // Above cloud ocean is visible from Floor 28 up to Floor 46
-    this.aboveCloudSeaGroup.visible = floorCount >= 28 && floorCount <= 46;
-    // High atmosphere curved horizon is visible from Floor 36 up to Floor 52
-    this.highAtmoGroup.visible = floorCount >= 36 && floorCount <= 52;
-    // Space & Earth globe are visible from Floor 44 onward
-    this.spaceGroup.visible = floorCount >= 44;
-    // Orbital station is visible from Floor 57 to Floor 74
-    this.orbitalGroup.visible = floorCount >= 57 && floorCount <= 74;
-    // Moon is visible from Floor 64 onward
-    this.moonGroup.visible = floorCount >= 64;
+    // Ground city stays at Y = 0. Gradually sinks via parallax and remains visible until floor 26.
+    this.cityGroup.visible = floorCount <= 26;
+    if (this.cityGroup.visible) {
+      const citySink = Math.max(0, floorCount - 12) * 2.2;
+      this.cityGroup.position.y = -citySink;
+    }
+
+    // Mountains are visible from Floor 5 up to Floor 36
+    this.mountainGroup.visible = floorCount >= 5 && floorCount <= 36;
+    if (this.mountainGroup.visible) {
+      if (floorCount > 18) {
+        const mountainSink = THREE.MathUtils.smoothstep(floorCount, 18, 34) * 45;
+        this.mountainGroup.position.y = -mountainSink;
+      } else {
+        this.mountainGroup.position.y = 0;
+      }
+    }
+
+    // Cloud world is visible from Floor 15 up to Floor 38 with smooth entrance & exit scaling
+    this.cloudWorldGroup.visible = floorCount >= 15 && floorCount <= 38;
+    if (this.cloudWorldGroup.visible) {
+      if (floorCount < 21) {
+        // Floor 15-20: incoming cloud world grows and rises smoothly into view
+        const cloudEntrance = THREE.MathUtils.smoothstep(floorCount, 15, 21);
+        const cloudScale = THREE.MathUtils.lerp(0.15, 1.0, cloudEntrance);
+        this.cloudWorldGroup.scale.set(cloudScale, cloudScale, cloudScale);
+        this.cloudWorldGroup.position.y = THREE.MathUtils.lerp(-80, -45, cloudEntrance);
+      } else if (floorCount > 28) {
+        // Floor 28-36: cloud world gently sinks beneath the tower
+        const cloudExit = THREE.MathUtils.smoothstep(floorCount, 28, 36);
+        this.cloudWorldGroup.position.y = THREE.MathUtils.lerp(-45, -110, cloudExit);
+        const exitScale = THREE.MathUtils.lerp(1.0, 0.4, cloudExit);
+        this.cloudWorldGroup.scale.set(exitScale, exitScale, exitScale);
+      } else {
+        this.cloudWorldGroup.scale.set(1, 1, 1);
+        this.cloudWorldGroup.position.y = -45;
+      }
+    }
+
+    // Above cloud ocean is visible from Floor 26 up to Floor 50
+    this.aboveCloudSeaGroup.visible = floorCount >= 26 && floorCount <= 50;
+    // High atmosphere curved horizon is visible from Floor 34 up to Floor 56
+    this.highAtmoGroup.visible = floorCount >= 34 && floorCount <= 56;
+    // Space & Earth globe are visible from Floor 42 onward
+    this.spaceGroup.visible = floorCount >= 42;
+    // Orbital station is visible from Floor 54 to Floor 76
+    this.orbitalGroup.visible = floorCount >= 54 && floorCount <= 76;
+    // Moon is visible from Floor 62 onward
+    this.moonGroup.visible = floorCount >= 62;
 
     // 10C. Dynamic Parallax Tracking:
     // Old scenery remains at world altitude; celestial / sky elements follow smoothly
@@ -1674,6 +1709,16 @@ export class EnvironmentManager {
     // 10E. Update Sky Shader, Fog, and Sun/Ambient Lighting
     this.updateLightingAndSky(floorCount, regionIndex, transitionProgress, scene, sunLight, ambientLight);
 
+    // Development-only required debug log (Part G)
+    if (import.meta.env.DEV) {
+      console.debug('[EnvironmentTransition]', {
+        Floor: floorCount,
+        CurrentRegion: state.regionName,
+        NextRegion: state.nextRegionName,
+        Blend: Number(state.transitionProgress.toFixed(2)),
+      });
+    }
+
     return state;
   }
 
@@ -1717,28 +1762,33 @@ export class EnvironmentManager {
         ambientLight.intensity = 0.95;
       }
     } else if (regionIndex === 1) {
-      // High Mountains -> approaching clouds
+      // High Mountains -> approaching clouds (seamless connection to Cloud World)
       const t = transitionProgress;
       uniforms.topColor.value.setRGB(
-        THREE.MathUtils.lerp(0.08, 0.58, t),
-        THREE.MathUtils.lerp(0.52, 0.76, t),
-        THREE.MathUtils.lerp(0.85, 0.99, t)
+        THREE.MathUtils.lerp(0.08, 0.22, t),
+        THREE.MathUtils.lerp(0.52, 0.65, t),
+        THREE.MathUtils.lerp(0.85, 0.98, t)
       );
       uniforms.horizonColor.value.setRGB(
-        THREE.MathUtils.lerp(0.88, 0.99, t),
-        THREE.MathUtils.lerp(0.95, 0.95, t),
-        THREE.MathUtils.lerp(0.99, 0.82, t)
+        THREE.MathUtils.lerp(0.88, 0.96, t),
+        THREE.MathUtils.lerp(0.95, 0.98, t),
+        THREE.MathUtils.lerp(0.99, 1.0, t)
+      );
+      uniforms.groundHaze.value.setRGB(
+        THREE.MathUtils.lerp(0.88, 0.94, t),
+        THREE.MathUtils.lerp(0.94, 0.97, t),
+        THREE.MathUtils.lerp(0.98, 1.0, t)
       );
       uniforms.starIntensity.value = 0.0;
       uniforms.spaceDarkness.value = 0.0;
 
       if (scene && scene.fog instanceof THREE.FogExp2) {
         scene.fog.color.setRGB(
-          THREE.MathUtils.lerp(0.85, 0.99, t),
-          THREE.MathUtils.lerp(0.92, 0.95, t),
-          THREE.MathUtils.lerp(0.99, 0.85, t)
+          THREE.MathUtils.lerp(0.85, 0.95, t),
+          THREE.MathUtils.lerp(0.92, 0.98, t),
+          THREE.MathUtils.lerp(0.99, 1.0, t)
         );
-        scene.fog.density = THREE.MathUtils.lerp(0.0035, 0.006, t);
+        scene.fog.density = THREE.MathUtils.lerp(0.0035, 0.005, t);
       }
     } else if (regionIndex === 2) {
       // Cloud World -> breakthrough into upper sky

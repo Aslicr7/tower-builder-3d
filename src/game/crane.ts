@@ -58,9 +58,6 @@ export class CraneSystem {
   // 4 Corner lifting pad-eye lugs (rendered at the floor's top corners)
   private cornerLugs: THREE.Group;
 
-  // Directional motion arrows
-  private arrowGroup: THREE.Group;
-
   // Off-screen anchor point coordinates for floor deliveries
   public static readonly MAST_X = 18.0;
   public static readonly MAST_Z = -3.5;
@@ -100,11 +97,12 @@ export class CraneSystem {
     this.boomGroup = this.createPartialBoom(yellowIndustrialMat, darkSteelMat);
     this.group.add(this.boomGroup);
 
-    // 2. Pulley / Hook Block Assembly
+    // 2. Pulley / Hook Block Assembly (scaled down by 18% so focus is hook + slings + module)
     this.hookBlock = this.createPulleyHookBlock(yellowIndustrialMat, darkSteelMat);
+    this.hookBlock.scale.set(0.82, 0.82, 0.82);
     this.group.add(this.hookBlock);
 
-    // 3. Two Vertical Hoist Cables (3D Cylinders with 9cm physical diameter)
+    // 3. Two Vertical Hoist Cables (3D Cylinders with physical steel wire diameter)
     const cableGeo = new THREE.CylinderGeometry(1, 1, 1, 10);
     for (let i = 0; i < 2; i++) {
       const cableMesh = new THREE.Mesh(cableGeo, cableWireMat);
@@ -113,7 +111,7 @@ export class CraneSystem {
       this.group.add(cableMesh);
     }
 
-    // 4. Four Diagonal Lifting Slings (3D Cylinders with 8cm physical diameter)
+    // 4. Four Diagonal Lifting Slings (3D Cylinders with physical steel wire diameter)
     const slingGeo = new THREE.CylinderGeometry(1, 1, 1, 8);
     for (let i = 0; i < 4; i++) {
       const slingMesh = new THREE.Mesh(slingGeo, cableWireMat);
@@ -130,15 +128,11 @@ export class CraneSystem {
       roughness: 0.3,
     });
     for (let i = 0; i < 4; i++) {
-      const lug = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.05, 8, 16), lugMat);
+      const lug = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.045, 8, 16), lugMat);
       lug.rotation.y = Math.PI / 4;
       this.cornerLugs.add(lug);
     }
     this.group.add(this.cornerLugs);
-
-    // 6. Directional Motion Arrows
-    this.arrowGroup = this.createArrowHints();
-    this.group.add(this.arrowGroup);
   }
 
   /**
@@ -369,70 +363,13 @@ export class CraneSystem {
   }
 
   /**
-   * Directional arrow hints to communicate crane horizontal sway
-   */
-  private createArrowHints(): THREE.Group {
-    const group = new THREE.Group();
-    group.name = 'CraneMotionArrows';
-
-    const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 128;
-    const ctx = canvas.getContext('2d')!;
-    ctx.clearRect(0, 0, 256, 128);
-
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
-    ctx.shadowColor = 'rgba(255, 255, 255, 0.85)';
-    ctx.shadowBlur = 10;
-
-    // Left arrow
-    ctx.beginPath();
-    ctx.moveTo(30, 64);
-    ctx.lineTo(70, 34);
-    ctx.lineTo(70, 52);
-    ctx.lineTo(110, 52);
-    ctx.lineTo(110, 76);
-    ctx.lineTo(70, 76);
-    ctx.lineTo(70, 94);
-    ctx.closePath();
-    ctx.fill();
-
-    // Right arrow
-    ctx.beginPath();
-    ctx.moveTo(226, 64);
-    ctx.lineTo(186, 34);
-    ctx.lineTo(186, 52);
-    ctx.lineTo(146, 52);
-    ctx.lineTo(146, 76);
-    ctx.lineTo(186, 76);
-    ctx.lineTo(186, 94);
-    ctx.closePath();
-    ctx.fill();
-
-    const tex = new THREE.CanvasTexture(canvas);
-    const mat = new THREE.MeshBasicMaterial({
-      map: tex,
-      transparent: true,
-      opacity: 0.85,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    });
-
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1.8), mat);
-    plane.position.set(0, 0, 0);
-    group.add(plane);
-
-    return group;
-  }
-
-  /**
    * Main update function called every animation frame.
    * Updates:
    * 1. Boom position at craneY
    * 2. Trolley position along boom (trolleyX, trolleyZ)
-   * 3. Pulley Block position at (trolleyX, hookY, trolleyZ)
-   * 4. TWO vertical cylindrical hoist cables from boom to pulley block
-   * 5. FOUR diagonal cylindrical slings from hook saddle to the four floor corners
+   * 3. Pulley Block position at (hookX, hookY, hookZ)
+   * 4. TWO vertical cylindrical hoist cables from trolley down to pulley block
+   * 5. FOUR slender diagonal cylindrical slings from hook saddle to the four floor lifting points
    */
   public updatePosition(
     craneY: number,
@@ -441,40 +378,45 @@ export class CraneSystem {
     hookY: number,
     floorGroup: THREE.Group | null,
     floorDims?: FloorDimensions,
-    showArrows: boolean = true
+    _unusedShowArrows: boolean = false,
+    hookX?: number,
+    hookZ?: number
   ) {
+    const hX = hookX !== undefined ? hookX : trolleyX;
+    const hZ = hookZ !== undefined ? hookZ : trolleyZ;
+
     // 1. Partial Boom at craneY
     this.boomGroup.position.set(0, craneY, trolleyZ);
     this.trolleyMesh.position.set(trolleyX, 0, 0);
 
-    // 2. Pulley / Hook Block at (trolleyX, hookY, trolleyZ)
-    this.hookWorldPos.set(trolleyX, hookY, trolleyZ);
+    // 2. Pulley / Hook Block at (hX, hookY, hZ)
+    this.hookWorldPos.set(hX, hookY, hZ);
     this.hookBlock.position.copy(this.hookWorldPos);
     this.hookBlock.visible = true;
 
-    // Hook saddle point (where slings meet at the bottom of the hook)
-    // Hook block center is at hookY; hook saddle is at hookY - 2.15m
-    const saddleOffsetY = 2.15;
-    this.hookSaddlePos.set(trolleyX, hookY - saddleOffsetY, trolleyZ);
+    // Hook saddle point (where slings meet at bottom of the central hook)
+    // Scaled by 0.82: saddleOffsetY = 1.76m
+    const saddleOffsetY = 1.76;
+    this.hookSaddlePos.set(hX, hookY - saddleOffsetY, hZ);
 
     // 3. TWO Vertical Hoist Cables:
     // From trolley guide sheaves down to the dual top sheaves of the Pulley Block
     const boomSheaveY = craneY - 0.45;
-    const blockSheaveY = hookY + 0.92;
-    const sheaveSpanX = 0.25;
+    const blockSheaveY = hookY + 0.92 * 0.82;
+    const trolleySheaveSpanX = 0.25;
+    const blockSheaveSpanX = 0.25 * 0.82;
 
-    this.trolleySheave1.set(trolleyX - sheaveSpanX, boomSheaveY, trolleyZ);
-    this.blockSheave1.set(trolleyX - sheaveSpanX, blockSheaveY, trolleyZ);
-    orientCylinder(this.hoistCables[0], this.trolleySheave1, this.blockSheave1, 0.045);
+    this.trolleySheave1.set(trolleyX - trolleySheaveSpanX, boomSheaveY, trolleyZ);
+    this.blockSheave1.set(hX - blockSheaveSpanX, blockSheaveY, hZ);
+    orientCylinder(this.hoistCables[0], this.trolleySheave1, this.blockSheave1, 0.04);
 
-    this.trolleySheave2.set(trolleyX + sheaveSpanX, boomSheaveY, trolleyZ);
-    this.blockSheave2.set(trolleyX + sheaveSpanX, blockSheaveY, trolleyZ);
-    orientCylinder(this.hoistCables[1], this.trolleySheave2, this.blockSheave2, 0.045);
+    this.trolleySheave2.set(trolleyX + trolleySheaveSpanX, boomSheaveY, trolleyZ);
+    this.blockSheave2.set(hX + blockSheaveSpanX, blockSheaveY, hZ);
+    orientCylinder(this.hoistCables[1], this.trolleySheave2, this.blockSheave2, 0.04);
 
     // 4. FOUR Lifting Slings:
     if (floorGroup && floorDims) {
       this.cornerLugs.visible = true;
-      this.arrowGroup.visible = showArrows;
 
       // 4 Lifting Slings Attachment Points:
       // If the module explicitly specifies 4 top lifting points (e.g. Sky Garden, future special modules),
@@ -508,18 +450,8 @@ export class CraneSystem {
           lug.rotation.y = floorGroup.rotation.y + Math.PI / 4;
         }
 
-        // Orient 3D sling cylinder from hook saddle to corner
-        orientCylinder(this.slings[i], this.hookSaddlePos, this.cornerWorld, 0.04);
-      }
-
-      // Position directional arrows above the floor
-      if (showArrows) {
-        const maxY = Math.max(...cornerOffsets.map((p) => p.y));
-        this.arrowGroup.position.set(
-          floorGroup.position.x,
-          floorGroup.position.y + maxY + 1.25,
-          floorGroup.position.z + 1.2
-        );
+        // Orient 3D sling cylinder from central hook saddle to corner pad-eye lug
+        orientCylinder(this.slings[i], this.hookSaddlePos, this.cornerWorld, 0.036);
       }
     } else {
       // FLOOR RELEASED / DROPPED:
@@ -527,17 +459,16 @@ export class CraneSystem {
       // The four slings hang naturally loose beneath the hook saddle.
       // They do NOT stretch down after the falling floor!
       this.cornerLugs.visible = false;
-      this.arrowGroup.visible = false;
 
-      const idleSlingLen = 1.35;
+      const idleSlingLen = 1.65;
       for (let i = 0; i < 4; i++) {
         const ang = (i * Math.PI) / 2 + Math.PI / 4;
         const idleEnd = new THREE.Vector3(
-          this.hookSaddlePos.x + Math.cos(ang) * 0.28,
+          this.hookSaddlePos.x + Math.cos(ang) * 0.25,
           this.hookSaddlePos.y - idleSlingLen,
-          this.hookSaddlePos.z + Math.sin(ang) * 0.28
+          this.hookSaddlePos.z + Math.sin(ang) * 0.25
         );
-        orientCylinder(this.slings[i], this.hookSaddlePos, idleEnd, 0.038);
+        orientCylinder(this.slings[i], this.hookSaddlePos, idleEnd, 0.034);
       }
     }
   }

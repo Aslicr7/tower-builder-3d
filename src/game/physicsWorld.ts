@@ -2,7 +2,13 @@ import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
 import { FloorDimensions } from '../types';
 import { GAME_CONFIG } from './constants';
-import { getDifficultyForFloor, getStabilizationMaxForce, StabilizationStatus } from './difficultyCurve';
+import {
+  getDifficultyForFloor,
+  getStabilizationMaxForce,
+  getSettledDampingForFloor,
+  getActivePhysicsWindowSize,
+  StabilizationStatus,
+} from './difficultyCurve';
 
 export interface PhysicsFloorRecord {
   id: number;
@@ -167,20 +173,23 @@ export class PhysicsWorld {
     };
 
     // HEAVY CONCRETE IMPACT DAMPING: Zero recoil upward on contact
+    // Part C: Scale collision lateral damping with floor height so late game doesn't artificially kill momentum
     body.addEventListener('collide', () => {
       if (record.firstContactTime === null) {
         record.firstContactTime = performance.now();
       }
-      // Strictly prevent upward bouncing
+      // Strictly prevent upward bouncing (restitution = 0)
       if (body.velocity.y > 0) {
         body.velocity.y = 0;
       }
-      // Damp excess lateral slide and spin on heavy impact
-      body.velocity.x *= 0.55;
-      body.velocity.z *= 0.55;
-      body.angularVelocity.x *= 0.4;
-      body.angularVelocity.y *= 0.5;
-      body.angularVelocity.z *= 0.4;
+      // Part C: Damping scaling across difficulty
+      const latDamp = id <= 15 ? 0.65 : id <= 35 ? 0.78 : id <= 50 ? 0.88 : 0.95;
+      body.velocity.x *= latDamp;
+      body.velocity.z *= latDamp;
+      const rotDamp = id <= 15 ? 0.45 : id <= 35 ? 0.60 : id <= 50 ? 0.75 : 0.88;
+      body.angularVelocity.x *= rotDamp;
+      body.angularVelocity.y *= rotDamp;
+      body.angularVelocity.z *= rotDamp;
     });
 
     this.world.addBody(body);
@@ -204,38 +213,31 @@ export class PhysicsWorld {
       }
     }
 
-    // SETTLED FLOOR GRIP & RESIDUAL VELOCITY DEAD-ZONE:
-    // Heavy architectural concrete modules that have landed, settled, and have valid support
-    // must strongly resist tiny residual horizontal sliding forces and numerical micro-skating.
+    // SETTLED FLOOR GRIP & RESIDUAL VELOCITY DEAD-ZONE (Part C7, C8):
+    // Tiny velocity dead-zone ONLY to remove floating-point numerical micro-jitter (< 0.03 m/s).
+    // Visible physical sliding (>= 0.03 m/s) is NOT automatically cancelled!
     for (const rec of this.records) {
       if (rec.settled && !rec.isFrozen && !rec.isDetached) {
-        // Only apply grip if the floor has reasonable structural support.
-        // If support is DANGEROUS / < 25%, it must remain completely free to tilt, slide and collapse!
-        if (rec.supportRatio >= GAME_CONFIG.STABILIZATION_RISKY_SUPPORT) {
-          const vx = rec.body.velocity.x;
-          const vz = rec.body.velocity.z;
-          const hSpeed = Math.sqrt(vx * vx + vz * vz);
-          const angSpeed = rec.body.angularVelocity.length();
+        const vx = rec.body.velocity.x;
+        const vz = rec.body.velocity.z;
+        const hSpeed = Math.sqrt(vx * vx + vz * vz);
+        const angSpeed = rec.body.angularVelocity.length();
 
-          if (hSpeed < 0.06) {
-            // Velocity Dead-Zone: zero out micro-residual horizontal creep / ice sliding
-            rec.body.velocity.x = 0;
-            rec.body.velocity.z = 0;
-            if (angSpeed < 0.06) {
-              rec.body.angularVelocity.set(0, 0, 0);
-            }
-          } else if (hSpeed < 0.40) {
-            // Static-like compressive friction resistance:
-            // Dampen small lateral residual sliding quickly toward zero, scaled by support ratio
-            const dampingFactor = Math.exp(-14.0 * rec.supportRatio * clampedDelta);
-            rec.body.velocity.x *= dampingFactor;
-            rec.body.velocity.z *= dampingFactor;
-            rec.body.angularVelocity.x *= dampingFactor;
-            rec.body.angularVelocity.z *= dampingFactor;
+        if (hSpeed < 0.03) {
+          // Velocity Dead-Zone: zero out numerical micro-residual noise / sub-pixel drift
+          rec.body.velocity.x = 0;
+          rec.body.velocity.z = 0;
+          if (angSpeed < 0.03) {
+            rec.body.angularVelocity.set(0, 0, 0);
           }
-          // If hSpeed >= 0.40, do NOT damp! Large impacts or deliberate player-created momentum
-          // remain fully dynamic so severe shifts, tipping, and falls still occur physically.
+        } else if (rec.supportRatio >= GAME_CONFIG.STABILIZATION_VERY_STABLE_SUPPORT) {
+          // Only VERY_STABLE settled floors get compressive friction resistance against drift
+          const dampingFactor = Math.exp(-6.0 * clampedDelta);
+          rec.body.velocity.x *= dampingFactor;
+          rec.body.velocity.z *= dampingFactor;
         }
+        // STABLE, RISKY, and DANGEROUS floors with visible movement (>= 0.03 m/s)
+        // are NOT artificially killed, allowing physical sliding/tilting based on real contact physics!
       }
     }
 
@@ -443,14 +445,7 @@ export class PhysicsWorld {
 
     // Smooth difficulty progression (replaces binary floor <= 20 cliff)
     const difficulty = getDifficultyForFloor(currentFloorCount);
-    const maxForce = getStabilizationMaxForce(status, difficulty);
-
-    // Development-only temporary debug log
-    if (import.meta.env.DEV) {
-      console.debug(
-        `[Stabilization] Floor: ${currentFloorCount} | Support: ${(supportRatio * 100).toFixed(1)}% | Status: ${status} | Difficulty: ${difficulty.toFixed(2)} | ConstraintForce: ${maxForce.toExponential(2)}`
-      );
-    }
+    const maxForce = getStabilizationMaxForce(status, difficulty, currentFloorCount);
 
     if (maxForce > 0) {
       // LockConstraint locks current relative position and rotation (NO SNAPPING OR CENTERING!)
@@ -460,14 +455,26 @@ export class PhysicsWorld {
       this.constraints.push(lock);
     }
 
-    // Dampen micro-jitter on settled floor (architectural firmness)
-    record.body.linearDamping = 0.65;
-    record.body.angularDamping = 0.80;
+    // Settled Damping according to Part C9 (scaled by floor height)
+    const damping = getSettledDampingForFloor(currentFloorCount);
+    record.body.linearDamping = damping.linear;
+    record.body.angularDamping = damping.angular;
 
-    // Enforce Active Physics Window:
-    // Only the top active floors (ACTIVE_PHYSICS_WINDOW = 4) remain fully dynamic.
-    // Older floors below this window become STATIC bodies (preserving their exact position, rotation, and crookedness).
-    this.enforceActivePhysicsWindow();
+    // Enforce Active Physics Window according to Part C10
+    const activeWindowSize = getActivePhysicsWindowSize(currentFloorCount);
+    this.enforceActivePhysicsWindow(activeWindowSize);
+
+    // Development-only required debug log (Part G)
+    if (import.meta.env.DEV) {
+      console.debug('[PhysicsPlacement]', {
+        Floor: currentFloorCount,
+        SupportRatio: (supportRatio * 100).toFixed(1) + '%',
+        PlacementClass: status,
+        ConstraintForce: maxForce.toExponential(2),
+        SettledDamping: `linear ${damping.linear.toFixed(2)} / angular ${damping.angular.toFixed(2)}`,
+        ActiveWindowSize: activeWindowSize,
+      });
+    }
 
     return { supportRatio, status };
   }
@@ -540,15 +547,16 @@ export class PhysicsWorld {
   }
 
   /**
-   * ACTIVE PHYSICS WINDOW:
-   * Keeps the newest floors (ACTIVE_PHYSICS_WINDOW = 4) fully dynamic.
+   * ACTIVE PHYSICS WINDOW (Part C10):
+   * Keeps the newest floors fully dynamic based on activeWindowSize.
    * Older floors below this window become STATIC CANNON bodies with authoritative frozen transforms,
    * perfectly preserving their exact position, crookedness, and rotation,
    * while eliminating jitter compounding, preventing chain-reaction collapse,
    * and ensuring smooth 60fps on mobile for runs of 100-200+ floors!
    */
-  public enforceActivePhysicsWindow() {
-    const activeWindowSize = GAME_CONFIG.ACTIVE_PHYSICS_WINDOW;
+  public enforceActivePhysicsWindow(customWindowSize?: number) {
+    const activeWindowSize =
+      customWindowSize || getActivePhysicsWindowSize(this.records.filter((r) => r.settled).length);
     // Only count surviving settled floors for the active window cutoff
     const survivingFloors = this.records.filter((r) => r.settled && !r.isDetached);
     const cutoff = survivingFloors.length - activeWindowSize;
@@ -557,7 +565,6 @@ export class PhysicsWorld {
     for (let i = 0; i < cutoff; i++) {
       const rec = survivingFloors[i];
       if (!rec.isFrozen) {
-        // DO NOT FREEZE A FLOOR TOO EARLY:
         // A floor may enter the frozen section ONLY if settled === true,
         // and it has already been stable (not falling or sliding significantly).
         const speed = rec.body.velocity.length();

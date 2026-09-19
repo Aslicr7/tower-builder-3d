@@ -33,6 +33,11 @@ export const GAME_CONFIG = {
   LINEAR_DAMPING: 0.48, // absorbs kinetic bounce & lateral slide
   ANGULAR_DAMPING: 0.72, // prevents rubbery rotational rebound
   
+  // Scoring parameters (Part 2)
+  BASE_FLOOR_SCORE: 1,
+  GREAT_BONUS: 1,
+  PERFECT_BONUS: 2,
+
   // Tolerances
   PERFECT_THRESHOLD_DIST: 0.25,
   PERFECT_THRESHOLD_ROT: 0.09,

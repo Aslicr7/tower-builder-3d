@@ -18,6 +18,8 @@ export default function App() {
 
   const [gameState, setGameState] = useState<GameState>('PLAYING');
   const [stats, setStats] = useState<GameStats>({
+    score: 0,
+    bestScore: 0,
     currentHeight: 0,
     bestHeight: 0,
     currentFloor: 0,
@@ -126,7 +128,8 @@ export default function App() {
         isPaused={gameState === 'PAUSED'}
         onPauseToggle={handlePauseToggle}
         onDropFloor={handleDrop}
-        onRotateCamera={() => handleRotateCamera(1)}
+        onRotateCameraLeft={() => handleRotateCamera(-1)}
+        onRotateCameraRight={() => handleRotateCamera(1)}
       />
 
       {/* TEMP DEV: Environment region testing */}

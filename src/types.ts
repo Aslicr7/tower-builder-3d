@@ -38,6 +38,8 @@ export type FeedbackType = 'PERFECT' | 'GREAT' | 'BALANCED' | 'RISKY' | 'DANGERO
 export type GameOverReason = 'MISSED_FLOOR' | 'REAL_TOP_COLLAPSE';
 
 export interface GameStats {
+  score: number;
+  bestScore: number;
   currentHeight: number;
   bestHeight: number;
   currentFloor: number;

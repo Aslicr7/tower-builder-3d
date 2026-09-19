@@ -1,14 +1,15 @@
 import * as THREE from 'three';
 import confetti from 'canvas-confetti';
-import { FeedbackEvent, FloorDimensions, FloorModuleStyle, GameState, GameStats } from '../types';
+import { FeedbackEvent, FeedbackType, FloorDimensions, FloorModuleStyle, GameState, GameStats } from '../types';
 import { sounds } from '../audio/sound';
 import { CityScenery } from './cityScenery';
 import { CraneSystem } from './crane';
 import { createFloorModule, createTowerFoundation } from './floorGenerator';
 import { selectFloorModule } from './moduleSelector';
-import { getReleaseMomentumMultipliers } from './difficultyCurve';
+import { getReleaseMomentumMultipliers, getCraneKinematicsForFloor } from './difficultyCurve';
 import { PhysicsWorld } from './physicsWorld';
 import { GAME_CONFIG } from './constants';
+import { createMotionProfile, ModuleMotionProfile } from './motionProfile';
 
 export interface GameEngineCallbacks {
   onStatsUpdate: (stats: GameStats) => void;
@@ -35,6 +36,8 @@ export class GameEngine {
   // Game state
   private state: GameState = 'START';
   private floorCount = 0;
+  private score = 0;
+  private bestScore = 0;
   private bestHeight = 0;
   private perfectStreak = 0;
   private isNewBest = false;
@@ -54,6 +57,12 @@ export class GameEngine {
   private craneVelX = 0;
   private craneVelZ = 0;
   private craneRotVelY = 0;
+
+  // Hanging module suspension & pendulum dynamics (lag, swing, tilt, inertia)
+  private moduleX = 0;
+  private moduleZ = 0;
+  private moduleVelX = 0;
+  private moduleVelZ = 0;
 
   // Camera tracking & Orbit View
   private cameraTarget = new THREE.Vector3(0, 3.2, 0);
@@ -75,13 +84,22 @@ export class GameEngine {
   private collapseFailureDuration = 0;
 
   // Continuous Smooth Drop & Delivery Transition State Machine
-  private transitionPhase: 'READY' | 'IN_FLIGHT' | 'SETTLING' | 'DELIVERING' = 'READY';
+  private transitionPhase: 'READY' | 'IN_FLIGHT' | 'SETTLING' | 'DELIVERING' | 'SUSPENDING' = 'READY';
   private transitionTimer = 0;
+  private readonly blendDuration = 0.45;
+  private startPitchTilt = 0;
+  private startRollTilt = 0;
+  private startYawRot = 0;
+  private cranePhaseX = 0;
+  private cranePhaseZ = 0;
+  private cranePhaseRot = 0;
+  private loggedHandoffMilestones = new Set<number>();
   private canDrop = true;
   private currentCraneY = 0;
   private currentHookY = 0;
   private currentTrolleyX = 0;
   private currentTrolleyZ = 0;
+  private currentMotionProfile: ModuleMotionProfile | null = null;
 
   // Animation frame
   private animId: number | null = null;
@@ -93,7 +111,15 @@ export class GameEngine {
     this.container = container;
     this.callbacks = callbacks;
 
-    // Load saved best height from localStorage
+    // Load saved best score from localStorage (separate from best height)
+    try {
+      const savedScore = localStorage.getItem('tower_builder_best_score');
+      if (savedScore) this.bestScore = parseInt(savedScore, 10) || 0;
+    } catch {
+      // LocalStorage fallback
+    }
+
+    // Load saved best height from localStorage (internally preserved)
     try {
       const savedBest = localStorage.getItem('tower_builder_best_height');
       if (savedBest) this.bestHeight = parseFloat(savedBest) || 0;
@@ -263,6 +289,7 @@ export class GameEngine {
 
     this.physics.reset();
     this.floorCount = 0;
+    this.score = 0;
     this.perfectStreak = 0;
     this.isNewBest = false;
     this.floorStyleHistory = [];
@@ -289,12 +316,23 @@ export class GameEngine {
     );
     this.camera.lookAt(this.cameraTarget);
 
-    // Initialize crane positions
+    // Initialize crane positions (spacious vertical hoist cables and suspended slings)
     const initialFloorTopY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + 2.3;
-    this.currentCraneY = initialFloorTopY + 9.4;
-    this.currentHookY = initialFloorTopY + 4.85;
+    this.currentCraneY = initialFloorTopY + 12.0;
+    this.currentHookY = initialFloorTopY + 6.56;
     this.currentTrolleyX = 0;
     this.currentTrolleyZ = 0;
+    this.moduleX = 0;
+    this.moduleZ = 0;
+    this.moduleVelX = 0;
+    this.moduleVelZ = 0;
+    this.cranePhaseX = 0;
+    this.cranePhaseZ = 0;
+    this.cranePhaseRot = 0;
+    this.startPitchTilt = 0;
+    this.startRollTilt = 0;
+    this.startYawRot = 0;
+    this.loggedHandoffMilestones.clear();
 
     // Spawn first suspended floor directly in ready position
     this.spawnNextFloorImmediately();
@@ -324,20 +362,34 @@ export class GameEngine {
     this.hangingFloorDims = dimensions;
     this.scene.add(group);
 
+    // Bounded, unique motion profile for this module
+    this.currentMotionProfile = createMotionProfile(this.floorCount + 1, this.hangingFloorStyle, dimensions);
+
     this.isFloorHanging = true;
     this.canDrop = true;
     this.transitionPhase = 'READY';
     this.transitionTimer = 0;
+    this.currentTrolleyX = this.currentMotionProfile.targetEntryX;
+    this.currentTrolleyZ = this.currentMotionProfile.targetEntryZ;
+    this.moduleX = this.currentMotionProfile.targetEntryX;
+    this.moduleZ = this.currentMotionProfile.targetEntryZ;
+    this.moduleVelX = 0;
+    this.moduleVelZ = 0;
+    this.cranePhaseX = this.currentMotionProfile.startPhaseX;
+    this.cranePhaseZ = this.currentMotionProfile.startPhaseZ;
+    this.cranePhaseRot = this.currentMotionProfile.startPhaseRot;
 
     // Crane height: above highest placed floor
     const towerTopY = this.physics.getTowerTopY();
     const floorH = dimensions.height;
     const hangingY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + floorH / 2;
 
-    this.hangingFloorGroup.position.set(0, hangingY, 0);
+    this.hangingFloorGroup.position.set(this.moduleX, hangingY, this.moduleZ);
 
     const targetY = Math.max(towerTopY - 3.2, 3.2);
     this.cameraDesiredTarget.set(0, targetY, 0);
+
+    this.logMotionProfile(this.currentMotionProfile);
   }
 
   /**
@@ -370,18 +422,27 @@ export class GameEngine {
     this.transitionTimer = 0;
 
     // Calculate release momentum based on smooth difficulty progression
+    // Preserves the real instantaneous momentum of the suspended hanging module!
     const momentum = getReleaseMomentumMultipliers(this.floorCount + 1);
+    const kinematics = getCraneKinematicsForFloor(this.floorCount + 1);
     const linearVelocity = new THREE.Vector3(
-      this.craneVelX * momentum.linear,
+      this.moduleVelX * momentum.linear,
       0,
-      this.craneVelZ * momentum.linear
+      this.moduleVelZ * momentum.linear
     );
     const angularVelocityY = this.craneRotVelY * momentum.angular;
 
     if (import.meta.env.DEV) {
-      console.debug(
-        `[Difficulty] Floor: ${this.floorCount + 1} | Difficulty: ${momentum.difficulty.toFixed(2)} | LinearTransfer: ${momentum.linear.toFixed(2)} | AngularTransfer: ${momentum.angular.toFixed(2)}`
-      );
+      console.debug('[CraneKinematics]', {
+        Floor: this.floorCount + 1,
+        SpeedMult: kinematics.speedMult.toFixed(2),
+        AmpX: kinematics.ampX.toFixed(2),
+        AmpZ: kinematics.ampZ.toFixed(2),
+        RotY: kinematics.rotY.toFixed(3),
+        SwayFactor: kinematics.swayFactor.toFixed(3),
+        LinearTransfer: momentum.linear.toFixed(2),
+        AngularTransfer: momentum.angular.toFixed(2),
+      });
     }
 
     // Rigid body physics takes over - zero snapping!
@@ -400,30 +461,38 @@ export class GameEngine {
   private updateCraneMotion(delta: number) {
     this.swingTime += delta;
 
-    // Continuous smooth difficulty scaling (Floors 1 to 200+)
-    const progress = Math.min(Math.max(this.floorCount / 180, 0), 1.0);
-    const t = progress * progress * (3 - 2 * progress);
+    // Single source of truth: Crane kinematics from difficulty curve
+    const kinematics = getCraneKinematicsForFloor(this.floorCount + 1);
+    const swingXRange = kinematics.ampX;
+    const swingZRange = kinematics.ampZ;
+    const rotYRange = kinematics.rotY;
 
-    const speed = THREE.MathUtils.lerp(GAME_CONFIG.CRANE_MIN_SPEED, GAME_CONFIG.CRANE_MAX_SPEED, t);
-    const swingXRange = THREE.MathUtils.lerp(GAME_CONFIG.CRANE_MIN_SWING_X, GAME_CONFIG.CRANE_MAX_SWING_X, t);
-    const swingZRange = THREE.MathUtils.lerp(GAME_CONFIG.CRANE_MIN_SWING_Z, GAME_CONFIG.CRANE_MAX_SWING_Z, t);
-    const rotYRange = THREE.MathUtils.lerp(GAME_CONFIG.CRANE_MIN_ROTATION_Y, GAME_CONFIG.CRANE_MAX_ROTATION_Y, t);
+    const profile = this.currentMotionProfile;
+
+    // Subtle slow speed modulation drift (±3%, non-synchronized slow wave ~28-36s period)
+    const slowWave = profile
+      ? profile.speedModulationAmp * Math.sin(this.swingTime * profile.speedModulationFreq + profile.speedModulationPhase)
+      : 0;
+    const speedMod = 1.0 + slowWave;
 
     const prevX = this.craneX;
     const prevZ = this.craneZ;
     const prevRot = this.craneRotY;
 
-    // 1. Horizontal left and right
-    const freqX = speed;
-    this.craneX = Math.sin(this.swingTime * freqX) * swingXRange;
+    // 1. Advance crane oscillation phases using independent, incommensurable frequencies
+    const freqX = (profile ? profile.freqX : GAME_CONFIG.CRANE_MIN_SPEED * kinematics.speedMult) * speedMod;
+    this.cranePhaseX += delta * freqX;
+    this.craneX = Math.sin(this.cranePhaseX) * swingXRange;
 
-    // 2. Movement along depth/Z axis (very small in early floors)
-    const freqZ = speed * 0.65;
-    this.craneZ = Math.cos(this.swingTime * freqZ) * swingZRange;
+    // 2. Movement along depth/Z axis (independent frequency & phase)
+    const freqZ = (profile ? profile.freqZ : GAME_CONFIG.CRANE_MIN_SPEED * kinematics.speedMult * 0.73) * speedMod;
+    this.cranePhaseZ += delta * freqZ;
+    this.craneZ = Math.cos(this.cranePhaseZ) * swingZRange;
 
-    // 3. Slow rotation around vertical Y axis (very small in early floors)
-    const freqRot = speed * 0.55;
-    this.craneRotY = Math.sin(this.swingTime * freqRot) * rotYRange;
+    // 3. Rotation around vertical Y axis (independent frequency & phase)
+    const freqRot = (profile ? profile.freqRot : GAME_CONFIG.CRANE_MIN_SPEED * kinematics.speedMult * 0.59) * speedMod;
+    this.cranePhaseRot += delta * freqRot;
+    this.craneRotY = Math.sin(this.cranePhaseRot) * rotYRange;
 
     // Calculate velocities for momentum preservation
     this.craneVelX = delta > 0 ? (this.craneX - prevX) / delta : 0;
@@ -436,7 +505,8 @@ export class GameEngine {
     const floorY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + activeFloorH / 2;
     const floorTopY = floorY + activeFloorH / 2;
 
-    const targetCraneY = floorTopY + 9.4;
+    // Crane boom elevation: raised so hook has ample vertical cable travel
+    const targetCraneY = floorTopY + 12.0;
     if (this.currentCraneY === 0) {
       this.currentCraneY = targetCraneY;
     } else {
@@ -444,8 +514,11 @@ export class GameEngine {
       this.currentCraneY = THREE.MathUtils.lerp(this.currentCraneY, targetCraneY, craneAlpha);
     }
 
-    // Default hook block center position (hook saddle sits at defaultHookY - 2.15 = floorTopY + 2.7m)
-    const defaultHookY = floorTopY + 4.85;
+    // Increased visible distance between hook and module (Requirement 5 & 9):
+    // Hook saddle hangs at floorTopY + 4.80m; hook block center is at saddle + 1.76m = floorTopY + 6.56m
+    const suspensionHeight = 4.80;
+    const saddleOffsetY = 1.76;
+    const defaultHookY = floorTopY + suspensionHeight + saddleOffsetY;
 
     if (this.transitionPhase === 'IN_FLIGHT') {
       // Floor in flight: Hook stays suspended above, retracting slightly clear of falling floor
@@ -499,34 +572,71 @@ export class GameEngine {
         this.hangingFloorDims = dimensions;
         this.scene.add(group);
 
+        // Generate bounded per-module motion profile for the newly created module
+        this.currentMotionProfile = createMotionProfile(this.floorCount + 1, this.hangingFloorStyle, dimensions);
+
         const pickupFloorY = floorY + 1.2;
         this.hangingFloorGroup.position.set(pickupX, pickupFloorY, CraneSystem.MAST_Z);
+        this.hangingFloorGroup.rotation.set(0, 0, 0);
+
         this.currentTrolleyX = pickupX;
         this.currentTrolleyZ = CraneSystem.MAST_Z;
-        this.currentHookY = pickupFloorY + dimensions.height / 2 + 4.85;
+        this.currentHookY = pickupFloorY + dimensions.height / 2 + suspensionHeight + saddleOffsetY;
+        this.moduleX = pickupX;
+        this.moduleZ = CraneSystem.MAST_Z;
+        this.moduleVelX = 0;
+        this.moduleVelZ = 0;
       }
     } else if (this.transitionPhase === 'DELIVERING' && this.hangingFloorGroup && this.hangingFloorDims) {
-      // PHASE 3: NEXT FLOOR ARRIVAL
-      // Trolley smoothly glides along crane boom into hanging position over 0.75s
+      // PHASE 3: NEXT FLOOR TRANSPORT
+      // Trolley smoothly glides along crane boom into active gameplay area over 0.85s
       this.transitionTimer += delta;
-      const deliveryDuration = 0.75;
+      const deliveryDuration = 0.85;
       const p = Math.min(this.transitionTimer / deliveryDuration, 1.0);
       const ease = p * p * (3 - 2 * p); // Smoothstep easing
 
       const pickupX = CraneSystem.MAST_X - 2.5;
+      const pickupZ = CraneSystem.MAST_Z;
       const pickupFloorY = floorY + 1.2;
       const targetFloorY = floorY;
+      const entryX = this.currentMotionProfile ? this.currentMotionProfile.targetEntryX : 0;
+      const entryZ = this.currentMotionProfile ? this.currentMotionProfile.targetEntryZ : 0;
 
-      this.currentTrolleyX = THREE.MathUtils.lerp(pickupX, this.craneX, ease);
-      this.currentTrolleyZ = THREE.MathUtils.lerp(CraneSystem.MAST_Z, this.craneZ, ease);
+      const prevTrolleyX = this.currentTrolleyX;
+      const prevTrolleyZ = this.currentTrolleyZ;
+      this.currentTrolleyX = THREE.MathUtils.lerp(pickupX, entryX, ease);
+      this.currentTrolleyZ = THREE.MathUtils.lerp(pickupZ, entryZ, ease);
 
       const curFloorY = THREE.MathUtils.lerp(pickupFloorY, targetFloorY, ease);
-      const curRotY = THREE.MathUtils.lerp(0, this.craneRotY, ease);
 
-      this.hangingFloorGroup.position.set(this.currentTrolleyX, curFloorY, this.currentTrolleyZ);
-      this.hangingFloorGroup.rotation.set(0, curRotY, 0);
+      // Instantaneous trolley velocity derived from actual delta
+      const tVelX = delta > 0 ? (this.currentTrolleyX - prevTrolleyX) / delta : 0;
+      const tVelZ = delta > 0 ? (this.currentTrolleyZ - prevTrolleyZ) / delta : 0;
 
-      this.currentHookY = curFloorY + this.hangingFloorDims.height / 2 + 4.85;
+      // Suspended module lags naturally behind the moving trolley (small natural lag, 1°–3° tilt)
+      const lagTime = 0.035;
+      const targetModX = this.currentTrolleyX - tVelX * lagTime;
+      const targetModZ = this.currentTrolleyZ - tVelZ * lagTime;
+      const followAlpha = 1.0 - Math.exp(-12.0 * delta);
+      const prevModX = this.moduleX;
+      const prevModZ = this.moduleZ;
+      this.moduleX = THREE.MathUtils.lerp(this.moduleX, targetModX, followAlpha);
+      this.moduleZ = THREE.MathUtils.lerp(this.moduleZ, targetModZ, followAlpha);
+      this.moduleVelX = delta > 0 ? (this.moduleX - prevModX) / delta : 0;
+      this.moduleVelZ = delta > 0 ? (this.moduleZ - prevModZ) / delta : 0;
+
+      // Natural tilt from suspension sling angle during transport
+      const curRollTilt = -(this.moduleX - this.currentTrolleyX) / suspensionHeight;
+      const curPitchTilt = (this.moduleZ - this.currentTrolleyZ) / suspensionHeight;
+
+      this.hangingFloorGroup.position.set(this.moduleX, curFloorY, this.moduleZ);
+      this.hangingFloorGroup.rotation.set(curPitchTilt, 0, curRollTilt);
+
+      this.currentHookY = curFloorY + this.hangingFloorDims.height / 2 + suspensionHeight + saddleOffsetY;
+
+      // Central hook block has subtle lead between trolley and load
+      const hookX = this.currentTrolleyX + 0.12 * (this.moduleX - this.currentTrolleyX);
+      const hookZ = this.currentTrolleyZ + 0.12 * (this.moduleZ - this.currentTrolleyZ);
 
       this.crane.updatePosition(
         this.currentCraneY,
@@ -535,27 +645,96 @@ export class GameEngine {
         this.currentHookY,
         this.hangingFloorGroup,
         this.hangingFloorDims,
-        false // arrows hidden during delivery
+        false,
+        hookX,
+        hookZ
       );
 
       if (p >= 1.0) {
-        // PHASE 4: READY!
-        this.transitionPhase = 'READY';
-        this.isFloorHanging = true;
-        this.canDrop = true; // Player input re-enabled
+        // Seamless handoff into 0.45s suspension blend (Phase 4: SUSPENDING)
+        this.transitionPhase = 'SUSPENDING';
+        this.transitionTimer = 0;
+        this.startRollTilt = curRollTilt;
+        this.startPitchTilt = curPitchTilt;
+        this.startYawRot = 0;
+
+        // Phase synchronization: establish oscillation phases from motion profile - zero positional or velocity discontinuity!
+        this.cranePhaseX = this.currentMotionProfile ? this.currentMotionProfile.startPhaseX : Math.PI;
+        this.cranePhaseZ = this.currentMotionProfile ? this.currentMotionProfile.startPhaseZ : -Math.PI / 2;
+        this.cranePhaseRot = this.currentMotionProfile ? this.currentMotionProfile.startPhaseRot : 0;
+        this.loggedHandoffMilestones.clear();
       }
-    } else if (this.isFloorHanging && this.hangingFloorGroup && this.hangingFloorDims) {
-      // PHASE 4 / NORMAL SWINGING MOTION
+    } else if (this.transitionPhase === 'SUSPENDING' && this.hangingFloorGroup && this.hangingFloorDims) {
+      // PHASE 4: SUSPENSION BLEND (0.45s)
+      // Smoothly blend transport influence (1.0 -> 0.0) into full suspension influence (0.0 -> 1.0)
+      this.transitionTimer += delta;
+      const u = Math.min(this.transitionTimer / this.blendDuration, 1.0);
+      const blendAlpha = u * u * (3 - 2 * u); // Smoothstep 0.0 -> 1.0
+      const swingStrength = blendAlpha; // 0% -> 20% -> 50% -> 80% -> 100%
+
       this.currentTrolleyX = this.craneX;
       this.currentTrolleyZ = this.craneZ;
       this.currentHookY = defaultHookY;
 
-      const swayFactor = 0.02 + t * 0.02;
-      const swayRoll = -this.craneVelX * swayFactor;
-      const swayPitch = this.craneVelZ * swayFactor;
+      // Natural pendulum simulation parameters smoothly ramping into motion profile values:
+      const targetSpringKX = this.currentMotionProfile ? this.currentMotionProfile.swingSpringKX : 5.2;
+      const targetSpringKZ = this.currentMotionProfile ? this.currentMotionProfile.swingSpringKZ : 5.2;
+      const targetDamping = this.currentMotionProfile ? this.currentMotionProfile.swingDamping : 1.35;
 
-      this.hangingFloorGroup.position.set(this.craneX, floorY, this.craneZ);
-      this.hangingFloorGroup.rotation.set(swayPitch, this.craneRotY, swayRoll);
+      const springKX = THREE.MathUtils.lerp(3.2, targetSpringKX, swingStrength);
+      const springKZ = THREE.MathUtils.lerp(3.0, targetSpringKZ, swingStrength);
+      const damping = THREE.MathUtils.lerp(2.2, targetDamping, swingStrength);
+
+      const normDiff = Math.min(Math.max(this.floorCount / 50, 0), 1.0);
+      const maxSwingDist = THREE.MathUtils.lerp(0.75, 1.45, normDiff);
+
+      const dispX = this.moduleX - this.craneX;
+      const dispZ = this.moduleZ - this.craneZ;
+      const relVelX = this.moduleVelX - this.craneVelX;
+      const relVelZ = this.moduleVelZ - this.craneVelZ;
+
+      const accX = -springKX * dispX - damping * relVelX;
+      const accZ = -springKZ * dispZ - damping * relVelZ;
+
+      const stepDt = Math.min(delta, 0.05);
+      this.moduleVelX += accX * stepDt;
+      this.moduleVelZ += accZ * stepDt;
+      this.moduleX += this.moduleVelX * stepDt;
+      this.moduleZ += this.moduleVelZ * stepDt;
+
+      const curDispX = this.moduleX - this.craneX;
+      const curDispZ = this.moduleZ - this.craneZ;
+      const curDist = Math.sqrt(curDispX * curDispX + curDispZ * curDispZ);
+
+      if (curDist > maxSwingDist && curDist > 0.0001) {
+        const scale = maxSwingDist / curDist;
+        this.moduleX = this.craneX + curDispX * scale;
+        this.moduleZ = this.craneZ + curDispZ * scale;
+        const normX = curDispX / curDist;
+        const normZ = curDispZ / curDist;
+        const vDotN = this.moduleVelX * normX + this.moduleVelZ * normZ;
+        if (vDotN > 0) {
+          this.moduleVelX -= vDotN * normX;
+          this.moduleVelZ -= vDotN * normZ;
+        }
+      }
+
+      const hookX = this.craneX + 0.12 * (this.moduleX - this.craneX);
+      const hookZ = this.craneZ + 0.12 * (this.moduleZ - this.craneZ);
+
+      // Smoothly blend tilt from transport starting tilt to full suspension sling tilt
+      const targetRollTilt = -(this.moduleX - this.craneX) / suspensionHeight;
+      const targetPitchTilt = (this.moduleZ - this.craneZ) / suspensionHeight;
+      const rollTilt = THREE.MathUtils.lerp(this.startRollTilt, targetRollTilt, swingStrength);
+      const pitchTilt = THREE.MathUtils.lerp(this.startPitchTilt, targetPitchTilt, swingStrength);
+
+      // Smoothly blend yaw rotation from 0 to full crane rotation oscillation
+      const yawRot = THREE.MathUtils.lerp(this.startYawRot, this.craneRotY, blendAlpha);
+
+      const liftY = (curDispX * curDispX + curDispZ * curDispZ) / (2 * suspensionHeight);
+
+      this.hangingFloorGroup.position.set(this.moduleX, floorY + liftY, this.moduleZ);
+      this.hangingFloorGroup.rotation.set(pitchTilt, yawRot, rollTilt);
 
       this.crane.updatePosition(
         this.currentCraneY,
@@ -564,7 +743,97 @@ export class GameEngine {
         defaultHookY,
         this.hangingFloorGroup,
         this.hangingFloorDims,
-        true // arrows visible when ready
+        false,
+        hookX,
+        hookZ
+      );
+
+      // Section 28 Dev Debug Log around handoff
+      this.logHandoffState(u, pitchTilt, rollTilt, yawRot);
+
+      if (u >= 1.0) {
+        this.transitionPhase = 'READY';
+        this.isFloorHanging = true;
+        this.canDrop = true; // Player input safely re-enabled in active play area
+        if (this.currentMotionProfile) {
+          this.logMotionProfile(this.currentMotionProfile);
+        }
+      }
+    } else if (this.isFloorHanging && this.hangingFloorGroup && this.hangingFloorDims) {
+      // PHASE 5 / SUSPENDED LOAD PENDULUM SIMULATION (Full Gameplay Suspension)
+      // The module has its own independent suspension state; the trolley acts as the moving anchor.
+      this.currentTrolleyX = this.craneX;
+      this.currentTrolleyZ = this.craneZ;
+      this.currentHookY = defaultHookY;
+
+      // Natural pendulum simulation parameters from active module's motion profile:
+      const springKX = this.currentMotionProfile ? this.currentMotionProfile.swingSpringKX : 5.2;
+      const springKZ = this.currentMotionProfile ? this.currentMotionProfile.swingSpringKZ : 5.2;
+      const damping = this.currentMotionProfile ? this.currentMotionProfile.swingDamping : 1.35;
+
+      // Clamped swing angle/displacement based on floor difficulty (Requirement 23: 10°–17.5° max)
+      const normDiff = Math.min(Math.max(this.floorCount / 50, 0), 1.0);
+      const maxSwingDist = THREE.MathUtils.lerp(0.75, 1.45, normDiff);
+
+      // Relative displacement and velocity between suspended module and trolley anchor
+      const dispX = this.moduleX - this.craneX;
+      const dispZ = this.moduleZ - this.craneZ;
+      const relVelX = this.moduleVelX - this.craneVelX;
+      const relVelZ = this.moduleVelZ - this.craneVelZ;
+
+      // Dynamic acceleration on the suspended module
+      const accX = -springKX * dispX - damping * relVelX;
+      const accZ = -springKZ * dispZ - damping * relVelZ;
+
+      const stepDt = Math.min(delta, 0.05);
+      this.moduleVelX += accX * stepDt;
+      this.moduleVelZ += accZ * stepDt;
+      this.moduleX += this.moduleVelX * stepDt;
+      this.moduleZ += this.moduleVelZ * stepDt;
+
+      // Soft clamp displacement so the suspended load remains safe and predictable
+      const curDispX = this.moduleX - this.craneX;
+      const curDispZ = this.moduleZ - this.craneZ;
+      const curDist = Math.sqrt(curDispX * curDispX + curDispZ * curDispZ);
+
+      if (curDist > maxSwingDist && curDist > 0.0001) {
+        const scale = maxSwingDist / curDist;
+        this.moduleX = this.craneX + curDispX * scale;
+        this.moduleZ = this.craneZ + curDispZ * scale;
+        const normX = curDispX / curDist;
+        const normZ = curDispZ / curDist;
+        const vDotN = this.moduleVelX * normX + this.moduleVelZ * normZ;
+        if (vDotN > 0) {
+          this.moduleVelX -= vDotN * normX;
+          this.moduleVelZ -= vDotN * normZ;
+        }
+      }
+
+      // Central hook block hangs between trolley and load with subtle cable lead
+      const hookX = this.craneX + 0.12 * (this.moduleX - this.craneX);
+      const hookZ = this.craneZ + 0.12 * (this.moduleZ - this.craneZ);
+
+      // Visual roll and pitch tilt resulting from sling angle
+      const rollTilt = -(this.moduleX - this.craneX) / suspensionHeight;
+      const pitchTilt = (this.moduleZ - this.craneZ) / suspensionHeight;
+      const yawRot = this.craneRotY;
+
+      // Subtle vertical arc lift during lateral swing
+      const liftY = (curDispX * curDispX + curDispZ * curDispZ) / (2 * suspensionHeight);
+
+      this.hangingFloorGroup.position.set(this.moduleX, floorY + liftY, this.moduleZ);
+      this.hangingFloorGroup.rotation.set(pitchTilt, yawRot, rollTilt);
+
+      this.crane.updatePosition(
+        this.currentCraneY,
+        this.craneX,
+        this.craneZ,
+        defaultHookY,
+        this.hangingFloorGroup,
+        this.hangingFloorDims,
+        false,
+        hookX,
+        hookZ
       );
     } else {
       this.crane.updatePosition(
@@ -576,6 +845,43 @@ export class GameEngine {
         undefined,
         false
       );
+    }
+  }
+
+  private logMotionProfile(profile: ModuleMotionProfile) {
+    console.log(
+      `[MotionProfile] Floor: ${profile.floor} | Difficulty: ${profile.difficulty.toFixed(2)} | ` +
+      `XFrequency: ${profile.freqX.toFixed(3)} | ZFrequency: ${profile.freqZ.toFixed(3)} | ` +
+      `XPhase: ${profile.startPhaseX.toFixed(2)} | ZPhase: ${profile.startPhaseZ.toFixed(2)} | ` +
+      `SwingXFactor: ${(profile.swingSpringKX / 5.2).toFixed(2)} | ` +
+      `SwingZFactor: ${(profile.swingSpringKZ / 5.2).toFixed(2)} | ` +
+      `RotationFrequency: ${profile.freqRot.toFixed(3)} | ` +
+      `RotationPhase: ${profile.startPhaseRot.toFixed(2)} | ` +
+      `SpeedMultiplier: ${profile.speedMultiplier.toFixed(2)}`
+    );
+  }
+
+  private logHandoffState(u: number, pitch: number, roll: number, yaw: number) {
+    const milestones = [0.0, 0.25, 0.5, 0.75, 1.0];
+    for (const m of milestones) {
+      if (u >= m && !this.loggedHandoffMilestones.has(m)) {
+        this.loggedHandoffMilestones.add(m);
+        const swingOffsetX = this.moduleX - this.currentTrolleyX;
+        const swingOffsetZ = this.moduleZ - this.currentTrolleyZ;
+        const swingVelX = this.moduleVelX - this.craneVelX;
+        const swingVelZ = this.moduleVelZ - this.craneVelZ;
+        console.log(
+          `[SuspensionHandoff] State: ${this.transitionPhase} | Blend: ${u.toFixed(2)} | ` +
+          `ModulePosition: (${this.moduleX.toFixed(3)}, ${this.moduleZ.toFixed(3)}) | ` +
+          `ModuleVelocity: (${this.moduleVelX.toFixed(3)}, ${this.moduleVelZ.toFixed(3)}) | ` +
+          `SwingOffsetX: ${swingOffsetX.toFixed(3)} | SwingOffsetZ: ${swingOffsetZ.toFixed(3)} | ` +
+          `SwingVelocityX: ${swingVelX.toFixed(3)} | SwingVelocityZ: ${swingVelZ.toFixed(3)} | ` +
+          `Rotation: (P:${(pitch * 180 / Math.PI).toFixed(1)}°, Y:${(yaw * 180 / Math.PI).toFixed(1)}°, R:${(roll * 180 / Math.PI).toFixed(1)}°) | ` +
+          `TrolleyPosition: (${this.currentTrolleyX.toFixed(3)}, ${this.currentTrolleyZ.toFixed(3)}) | ` +
+          `TrolleyVelocity: (${this.craneVelX.toFixed(3)}, ${this.craneVelZ.toFixed(3)})`
+        );
+        break;
+      }
     }
   }
 
@@ -612,39 +918,38 @@ export class GameEngine {
 
     const rotOffset = Math.abs(this.craneRotY);
 
-    // Feedback
+    // Placement Scoring & Feedback (Parts 2, 3, 4, 5)
+    let pointsAwarded = GAME_CONFIG.BASE_FLOOR_SCORE;
+    let feedbackType: FeedbackType = null;
+    let feedbackMessage = `+${GAME_CONFIG.BASE_FLOOR_SCORE}`;
+
     if (distOffset < GAME_CONFIG.PERFECT_THRESHOLD_DIST && rotOffset < GAME_CONFIG.PERFECT_THRESHOLD_ROT) {
       this.perfectStreak++;
+      pointsAwarded += GAME_CONFIG.PERFECT_BONUS; // +2 bonus => 3 total
+      feedbackType = 'PERFECT';
+      feedbackMessage = this.perfectStreak > 1
+        ? `PERFECT x${this.perfectStreak}! +${pointsAwarded}`
+        : `PERFECT! +${pointsAwarded}`;
       sounds.playPerfectChime();
-      this.callbacks.onFeedback({
-        id: Date.now(),
-        type: 'PERFECT',
-        message: this.perfectStreak > 1 ? `PERFECT x${this.perfectStreak}!` : 'PERFECT!',
-      });
     } else if (distOffset < GAME_CONFIG.GREAT_THRESHOLD_DIST) {
       this.perfectStreak = 0;
-      this.callbacks.onFeedback({
-        id: Date.now(),
-        type: 'GREAT',
-        message: 'GREAT!',
-      });
+      pointsAwarded += GAME_CONFIG.GREAT_BONUS; // +1 bonus => 2 total
+      feedbackType = 'GREAT';
+      feedbackMessage = `GREAT! +${pointsAwarded}`;
     } else if (status === 'RISKY' || status === 'DANGEROUS' || distOffset > 1.6 || tiltAngle > 0.45) {
       this.perfectStreak = 0;
+      feedbackType = 'RISKY';
+      feedbackMessage = `RISKY! +${pointsAwarded}`;
       sounds.playCreak();
-      this.callbacks.onFeedback({
-        id: Date.now(),
-        type: 'RISKY',
-        message: 'RISKY OVERHANG!',
-      });
     } else {
       this.perfectStreak = 0;
+      feedbackMessage = `+${pointsAwarded}`;
     }
 
-    this.updateStatsUI();
+    this.score += pointsAwarded;
 
-    // Check if new best height
-    const currentHeight = Math.round(this.floorCount * GAME_CONFIG.METERS_PER_FLOOR);
-    if (currentHeight > this.bestHeight && this.floorCount > 1) {
+    // Check if new best score
+    if (this.score > this.bestScore && this.floorCount > 1) {
       if (!this.isNewBest) {
         this.isNewBest = true;
         confetti({
@@ -653,6 +958,25 @@ export class GameEngine {
           origin: { y: 0.25 },
         });
       }
+      this.bestScore = this.score;
+      try {
+        localStorage.setItem('tower_builder_best_score', this.bestScore.toString());
+      } catch {
+        // storage fallback
+      }
+    }
+
+    this.callbacks.onFeedback({
+      id: Date.now(),
+      type: feedbackType,
+      message: feedbackMessage,
+    });
+
+    this.updateStatsUI();
+
+    // Internal height calculation preserved for environment and camera progression
+    const currentHeight = Math.round(this.floorCount * GAME_CONFIG.METERS_PER_FLOOR);
+    if (currentHeight > this.bestHeight && this.floorCount > 1) {
       this.bestHeight = currentHeight;
       try {
         localStorage.setItem('tower_builder_best_height', this.bestHeight.toString());
@@ -787,6 +1111,8 @@ export class GameEngine {
   private updateStatsUI() {
     const currentHeight = Math.round(this.floorCount * GAME_CONFIG.METERS_PER_FLOOR);
     this.callbacks.onStatsUpdate({
+      score: this.score,
+      bestScore: Math.max(this.bestScore, this.score),
       currentHeight,
       bestHeight: Math.max(this.bestHeight, currentHeight),
       currentFloor: this.floorCount,
@@ -811,6 +1137,7 @@ export class GameEngine {
     }
 
     this.floorCount = Math.max(0, targetFloor);
+    this.score = this.floorCount * GAME_CONFIG.BASE_FLOOR_SCORE;
     const towerTopY = this.floorCount * 2.3;
     const initialTargetY = Math.max(towerTopY - 3.2, 3.2);
 
@@ -824,8 +1151,22 @@ export class GameEngine {
     this.camera.lookAt(this.cameraTarget);
 
     const floorTopY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + 2.3;
-    this.currentCraneY = floorTopY + 9.4;
-    this.currentHookY = floorTopY + 4.85;
+    this.currentCraneY = floorTopY + 12.0;
+    this.currentHookY = floorTopY + 6.56;
+    this.moduleX = 0;
+    this.moduleZ = 0;
+    this.moduleVelX = 0;
+    this.moduleVelZ = 0;
+    this.transitionPhase = 'READY';
+    this.canDrop = true;
+    this.isFloorHanging = true;
+    this.cranePhaseX = 0;
+    this.cranePhaseZ = 0;
+    this.cranePhaseRot = 0;
+    this.startPitchTilt = 0;
+    this.startRollTilt = 0;
+    this.startYawRot = 0;
+    this.loggedHandoffMilestones.clear();
 
     if (this.hangingFloorGroup && this.hangingFloorDims) {
       const hangingY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + this.hangingFloorDims.height / 2;
