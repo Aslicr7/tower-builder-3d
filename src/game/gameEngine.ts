@@ -6,7 +6,7 @@ import { CityScenery } from './cityScenery';
 import { CraneSystem } from './crane';
 import { createFloorModule, createTowerFoundation } from './floorGenerator';
 import { selectFloorModule } from './moduleSelector';
-import { getReleaseMomentumMultipliers, getCraneKinematicsForFloor } from './difficultyCurve';
+import { getReleaseMomentumMultipliers, getCraneKinematicsForFloor, getDifficultyForFloor } from './difficultyCurve';
 import { PhysicsWorld } from './physicsWorld';
 import { GAME_CONFIG } from './constants';
 import { createMotionProfile, ModuleMotionProfile } from './motionProfile';
@@ -474,8 +474,8 @@ export class GameEngine {
     );
 
     // Initialize causal SuspensionSimulator
-    const normDiff = Math.min(Math.max(this.floorCount / 50, 0), 1.0);
-    const maxSwingDist = THREE.MathUtils.lerp(0.75, 1.45, normDiff);
+    const difficulty = getDifficultyForFloor(this.floorCount + 1);
+    const maxSwingDist = THREE.MathUtils.lerp(0.75, 1.45, difficulty);
     const suspensionHeight = 4.80;
 
     this.suspensionSimulator = new SuspensionSimulator({
@@ -654,9 +654,6 @@ export class GameEngine {
 
   private updateCraneMotion(delta: number) {
     this.swingTime += delta;
-
-    const kinematics = getCraneKinematicsForFloor(this.floorCount + 1);
-    const swingXRange = kinematics.ampX;
 
     if (this.isFloorHanging) {
       this.moduleHangingTime += delta;

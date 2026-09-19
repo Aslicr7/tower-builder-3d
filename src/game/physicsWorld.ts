@@ -4,6 +4,8 @@ import { FloorDimensions } from '../types';
 import { GAME_CONFIG } from './constants';
 import {
   getDifficultyForFloor,
+  getCraneKinematicsForFloor,
+  getReleaseMomentumMultipliers,
   getStabilizationMaxForce,
   getSettledDampingForFloor,
   getActivePhysicsWindowSize,
@@ -173,7 +175,9 @@ export class PhysicsWorld {
     };
 
     // HEAVY CONCRETE IMPACT DAMPING: Zero recoil upward on contact
-    // Part C: Scale collision lateral damping with floor height so late game doesn't artificially kill momentum
+    // Part K Impact Philosophy:
+    // LOW FLOOR: more of player's horizontal release momentum survives impact (latDamp ~0.90, rotDamp ~0.82)
+    // HIGH FLOOR: more impact absorption to prevent tall-tower chaos (latDamp ~0.72, rotDamp ~0.55)
     body.addEventListener('collide', () => {
       if (record.firstContactTime === null) {
         record.firstContactTime = performance.now();
@@ -182,11 +186,12 @@ export class PhysicsWorld {
       if (body.velocity.y > 0) {
         body.velocity.y = 0;
       }
-      // Part C: Damping scaling across difficulty
-      const latDamp = id <= 15 ? 0.65 : id <= 35 ? 0.78 : id <= 50 ? 0.88 : 0.95;
+      // Part K: Continuous impact damping across floor progression
+      const tImpact = Math.min(Math.max((id - 1) / 49, 0), 1.0);
+      const latDamp = 0.90 - tImpact * (0.90 - 0.72);
+      const rotDamp = 0.82 - tImpact * (0.82 - 0.55);
       body.velocity.x *= latDamp;
       body.velocity.z *= latDamp;
-      const rotDamp = id <= 15 ? 0.45 : id <= 35 ? 0.60 : id <= 50 ? 0.75 : 0.88;
       body.angularVelocity.x *= rotDamp;
       body.angularVelocity.y *= rotDamp;
       body.angularVelocity.z *= rotDamp;
@@ -213,31 +218,36 @@ export class PhysicsWorld {
       }
     }
 
-    // SETTLED FLOOR GRIP & RESIDUAL VELOCITY DEAD-ZONE (Part C7, C8):
-    // Tiny velocity dead-zone ONLY to remove floating-point numerical micro-jitter (< 0.03 m/s).
-    // Visible physical sliding (>= 0.03 m/s) is NOT automatically cancelled!
+    // SETTLED FLOOR GRIP & RESIDUAL VELOCITY DEAD-ZONE (Part L):
+    // DANGEROUS placements (< 25% support): zero artificial dead-zone, zero artificial friction.
+    // RISKY at low floors: small dead-zone (0.015 m/s) to allow slow sliding/shifting.
+    // STABLE / VERY_STABLE at high floors: active dead-zone and compressive drift damping to suppress creep.
     for (const rec of this.records) {
       if (rec.settled && !rec.isFrozen && !rec.isDetached) {
-        const vx = rec.body.velocity.x;
-        const vz = rec.body.velocity.z;
-        const hSpeed = Math.sqrt(vx * vx + vz * vz);
-        const angSpeed = rec.body.angularVelocity.length();
+        const isDangerous = rec.supportRatio < GAME_CONFIG.STABILIZATION_RISKY_SUPPORT;
+        if (!isDangerous) {
+          const vx = rec.body.velocity.x;
+          const vz = rec.body.velocity.z;
+          const hSpeed = Math.sqrt(vx * vx + vz * vz);
+          const angSpeed = rec.body.angularVelocity.length();
 
-        if (hSpeed < 0.03) {
-          // Velocity Dead-Zone: zero out numerical micro-residual noise / sub-pixel drift
-          rec.body.velocity.x = 0;
-          rec.body.velocity.z = 0;
-          if (angSpeed < 0.03) {
-            rec.body.angularVelocity.set(0, 0, 0);
+          const isRisky = rec.supportRatio < GAME_CONFIG.STABILIZATION_STABLE_SUPPORT;
+          const deadZoneThresh = rec.id <= 15 && isRisky ? 0.015 : 0.035;
+
+          if (hSpeed < deadZoneThresh) {
+            // Velocity Dead-Zone: zero out numerical micro-residual noise / sub-pixel drift
+            rec.body.velocity.x = 0;
+            rec.body.velocity.z = 0;
+            if (angSpeed < deadZoneThresh) {
+              rec.body.angularVelocity.set(0, 0, 0);
+            }
+          } else if (rec.supportRatio >= GAME_CONFIG.STABILIZATION_STABLE_SUPPORT) {
+            // Well-supported floors get compressive friction resistance against lateral drift
+            const dampingFactor = Math.exp(-8.0 * clampedDelta);
+            rec.body.velocity.x *= dampingFactor;
+            rec.body.velocity.z *= dampingFactor;
           }
-        } else if (rec.supportRatio >= GAME_CONFIG.STABILIZATION_VERY_STABLE_SUPPORT) {
-          // Only VERY_STABLE settled floors get compressive friction resistance against drift
-          const dampingFactor = Math.exp(-6.0 * clampedDelta);
-          rec.body.velocity.x *= dampingFactor;
-          rec.body.velocity.z *= dampingFactor;
         }
-        // STABLE, RISKY, and DANGEROUS floors with visible movement (>= 0.03 m/s)
-        // are NOT artificially killed, allowing physical sliding/tilting based on real contact physics!
       }
     }
 
@@ -443,9 +453,9 @@ export class PhysicsWorld {
       status = 'DANGEROUS';
     }
 
-    // Smooth difficulty progression (replaces binary floor <= 20 cliff)
+    // Smooth difficulty progression
     const difficulty = getDifficultyForFloor(currentFloorCount);
-    const maxForce = getStabilizationMaxForce(status, difficulty, currentFloorCount);
+    const maxForce = getStabilizationMaxForce(status, difficulty, currentFloorCount, supportRatio);
 
     if (maxForce > 0) {
       // LockConstraint locks current relative position and rotation (NO SNAPPING OR CENTERING!)
@@ -455,25 +465,37 @@ export class PhysicsWorld {
       this.constraints.push(lock);
     }
 
-    // Settled Damping according to Part C9 (scaled by floor height)
+    // Settled Damping according to Part H (scaled by floor height)
     const damping = getSettledDampingForFloor(currentFloorCount);
     record.body.linearDamping = damping.linear;
     record.body.angularDamping = damping.angular;
 
-    // Enforce Active Physics Window according to Part C10
+    // Enforce Active Physics Window
     const activeWindowSize = getActivePhysicsWindowSize(currentFloorCount);
     this.enforceActivePhysicsWindow(activeWindowSize);
 
-    // Development-only required debug log (Part G)
+    // Development-only required debug log (Part R)
     if (import.meta.env.DEV) {
-      console.debug('[PhysicsPlacement]', {
-        Floor: currentFloorCount,
-        SupportRatio: (supportRatio * 100).toFixed(1) + '%',
-        PlacementClass: status,
-        ConstraintForce: maxForce.toExponential(2),
-        SettledDamping: `linear ${damping.linear.toFixed(2)} / angular ${damping.angular.toFixed(2)}`,
-        ActiveWindowSize: activeWindowSize,
-      });
+      const kinematics = getCraneKinematicsForFloor(currentFloorCount);
+      const momentum = getReleaseMomentumMultipliers(currentFloorCount);
+      const devKeyFloors = [1, 5, 10, 20, 30, 40, 50, 70];
+      if (devKeyFloors.includes(currentFloorCount) || currentFloorCount <= 5) {
+        console.log(`[DifficultyDiagnostics Floor ${currentFloorCount}]`, {
+          Floor: currentFloorCount,
+          Difficulty: Number(difficulty.toFixed(3)),
+          EffectiveMovementSpeed: Number(kinematics.speedMult.toFixed(3)),
+          AmpX: Number(kinematics.ampX.toFixed(2)),
+          AmpZ: Number(kinematics.ampZ.toFixed(2)),
+          Rotation: Number(((kinematics.rotY * 180) / Math.PI).toFixed(1)),
+          LinearMomentum: Number(momentum.linear.toFixed(2)),
+          AngularMomentum: Number(momentum.angular.toFixed(2)),
+          StabilizationStatus: status,
+          SupportRatio: (supportRatio * 100).toFixed(1) + '%',
+          ConstraintMaxForce: maxForce === 0 ? 0 : Number(maxForce.toExponential(2)),
+          SettledLinearDamping: Number(damping.linear.toFixed(2)),
+          SettledAngularDamping: Number(damping.angular.toFixed(2)),
+        });
+      }
     }
 
     return { supportRatio, status };
