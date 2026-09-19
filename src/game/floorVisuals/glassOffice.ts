@@ -3,14 +3,14 @@
  *
  * Archetype #3: GLASS OFFICE
  * Visual identity:
- * - Dark architectural curtain-wall glass (smoky steel-blue)
- * - Large bold external structural frames (charcoal / graphite steel)
- * - Thin floor slabs (architectural concrete)
- * - Large clean geometric forms with strong asymmetry
+ * - Bright, desaturated architectural curtain-wall glass (clean blue-grey)
+ * - Visible bold external structural frames (charcoal / graphite steel)
+ * - Medium-grey architectural concrete floor slabs
+ * - Large clean geometric forms with strong asymmetry and depth
  * - Exactly 3 curated variants:
- *   - Glass A: Frame Box (Sleek glass volume with bold external exoskeleton portal frame)
- *   - Glass B: Cantilever Office (Two distinct volumes with an offset projecting office pod)
- *   - Glass C: Recessed Core (Twin glass pavilions flanking a dark recessed service core)
+ *   - Glass A: Frame Box (Stepped L-plan glass wing with bold external exoskeleton frame)
+ *   - Glass B: Cantilever Office (Two distinct volumes with a projecting lighter steel-blue pod)
+ *   - Glass C: Recessed Core (Twin blue-grey glass pavilions flanking a deep graphite core)
  *
  * Physics:
  * - Purely visual geometry.
@@ -50,7 +50,8 @@ function getMat<T extends THREE.Material>(key: string, factory: () => T): T {
 
 /**
  * Procedural Curtain Wall Glass Texture:
- * Clean architectural smoky steel-blue with subtle horizontal & vertical panel grid lines.
+ * Clean architectural blue-grey with subtle horizontal & vertical panel grid lines.
+ * Lightened so it does not multiply into near-black.
  */
 function createCurtainGlassCanvas(): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
@@ -58,20 +59,20 @@ function createCurtainGlassCanvas(): HTMLCanvasElement {
   canvas.height = 256;
   const ctx = canvas.getContext('2d')!;
 
-  // Base deep steel-blue tone
-  ctx.fillStyle = '#2F3E4D';
+  // Base clear architectural blue-grey tone
+  ctx.fillStyle = '#8AA9BA';
   ctx.fillRect(0, 0, 256, 256);
 
   // Soft vertical glass tint variation (sky reflection gradient)
   const grad = ctx.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0, 'rgba(64, 85, 105, 0.35)');
-  grad.addColorStop(0.5, 'rgba(40, 54, 68, 0.15)');
-  grad.addColorStop(1, 'rgba(25, 35, 45, 0.40)');
+  grad.addColorStop(0, 'rgba(175, 205, 222, 0.45)');
+  grad.addColorStop(0.5, 'rgba(142, 172, 190, 0.15)');
+  grad.addColorStop(1, 'rgba(118, 148, 166, 0.35)');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 256, 256);
 
-  // Subtle architectural curtain-wall panel joints
-  ctx.strokeStyle = '#1E2832';
+  // Clean architectural curtain-wall panel joints (soft dark blue-grey, NOT black)
+  ctx.strokeStyle = '#5A7788';
   ctx.lineWidth = 2;
 
   // Vertical panel seams (4 glass bays)
@@ -82,7 +83,8 @@ function createCurtainGlassCanvas(): HTMLCanvasElement {
     ctx.stroke();
   }
 
-  // Horizontal floor & spandrel seam
+  // Horizontal spandrel / floor seam
+  ctx.strokeStyle = '#4F6C7D';
   ctx.beginPath();
   ctx.moveTo(0, 128);
   ctx.lineTo(256, 128);
@@ -93,7 +95,7 @@ function createCurtainGlassCanvas(): HTMLCanvasElement {
 
 /**
  * Procedural Structural Steel Texture:
- * Matte charcoal architectural steel with micro-grain and subtle edge reflection.
+ * Matte charcoal architectural steel with micro-grain and clean edge definition.
  */
 function createStructuralSteelCanvas(): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
@@ -101,14 +103,14 @@ function createStructuralSteelCanvas(): HTMLCanvasElement {
   canvas.height = 128;
   const ctx = canvas.getContext('2d')!;
 
-  ctx.fillStyle = '#1D2126';
+  ctx.fillStyle = '#262C33';
   ctx.fillRect(0, 0, 128, 128);
 
   // Micro grain
-  for (let i = 0; i < 400; i++) {
+  for (let i = 0; i < 300; i++) {
     const x = Math.random() * 128;
     const y = Math.random() * 128;
-    const v = Math.random() > 0.5 ? 'rgba(45, 52, 60, 0.25)' : 'rgba(15, 18, 22, 0.35)';
+    const v = Math.random() > 0.5 ? 'rgba(60, 70, 80, 0.25)' : 'rgba(20, 24, 30, 0.35)';
     ctx.fillStyle = v;
     ctx.fillRect(x, y, 1, 1);
   }
@@ -118,7 +120,7 @@ function createStructuralSteelCanvas(): HTMLCanvasElement {
 
 /**
  * Procedural Concrete Slab Texture:
- * Medium architectural grey concrete for thin structural floor edges.
+ * Medium architectural grey concrete (#7C858B range) for crisp structural floor edges.
  */
 function createSlabConcreteCanvas(): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
@@ -126,14 +128,14 @@ function createSlabConcreteCanvas(): HTMLCanvasElement {
   canvas.height = 128;
   const ctx = canvas.getContext('2d')!;
 
-  ctx.fillStyle = '#444A52';
+  ctx.fillStyle = '#7C858B';
   ctx.fillRect(0, 0, 128, 128);
 
   // Fine concrete stipple
   for (let i = 0; i < 350; i++) {
     const x = Math.random() * 128;
     const y = Math.random() * 128;
-    ctx.fillStyle = Math.random() > 0.5 ? 'rgba(90, 98, 108, 0.18)' : 'rgba(35, 40, 45, 0.22)';
+    ctx.fillStyle = Math.random() > 0.5 ? 'rgba(145, 155, 162, 0.22)' : 'rgba(95, 102, 108, 0.25)';
     ctx.fillRect(x, y, 1.5, 1.5);
   }
 
@@ -150,11 +152,11 @@ function createCorePanelCanvas(): HTMLCanvasElement {
   canvas.height = 128;
   const ctx = canvas.getContext('2d')!;
 
-  ctx.fillStyle = '#22262C';
+  ctx.fillStyle = '#2F353D';
   ctx.fillRect(0, 0, 128, 128);
 
   // Vertical panel reveal ribs
-  ctx.fillStyle = '#181A1F';
+  ctx.fillStyle = '#20242B';
   for (let x = 16; x < 128; x += 32) {
     ctx.fillRect(x - 1, 0, 2, 128);
   }
@@ -163,48 +165,58 @@ function createCorePanelCanvas(): HTMLCanvasElement {
 }
 
 function getGlassOfficeMaterials() {
-  const glassTex = getTex('go_curtain_glass', createCurtainGlassCanvas);
+  const glassTex = getTex('go_curtain_glass_v2', createCurtainGlassCanvas);
   glassTex.repeat.set(2, 1);
 
-  const steelTex = getTex('go_structural_steel', createStructuralSteelCanvas);
-  const slabTex = getTex('go_slab_concrete', createSlabConcreteCanvas);
-  const coreTex = getTex('go_core_panel', createCorePanelCanvas);
+  const steelTex = getTex('go_structural_steel_v2', createStructuralSteelCanvas);
+  const slabTex = getTex('go_slab_concrete_v2', createSlabConcreteCanvas);
+  const coreTex = getTex('go_core_panel_v2', createCorePanelCanvas);
 
   return {
-    curtainGlass: getMat('go_mat_glass', () => new THREE.MeshStandardMaterial({
-      color: 0x364858, // Smoky desaturated steel-blue
+    // Primary Blue-Grey Architectural Curtain Glass
+    curtainGlass: getMat('go_mat_glass_v2', () => new THREE.MeshStandardMaterial({
+      color: 0x6E93A7, // Clear desaturated blue-grey
       map: glassTex,
-      roughness: 0.18,
-      metalness: 0.35,
+      roughness: 0.30,
+      metalness: 0.08, // Low metalness prevents black collapse in shadow
+      emissive: 0x182834,
+      emissiveIntensity: 0.16, // Subtle shadow lift (no neon glow)
     })),
-    curtainGlassLit: getMat('go_mat_glass_lit', () => new THREE.MeshStandardMaterial({
-      color: 0x485E72, // Soft illuminated corporate office tone
+    // Lighter Steel-Blue Glass (for illuminated floors & cantilever pod)
+    curtainGlassPod: getMat('go_mat_glass_pod_v2', () => new THREE.MeshStandardMaterial({
+      color: 0x82A8BD, // Crisp lighter steel-blue
       map: glassTex,
-      roughness: 0.22,
-      metalness: 0.25,
+      roughness: 0.26,
+      metalness: 0.06,
+      emissive: 0x203646,
+      emissiveIntensity: 0.18,
     })),
-    structuralSteel: getMat('go_mat_steel', () => new THREE.MeshStandardMaterial({
-      color: 0x1E2227, // Dark charcoal graphite steel
+    // Bold Charcoal / Graphite Structural Steel Frame
+    structuralSteel: getMat('go_mat_steel_v2', () => new THREE.MeshStandardMaterial({
+      color: 0x282E36, // Dark charcoal steel
       map: steelTex,
       roughness: 0.45,
-      metalness: 0.65,
+      metalness: 0.28,
     })),
-    slabConcrete: getMat('go_mat_slab', () => new THREE.MeshStandardMaterial({
-      color: 0x484E57, // Medium-dark architectural slab edge
+    // Medium Architectural Concrete Grey Floor Slab
+    slabConcrete: getMat('go_mat_slab_v2', () => new THREE.MeshStandardMaterial({
+      color: 0x808990, // Medium architectural grey (#7C858B / #808990)
       map: slabTex,
-      roughness: 0.65,
+      roughness: 0.58,
+      metalness: 0.05,
+    })),
+    // Dark Blue-Grey / Graphite Spandrel Panel
+    spandrelPanel: getMat('go_mat_spandrel_v2', () => new THREE.MeshStandardMaterial({
+      color: 0x36424B, // Refined dark blue-grey spandrel
+      roughness: 0.42,
       metalness: 0.15,
     })),
-    spandrelPanel: getMat('go_mat_spandrel', () => new THREE.MeshStandardMaterial({
-      color: 0x171A1F, // Dark charcoal spandrel band
-      roughness: 0.35,
-      metalness: 0.50,
-    })),
-    corePanel: getMat('go_mat_core', () => new THREE.MeshStandardMaterial({
-      color: 0x24282F, // Graphite panel for central core
+    // Dark Graphite Architectural Core Panel
+    corePanel: getMat('go_mat_core_v2', () => new THREE.MeshStandardMaterial({
+      color: 0x2C323A, // Graphite panel for central core
       map: coreTex,
-      roughness: 0.55,
-      metalness: 0.40,
+      roughness: 0.52,
+      metalness: 0.22,
     })),
   };
 }
@@ -233,7 +245,7 @@ export function buildGlassOffice(
     mesh.receiveShadow = true;
   };
 
-  // Thin architectural floor slabs (sleek 0.08m height, thinner than residential brick)
+  // Thin architectural floor slabs (sleek 0.08m height)
   const slabH = 0.08;
   const bodyH = h - slabH * 2;
 
@@ -243,7 +255,7 @@ export function buildGlassOffice(
 
   // =========================================================================
   // CONTINUOUS STRUCTURAL FLOOR SLABS (TOP & BOTTOM)
-  // Thin, dark architectural concrete edges cleanly separating office floors
+  // Medium architectural grey concrete slabs (#808990) cleanly delineating floors
   // =========================================================================
   const botSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), mats.slabConcrete);
   botSlab.position.y = bottomSlabY;
@@ -255,147 +267,153 @@ export function buildGlassOffice(
   setupMesh(topSlab);
   group.add(topSlab);
 
-  // Lived-in office illumination variation (~25% of floors have brighter interior zone)
+  // Lived-in office illumination variation (~25% of floors have brighter pod glazing)
   const isLitFloor = Math.abs(floorIndex * 11 + 5) % 4 === 0;
-  const glassMat = isLitFloor ? mats.curtainGlassLit : mats.curtainGlass;
+  const baseGlassMat = isLitFloor ? mats.curtainGlassPod : mats.curtainGlass;
 
   // =========================================================================
-  // VARIANT A: FRAME BOX (EXOSKELETON STRUCTURAL FRAME)
-  // Silhouette: Large sleek glass mass wrapped in a bold dark charcoal steel
-  // exoskeleton portal frame that extends beyond the glass facade.
+  // VARIANT A: FRAME BOX (STEPPED L-PLAN MASS + EXOSKELETON FRAME)
+  // Silhouette: Primary blue-grey glass wing on the right + recessed secondary
+  // wing on the left, creating an unmistakable 1.05m front setback/indentation,
+  // encased by a bold charcoal steel exoskeleton portal frame.
   // =========================================================================
   if (variantIndex === 0) {
-    const glassW = w - 0.35; // 3.85m
-    const glassD = d - 0.35; // 3.85m
-    const glassCenterY = 0;
+    const mainWingW = 2.45;
+    const mainWingD = d - 0.40; // 3.80m
+    const mainWingCenterX = 0.55;
+    const mainWingCenterZ = 0.05;
 
-    // 1. Primary Glass Curtain Wall Volume (slightly offset for asymmetry)
-    const offsetX = 0.10;
-    const offsetZ = -0.05;
-    const glassMass = new THREE.Mesh(
-      new THREE.BoxGeometry(glassW, bodyH, glassD),
-      glassMat
+    // 1. Primary Blue-Grey Glass Wing (Right / Center)
+    const mainGlass = new THREE.Mesh(
+      new THREE.BoxGeometry(mainWingW, bodyH, mainWingD),
+      baseGlassMat
     );
-    glassMass.position.set(offsetX, glassCenterY, offsetZ);
-    setupMesh(glassMass);
-    group.add(glassMass);
+    mainGlass.position.set(mainWingCenterX, 0, mainWingCenterZ);
+    setupMesh(mainGlass);
+    group.add(mainGlass);
 
-    // 2. Horizontal Spandrel Bands (charcoal bands running across upper and lower glazing)
-    const spandrelH = 0.22;
+    // Spandrel Bands across Primary Glass Wing
+    const spandrelH = 0.20;
     const topSpandrel = new THREE.Mesh(
-      new THREE.BoxGeometry(glassW + 0.02, spandrelH, glassD + 0.02),
+      new THREE.BoxGeometry(mainWingW + 0.01, spandrelH, mainWingD + 0.01),
       mats.spandrelPanel
     );
-    topSpandrel.position.set(offsetX, bodyH / 2 - spandrelH / 2, offsetZ);
+    topSpandrel.position.set(mainWingCenterX, bodyH / 2 - spandrelH / 2, mainWingCenterZ);
     setupMesh(topSpandrel);
     group.add(topSpandrel);
 
     const botSpandrel = new THREE.Mesh(
-      new THREE.BoxGeometry(glassW + 0.02, spandrelH, glassD + 0.02),
+      new THREE.BoxGeometry(mainWingW + 0.01, spandrelH, mainWingD + 0.01),
       mats.spandrelPanel
     );
-    botSpandrel.position.set(offsetX, -bodyH / 2 + spandrelH / 2, offsetZ);
+    botSpandrel.position.set(mainWingCenterX, -bodyH / 2 + spandrelH / 2, mainWingCenterZ);
     setupMesh(botSpandrel);
     group.add(botSpandrel);
 
-    // 3. Signature Feature: Heavy External Steel Exoskeleton Frame
-    // Bold, phone-readable structural columns and tie-beams wrapping the facade
-    const colSize = 0.18;
-    const frameProjZ = d / 2 + 0.06; // Projects outward past standard footprint
+    // 2. Secondary Recessed Wing (Left)
+    // Deep 1.05m setback from the front facade creates an articulated L-plan silhouette
+    const secWingW = 1.35;
+    const secWingD = 2.65;
+    const secWingCenterX = -w / 2 + secWingW / 2 + 0.10; // -1.325
+    const secWingCenterZ = -0.45; // Front edge sits at Z = +0.875, recessed 1.075m behind main wing at +1.95m!
 
-    // Column 1 (Left flank column, full height)
+    const secGlass = new THREE.Mesh(
+      new THREE.BoxGeometry(secWingW, bodyH, secWingD),
+      baseGlassMat
+    );
+    secGlass.position.set(secWingCenterX, 0, secWingCenterZ);
+    setupMesh(secGlass);
+    group.add(secGlass);
+
+    // 3. Signature Feature: External Charcoal Steel Exoskeleton Portal Frame
+    // Spans proudly across the front-left setback, creating depth and shadow
+    const colSize = 0.16;
+    const frameFrontZ = mainWingCenterZ + mainWingD / 2 + 0.04; // Z = +1.99m
+
+    // Left outer structural column (full height at the outer footprint corner)
     const colLeft = new THREE.Mesh(
-      new THREE.BoxGeometry(colSize, bodyH, colSize * 1.8),
-      mats.structuralSteel
-    );
-    colLeft.position.set(-w / 2 + colSize / 2 + 0.05, 0, frameProjZ - (colSize * 1.8) / 2);
-    setupMesh(colLeft);
-    group.add(colLeft);
-
-    // Column 2 (Center-right structural column)
-    const colMid = new THREE.Mesh(
-      new THREE.BoxGeometry(colSize, bodyH, colSize * 1.8),
-      mats.structuralSteel
-    );
-    colMid.position.set(0.75, 0, frameProjZ - (colSize * 1.8) / 2);
-    setupMesh(colMid);
-    group.add(colMid);
-
-    // Structural Top Header Beam (spanning between columns)
-    const spanW = 0.75 - (-w / 2 + colSize / 2 + 0.05);
-    const spanCenterX = (-w / 2 + colSize / 2 + 0.05 + 0.75) / 2;
-    const headerBeam = new THREE.Mesh(
-      new THREE.BoxGeometry(spanW + colSize, 0.20, colSize),
-      mats.structuralSteel
-    );
-    headerBeam.position.set(spanCenterX, bodyH / 2 - 0.10, frameProjZ - colSize / 2);
-    setupMesh(headerBeam);
-    group.add(headerBeam);
-
-    // Structural Mid-Height Tie Girder (bold horizontal structural line)
-    const midTieBeam = new THREE.Mesh(
-      new THREE.BoxGeometry(spanW + colSize, 0.14, colSize),
-      mats.structuralSteel
-    );
-    midTieBeam.position.set(spanCenterX, 0.10, frameProjZ - colSize / 2);
-    setupMesh(midTieBeam);
-    group.add(midTieBeam);
-
-    // Structural Return Girder on Left Elevation (wraps around corner)
-    const returnL = 1.60;
-    const sideTieBeam = new THREE.Mesh(
-      new THREE.BoxGeometry(colSize, 0.18, returnL),
-      mats.structuralSteel
-    );
-    sideTieBeam.position.set(-w / 2 + colSize / 2 + 0.05, 0.10, frameProjZ - returnL / 2);
-    setupMesh(sideTieBeam);
-    group.add(sideTieBeam);
-
-    // 4. Rear/Right Corner Secondary Columns (anchors the high-rise frame)
-    const cornerCol = new THREE.Mesh(
       new THREE.BoxGeometry(colSize, bodyH, colSize),
       mats.structuralSteel
     );
-    cornerCol.position.set(w / 2 - colSize / 2 - 0.05, 0, -d / 2 + colSize / 2 + 0.05);
-    setupMesh(cornerCol);
-    group.add(cornerCol);
+    colLeft.position.set(-w / 2 + colSize / 2 + 0.08, 0, frameFrontZ);
+    setupMesh(colLeft);
+    group.add(colLeft);
+
+    // Juncture column at the intersection of the setback and primary glass wing
+    const colMid = new THREE.Mesh(
+      new THREE.BoxGeometry(colSize, bodyH, colSize),
+      mats.structuralSteel
+    );
+    colMid.position.set(mainWingCenterX - mainWingW / 2 + colSize / 2, 0, frameFrontZ);
+    setupMesh(colMid);
+    group.add(colMid);
+
+    // Header girder spanning between the two columns
+    const frameSpanW = (mainWingCenterX - mainWingW / 2 + colSize / 2) - (-w / 2 + colSize / 2 + 0.08);
+    const frameSpanCenterX = ((-w / 2 + colSize / 2 + 0.08) + (mainWingCenterX - mainWingW / 2 + colSize / 2)) / 2;
+
+    const headerGirder = new THREE.Mesh(
+      new THREE.BoxGeometry(frameSpanW + colSize, 0.20, colSize),
+      mats.structuralSteel
+    );
+    headerGirder.position.set(frameSpanCenterX, bodyH / 2 - 0.10, frameFrontZ);
+    setupMesh(headerGirder);
+    group.add(headerGirder);
+
+    // Mid-height structural tie beam
+    const midTieGirder = new THREE.Mesh(
+      new THREE.BoxGeometry(frameSpanW + colSize, 0.14, colSize),
+      mats.structuralSteel
+    );
+    midTieGirder.position.set(frameSpanCenterX, 0.05, frameFrontZ);
+    setupMesh(midTieGirder);
+    group.add(midTieGirder);
+
+    // Left flank return beam connecting column back to the recessed wing
+    const returnL = 1.15;
+    const returnBeam = new THREE.Mesh(
+      new THREE.BoxGeometry(colSize, 0.16, returnL),
+      mats.structuralSteel
+    );
+    returnBeam.position.set(-w / 2 + colSize / 2 + 0.08, 0.05, frameFrontZ - returnL / 2);
+    setupMesh(returnBeam);
+    group.add(returnBeam);
+
+    // Right flank corner column anchoring the primary glass volume
+    const colRight = new THREE.Mesh(
+      new THREE.BoxGeometry(colSize, bodyH, colSize),
+      mats.structuralSteel
+    );
+    colRight.position.set(w / 2 - colSize / 2 - 0.08, 0, mainWingCenterZ + mainWingD / 2 - colSize / 2);
+    setupMesh(colRight);
+    group.add(colRight);
   }
 
   // =========================================================================
-  // VARIANT B: CANTILEVER OFFICE (OFFSET PROJECTING POD)
-  // Silhouette: Two distinct interlocking geometric masses where one office pod
-  // noticeably cantilevers forward (+0.55m), cradled by a heavy structural frame.
+  // VARIANT B: CANTILEVER OFFICE (STEPPED DUAL VOLUMES + PROJECTING POD)
+  // Silhouette: Medium blue-grey main wing set back on the left, paired with an
+  // unmistakable lighter steel-blue cantilever pod projecting +0.70m forward on
+  // the right, supported by heavy charcoal cradle girders.
   // =========================================================================
   else if (variantIndex === 1) {
-    const mainW = 2.25;
-    const cantiW = w - mainW + 0.15; // 2.10m
-    const cantiProj = 0.55; // Visual forward projection
+    const mainW = 2.15;
+    const cantiW = w - mainW + 0.10; // 2.15m
 
-    // 1. Volume 1: Main Glass Office Wing (Left side, set at standard depth)
-    const mainD = d - 0.30; // 3.90m
-    const mainCenterX = -w / 2 + mainW / 2;
-    const mainCenterZ = -0.10;
+    // 1. Volume 1: Main Glass Office Wing (Left, set at recessed depth)
+    const mainD = 3.30;
+    const mainCenterX = -w / 2 + mainW / 2 + 0.05;
+    const mainCenterZ = -0.30; // Front sits at Z = +1.35m
 
     const mainGlass = new THREE.Mesh(
       new THREE.BoxGeometry(mainW, bodyH, mainD),
-      glassMat
+      mats.curtainGlass // Medium blue-grey
     );
     mainGlass.position.set(mainCenterX, 0, mainCenterZ);
     setupMesh(mainGlass);
     group.add(mainGlass);
 
-    // Left Wing Corner Structural Column
-    const colSize = 0.16;
-    const leftCol = new THREE.Mesh(
-      new THREE.BoxGeometry(colSize, bodyH, colSize),
-      mats.structuralSteel
-    );
-    leftCol.position.set(-w / 2 + colSize / 2, 0, mainCenterZ + mainD / 2 - colSize / 2);
-    setupMesh(leftCol);
-    group.add(leftCol);
-
-    // Left Wing Spandrel
-    const spandrelH = 0.22;
+    // Main Wing Spandrels
+    const spandrelH = 0.20;
     const mainSpandrel = new THREE.Mesh(
       new THREE.BoxGeometry(mainW + 0.01, spandrelH, mainD + 0.01),
       mats.spandrelPanel
@@ -404,34 +422,45 @@ export function buildGlassOffice(
     setupMesh(mainSpandrel);
     group.add(mainSpandrel);
 
-    // 2. Volume 2: Cantilevered Office Pod (Right side, projecting forward)
-    const cantiD = d - 0.20; // 4.00m
-    const cantiCenterX = w / 2 - cantiW / 2 + 0.05;
-    const cantiCenterZ = cantiProj / 2;
+    // Left Corner Structural Column
+    const colSize = 0.16;
+    const leftCol = new THREE.Mesh(
+      new THREE.BoxGeometry(colSize, bodyH, colSize),
+      mats.structuralSteel
+    );
+    leftCol.position.set(-w / 2 + colSize / 2 + 0.06, 0, mainCenterZ + mainD / 2 - colSize / 2);
+    setupMesh(leftCol);
+    group.add(leftCol);
+
+    // 2. Volume 2: Cantilevered Office Pod (Right, projecting +0.70m forward!)
+    const cantiD = 3.85;
+    const cantiCenterX = w / 2 - cantiW / 2;
+    const cantiCenterZ = 0.15; // Front sits at Z = +2.075m (+0.725m forward projection!)
 
     const cantiGlass = new THREE.Mesh(
-      new THREE.BoxGeometry(cantiW, bodyH - 0.08, cantiD),
-      mats.curtainGlassLit // Projecting pod highlighted with corporate interior glow
+      new THREE.BoxGeometry(cantiW, bodyH - 0.06, cantiD),
+      mats.curtainGlassPod // Lighter, crisp steel-blue creates visible material distinction
     );
     cantiGlass.position.set(cantiCenterX, 0, cantiCenterZ);
     setupMesh(cantiGlass);
     group.add(cantiGlass);
 
     // 3. Signature Feature: Heavy Dark Structural Cantilever Cradle
-    // Heavy bottom support girder under the projecting cantilever
     const cantiFrontZ = cantiCenterZ + cantiD / 2;
     const cradleBeamH = 0.22;
+
+    // Bottom support cradle girder under the projecting cantilever
     const botCradleBeam = new THREE.Mesh(
-      new THREE.BoxGeometry(cantiW + 0.08, cradleBeamH, 0.22),
+      new THREE.BoxGeometry(cantiW + 0.06, cradleBeamH, 0.20),
       mats.structuralSteel
     );
     botCradleBeam.position.set(cantiCenterX, -bodyH / 2 + cradleBeamH / 2, cantiFrontZ);
     setupMesh(botCradleBeam);
     group.add(botCradleBeam);
 
-    // Heavy top fascia girder across the cantilever roof edge
+    // Top fascia girder across the cantilever roof edge
     const topCradleBeam = new THREE.Mesh(
-      new THREE.BoxGeometry(cantiW + 0.08, cradleBeamH, 0.22),
+      new THREE.BoxGeometry(cantiW + 0.06, cradleBeamH, 0.20),
       mats.structuralSteel
     );
     topCradleBeam.position.set(cantiCenterX, bodyH / 2 - cradleBeamH / 2, cantiFrontZ);
@@ -440,10 +469,10 @@ export function buildGlassOffice(
 
     // Heavy Outer Corner Column framing the projecting pod
     const cantiCornerCol = new THREE.Mesh(
-      new THREE.BoxGeometry(0.20, bodyH, 0.20),
+      new THREE.BoxGeometry(0.18, bodyH, 0.18),
       mats.structuralSteel
     );
-    cantiCornerCol.position.set(w / 2 - 0.05, 0, cantiFrontZ - 0.10);
+    cantiCornerCol.position.set(w / 2 - 0.08, 0, cantiFrontZ - 0.09);
     setupMesh(cantiCornerCol);
     group.add(cantiCornerCol);
 
@@ -458,41 +487,42 @@ export function buildGlassOffice(
   }
 
   // =========================================================================
-  // VARIANT C: RECESSED CORE (TWIN GLASS WINGS + CENTRAL RECESSED CORE)
-  // Silhouette: Twin curtain-wall glass pavilions framing a darker recessed
-  // architectural service/elevator core (-0.45m deep), linked by a top bridge girder.
+  // VARIANT C: RECESSED CORE (BLUE GLASS | DARK GRAPHITE RECESS | BLUE GLASS)
+  // Silhouette: Twin bright blue-grey curtain-wall glass pavilions flanking a
+  // deep (0.65m) central graphite elevator/service core, linked by a heavy
+  // dark steel bridge girder spanning the top.
   // =========================================================================
   else {
-    const wingW = 1.50;
-    const coreW = w - wingW * 2; // 1.20m
-    const wingD = d - 0.20; // 4.00m
-    const coreD = d - 0.80; // 3.40m
-    const coreRecessZ = -0.30; // Core sits recessed behind front glass plane
+    const wingW = 1.45;
+    const coreW = w - wingW * 2; // 1.30m
+    const wingD = d - 0.35; // 3.85m
+    const coreD = 2.65;
+    const coreRecessZ = -0.30; // Front edge of core is at Z = +1.025m (0.60m recessed behind glass wings at +1.625m!)
 
-    const leftWingCenterX = -w / 2 + wingW / 2;
-    const rightWingCenterX = w / 2 - wingW / 2;
-    const wingCenterZ = 0.05;
+    const leftWingCenterX = -w / 2 + wingW / 2 + 0.05;
+    const rightWingCenterX = w / 2 - wingW / 2 - 0.05;
+    const wingCenterZ = 0.05; // Front at Z = +1.975m
 
-    // 1. Left Curtain-Wall Glass Pavilion
+    // 1. Left Curtain-Wall Glass Pavilion (Bright Blue-Grey)
     const leftGlass = new THREE.Mesh(
       new THREE.BoxGeometry(wingW, bodyH, wingD),
-      glassMat
+      mats.curtainGlass
     );
     leftGlass.position.set(leftWingCenterX, 0, wingCenterZ);
     setupMesh(leftGlass);
     group.add(leftGlass);
 
-    // 2. Right Curtain-Wall Glass Pavilion
+    // 2. Right Curtain-Wall Glass Pavilion (Bright Blue-Grey)
     const rightGlass = new THREE.Mesh(
       new THREE.BoxGeometry(wingW, bodyH, wingD),
-      glassMat
+      mats.curtainGlass
     );
     rightGlass.position.set(rightWingCenterX, 0, wingCenterZ);
     setupMesh(rightGlass);
     group.add(rightGlass);
 
-    // Spandrels on Left and Right Wings
-    const spandrelH = 0.22;
+    // Spandrel Headers on Left and Right Pavilions
+    const spandrelH = 0.20;
     const leftSpandrel = new THREE.Mesh(
       new THREE.BoxGeometry(wingW + 0.01, spandrelH, wingD + 0.01),
       mats.spandrelPanel
@@ -514,16 +544,16 @@ export function buildGlassOffice(
     const colFrontZ = wingCenterZ + wingD / 2 - colSize / 2;
 
     const leftCol = new THREE.Mesh(new THREE.BoxGeometry(colSize, bodyH, colSize), mats.structuralSteel);
-    leftCol.position.set(-w / 2 + colSize / 2, 0, colFrontZ);
+    leftCol.position.set(-w / 2 + colSize / 2 + 0.06, 0, colFrontZ);
     setupMesh(leftCol);
     group.add(leftCol);
 
     const rightCol = new THREE.Mesh(new THREE.BoxGeometry(colSize, bodyH, colSize), mats.structuralSteel);
-    rightCol.position.set(w / 2 - colSize / 2, 0, colFrontZ);
+    rightCol.position.set(w / 2 - colSize / 2 - 0.06, 0, colFrontZ);
     setupMesh(rightCol);
     group.add(rightCol);
 
-    // 3. Central Recessed Core (dark graphite architectural paneling / elevator zone)
+    // 3. Central Recessed Core (Deep Dark Graphite Architectural Core)
     const coreMesh = new THREE.Mesh(
       new THREE.BoxGeometry(coreW, bodyH, coreD),
       mats.corePanel
@@ -532,8 +562,8 @@ export function buildGlassOffice(
     setupMesh(coreMesh);
     group.add(coreMesh);
 
-    // Vertical Technical Reveal Slot in center of core
-    const revealW = 0.12;
+    // Vertical Technical Reveal Slot in Center of Core
+    const revealW = 0.14;
     const revealSlot = new THREE.Mesh(
       new THREE.BoxGeometry(revealW, bodyH - 0.10, 0.04),
       mats.structuralSteel
@@ -545,16 +575,16 @@ export function buildGlassOffice(
     // 4. Signature Feature: Heavy Dark Steel Structural Bridge Girder
     // Connects the two glass pavilions across the top of the central recess
     const bridgeGirder = new THREE.Mesh(
-      new THREE.BoxGeometry(coreW + 0.20, 0.24, 0.22),
+      new THREE.BoxGeometry(coreW + 0.20, 0.22, 0.20),
       mats.structuralSteel
     );
-    bridgeGirder.position.set(0, bodyH / 2 - 0.12, colFrontZ);
+    bridgeGirder.position.set(0, bodyH / 2 - 0.11, colFrontZ);
     setupMesh(bridgeGirder);
     group.add(bridgeGirder);
 
-    // Lower Structural Tie Beam
+    // Lower Structural Tie Girder
     const lowerTie = new THREE.Mesh(
-      new THREE.BoxGeometry(coreW + 0.20, 0.14, 0.18),
+      new THREE.BoxGeometry(coreW + 0.20, 0.14, 0.16),
       mats.structuralSteel
     );
     lowerTie.position.set(0, -bodyH / 2 + 0.25, colFrontZ);
@@ -564,3 +594,4 @@ export function buildGlassOffice(
 
   return { group, dimensions };
 }
+

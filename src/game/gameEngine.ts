@@ -4,7 +4,7 @@ import { FeedbackEvent, FloorDimensions, FloorModuleStyle, GameState, GameStats 
 import { sounds } from '../audio/sound';
 import { CityScenery } from './cityScenery';
 import { CraneSystem } from './crane';
-import { ALL_STYLES, createFloorModule, createTowerFoundation } from './floorGenerator';
+import { createFloorModule, createTowerFoundation, PLAYABLE_FLOOR_STYLES } from './floorGenerator';
 import { PhysicsWorld } from './physicsWorld';
 import { GAME_CONFIG } from './constants';
 
@@ -40,7 +40,8 @@ export class GameEngine {
   // Active hanging floor
   private hangingFloorGroup: THREE.Group | null = null;
   private hangingFloorDims: FloorDimensions | null = null;
-  private hangingFloorStyle: FloorModuleStyle = 'GLASS_MODERN';
+  private hangingFloorStyle: FloorModuleStyle = 'MODERN_APARTMENT_V1';
+  private floorStyleHistory: FloorModuleStyle[] = [];
   private isFloorHanging = false;
 
   // Crane motion state
@@ -245,6 +246,7 @@ export class GameEngine {
     this.floorCount = 0;
     this.perfectStreak = 0;
     this.isNewBest = false;
+    this.floorStyleHistory = [];
     this.state = 'PLAYING';
     this.callbacks.onStateChange(this.state);
 
@@ -273,17 +275,36 @@ export class GameEngine {
     this.spawnNextFloorImmediately();
   }
 
+  /**
+   * Selects the next floor archetype randomly from the 6 approved archetypes
+   * with equal probability and enforces the anti-repetition rule:
+   * The same archetype cannot appear 3 times in a row.
+   */
+  private selectNextFloorStyle(): FloorModuleStyle {
+    const historyLen = this.floorStyleHistory.length;
+    let allowedStyles = [...PLAYABLE_FLOOR_STYLES];
+
+    // Check if the previous two floors were the same archetype
+    if (
+      historyLen >= 2 &&
+      this.floorStyleHistory[historyLen - 1] === this.floorStyleHistory[historyLen - 2]
+    ) {
+      const repeatedStyle = this.floorStyleHistory[historyLen - 1];
+      // Disallow the 3rd consecutive occurrence
+      allowedStyles = allowedStyles.filter((s) => s !== repeatedStyle);
+    }
+
+    // Uniform random selection from allowed pool
+    const selected = allowedStyles[Math.floor(Math.random() * allowedStyles.length)];
+    this.floorStyleHistory.push(selected);
+    console.log(`[Floor Spawn] ${selected}`);
+    return selected;
+  }
+
   private spawnNextFloorImmediately() {
     if (this.state !== 'PLAYING') return;
 
-    // TEMP: Glass Office visual test
-    this.hangingFloorStyle = 'GLASS_OFFICE';
-    // Previous tests:
-    // this.hangingFloorStyle = 'BRICK_APARTMENT';
-    // this.hangingFloorStyle = 'MODERN_APARTMENT_V1';
-    // Original style selection preserved:
-    // const styleIdx = (this.floorCount + Math.floor(Math.random() * 3)) % ALL_STYLES.length;
-    // this.hangingFloorStyle = ALL_STYLES[styleIdx];
+    this.hangingFloorStyle = this.selectNextFloorStyle();
 
     const { group, dimensions } = createFloorModule(this.hangingFloorStyle, this.floorCount + 1);
     this.hangingFloorGroup = group;
@@ -447,14 +468,7 @@ export class GameEngine {
         this.transitionTimer = 0;
 
         // Pre-create next floor module at crane jib pickup position
-        // TEMP: Glass Office visual test
-        this.hangingFloorStyle = 'GLASS_OFFICE';
-        // Previous tests:
-        // this.hangingFloorStyle = 'BRICK_APARTMENT';
-        // this.hangingFloorStyle = 'MODERN_APARTMENT_V1';
-        // Original style selection preserved:
-        // const styleIdx = (this.floorCount + Math.floor(Math.random() * 3)) % ALL_STYLES.length;
-        // this.hangingFloorStyle = ALL_STYLES[styleIdx];
+        this.hangingFloorStyle = this.selectNextFloorStyle();
 
         const { group, dimensions } = createFloorModule(this.hangingFloorStyle, this.floorCount + 1);
         this.hangingFloorGroup = group;

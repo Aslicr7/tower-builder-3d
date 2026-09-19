@@ -3,6 +3,9 @@ import { FloorDimensions, FloorModuleStyle } from '../types';
 import { GAME_CONFIG } from './constants';
 import { buildBrickApartment } from './floorVisuals/brickApartment';
 import { buildGlassOffice } from './floorVisuals/glassOffice';
+import { buildConcreteCantilever } from './floorVisuals/concreteCantilever';
+import { buildIndustrialFrame } from './floorVisuals/industrialFrame';
+import { buildSkyGarden } from './floorVisuals/skyGarden';
 
 // Shared materials cache for high performance
 const materialCache: Record<string, THREE.Material> = {};
@@ -380,9 +383,22 @@ export function getArchMaterials() {
   };
 }
 
+export const PLAYABLE_FLOOR_STYLES: FloorModuleStyle[] = [
+  'MODERN_APARTMENT_V1',
+  'BRICK_APARTMENT',
+  'GLASS_OFFICE',
+  'CONCRETE_CANTILEVER',
+  'INDUSTRIAL_FRAME',
+  'SKY_GARDEN',
+];
+
 export const ALL_STYLES: FloorModuleStyle[] = [
   'MODERN_APARTMENT_V1',
   'BRICK_APARTMENT',
+  'GLASS_OFFICE',
+  'CONCRETE_CANTILEVER',
+  'INDUSTRIAL_FRAME',
+  'SKY_GARDEN',
   'GLASS_MODERN',
   'BRUTALIST_CONCRETE',
   'RED_BRICK',
@@ -1248,6 +1264,21 @@ export function createFloorModule(
   // Glass Office Archetype
   if (style === 'GLASS_OFFICE') {
     return buildGlassOffice(floorIndex, w, d, h);
+  }
+
+  // Concrete Cantilever Archetype
+  if (style === 'CONCRETE_CANTILEVER') {
+    return buildConcreteCantilever(floorIndex, w, d, h);
+  }
+
+  // Industrial Frame Archetype
+  if (style === 'INDUSTRIAL_FRAME') {
+    return buildIndustrialFrame(floorIndex, w, d, h);
+  }
+
+  // Sky Garden Archetype
+  if (style === 'SKY_GARDEN') {
+    return buildSkyGarden(floorIndex, w, d, h);
   }
 
   const mats = getArchMaterials();
