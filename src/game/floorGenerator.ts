@@ -213,69 +213,168 @@ export function getArchMaterials() {
       roughness: 0.5,
       metalness: 0.4,
     })),
-    // Modern Apartment V1 Materials
-    aptConcreteWarm: getMaterial('aptConcWarm', () => new THREE.MeshStandardMaterial({
-      color: 0xf1efe9,
+    // -------------------------------------------------------------------------
+    // MODERN APARTMENT V1.2 - CURATED ARCHITECTURAL PALETTES
+    // -------------------------------------------------------------------------
+    // PALETTE A — WARM MODERN (Warm Ivory / Limestone, Charcoal, Smoky Blue-Grey)
+    aptWallA: getMaterial('aptWallA', () => new THREE.MeshStandardMaterial({
+      color: 0xe2ded4, // Warm Ivory / Limestone (#DDD7CB to #E8E2D6)
+      map: concreteTex,
+      roughness: 0.76,
+      metalness: 0.04,
+    })),
+    aptSecondaryA: getMaterial('aptSecA', () => new THREE.MeshStandardMaterial({
+      color: 0xd5d0c7, // Warm Light Grey
       map: concreteTex,
       roughness: 0.78,
       metalness: 0.04,
     })),
-    aptConcreteSlab: getMaterial('aptConcSlab', () => new THREE.MeshStandardMaterial({
-      color: 0xe8e4dc,
+    aptSlabA: getMaterial('aptSlabA', () => new THREE.MeshStandardMaterial({
+      color: 0xdcd7ce, // Warm limestone slab
       map: concreteTex,
       roughness: 0.75,
       metalness: 0.04,
     })),
-    aptConcreteAccent: getMaterial('aptConcAccent', () => new THREE.MeshStandardMaterial({
-      color: 0xe2ded4,
+    aptFrameA: getMaterial('aptFrameA', () => new THREE.MeshStandardMaterial({
+      color: 0x1e2631, // Deep Charcoal
+      roughness: 0.42,
+      metalness: 0.45,
+    })),
+    aptGlassA: getMaterial('aptGlassA', () => new THREE.MeshStandardMaterial({
+      color: 0x6e8a9f, // Smoky Blue-Grey (architectural tint, responsive to daylight)
+      roughness: 0.20,
+      metalness: 0.10,
+      transparent: true,
+      opacity: 0.82,
+    })),
+    aptGlassRailA: getMaterial('aptRailA', () => new THREE.MeshStandardMaterial({
+      color: 0x7692a7,
+      roughness: 0.16,
+      metalness: 0.10,
+      transparent: true,
+      opacity: 0.65,
+    })),
+    aptDeckA: getMaterial('aptDeckA', () => new THREE.MeshStandardMaterial({
+      color: 0x5d5347, // Muted warm timber/stone
+      roughness: 0.70,
+      metalness: 0.05,
+    })),
+
+    // PALETTE B — URBAN GREY (Light Concrete Grey, Graphite, Steel Blue-Grey)
+    aptWallB: getMaterial('aptWallB', () => new THREE.MeshStandardMaterial({
+      color: 0xc6cac5, // Light Concrete Grey (#BFC2BE to #CFD0CB)
       map: concreteTex,
-      roughness: 0.80,
+      roughness: 0.74,
+      metalness: 0.05,
+    })),
+    aptSecondaryB: getMaterial('aptSecB', () => new THREE.MeshStandardMaterial({
+      color: 0xb4b8b3, // Medium cool grey
+      map: concreteTex,
+      roughness: 0.76,
+      metalness: 0.05,
+    })),
+    aptSlabB: getMaterial('aptSlabB', () => new THREE.MeshStandardMaterial({
+      color: 0xbcbfba, // Urban concrete slab
+      map: concreteTex,
+      roughness: 0.75,
+      metalness: 0.05,
+    })),
+    aptFrameB: getMaterial('aptFrameB', () => new THREE.MeshStandardMaterial({
+      color: 0x272c32, // Graphite
+      roughness: 0.42,
+      metalness: 0.48,
+    })),
+    aptGlassB: getMaterial('aptGlassB', () => new THREE.MeshStandardMaterial({
+      color: 0x668094, // Steel Blue-Grey
+      roughness: 0.20,
+      metalness: 0.10,
+      transparent: true,
+      opacity: 0.82,
+    })),
+    aptGlassRailB: getMaterial('aptRailB', () => new THREE.MeshStandardMaterial({
+      color: 0x718a9e,
+      roughness: 0.16,
+      metalness: 0.10,
+      transparent: true,
+      opacity: 0.65,
+    })),
+    aptDeckB: getMaterial('aptDeckB', () => new THREE.MeshStandardMaterial({
+      color: 0x4c5257, // Cool architectural slate
+      roughness: 0.68,
+      metalness: 0.06,
+    })),
+
+    // PALETTE C — SAND / BRONZE MODERN (Sandstone/Greige, Dark Bronze, Smoke Green-Grey)
+    aptWallC: getMaterial('aptWallC', () => new THREE.MeshStandardMaterial({
+      color: 0xd0c4b2, // Muted Sandstone / Greige (#C9BCA8 to #D7C9B5)
+      map: concreteTex,
+      roughness: 0.76,
       metalness: 0.04,
     })),
-    aptCharcoalFrame: getMaterial('aptCharcoal', () => new THREE.MeshStandardMaterial({
-      color: 0x1e293b,
-      roughness: 0.45,
-      metalness: 0.5,
+    aptSecondaryC: getMaterial('aptSecC', () => new THREE.MeshStandardMaterial({
+      color: 0xbfb2a0, // Warm stone
+      map: concreteTex,
+      roughness: 0.78,
+      metalness: 0.04,
     })),
-    // Problem #3: Smoky blue-grey architectural glass (not black, responsive to lighting, subtle blue-grey tint)
-    aptGlassSmoky: getMaterial('aptGlassSmoky', () => new THREE.MeshStandardMaterial({
-      color: 0x5b7289,
-      roughness: 0.14,
-      metalness: 0.28,
+    aptSlabC: getMaterial('aptSlabC', () => new THREE.MeshStandardMaterial({
+      color: 0xc8bcab, // Sandstone slab
+      map: concreteTex,
+      roughness: 0.75,
+      metalness: 0.04,
+    })),
+    aptFrameC: getMaterial('aptFrameC', () => new THREE.MeshStandardMaterial({
+      color: 0x2e2925, // Dark bronze / charcoal-bronze
+      roughness: 0.42,
+      metalness: 0.52,
+    })),
+    aptGlassC: getMaterial('aptGlassC', () => new THREE.MeshStandardMaterial({
+      color: 0x648377, // Subtle smoke green-grey
+      roughness: 0.20,
+      metalness: 0.10,
       transparent: true,
-      opacity: 0.78,
+      opacity: 0.82,
     })),
-    aptGlassRailing: getMaterial('aptGlassRail', () => new THREE.MeshStandardMaterial({
-      color: 0x688299,
-      roughness: 0.12,
-      metalness: 0.20,
+    aptGlassRailC: getMaterial('aptRailC', () => new THREE.MeshStandardMaterial({
+      color: 0x6e8e82,
+      roughness: 0.16,
+      metalness: 0.10,
       transparent: true,
-      opacity: 0.60,
+      opacity: 0.65,
     })),
-    // Problem #3: Dark interior backing (deep slate shadow, not pitch black)
+    aptDeckC: getMaterial('aptDeckC', () => new THREE.MeshStandardMaterial({
+      color: 0x585044, // Warm grey stone/deck
+      roughness: 0.70,
+      metalness: 0.05,
+    })),
+
+    // INTERIOR BACKINGS (Deep Slate vs Soft Architectural Twilight Glow)
     aptInteriorDark: getMaterial('aptIntDark', () => new THREE.MeshStandardMaterial({
-      color: 0x1e2733,
+      color: 0x273240, // Deep slate shadow (not pitch black)
       roughness: 0.85,
       metalness: 0.0,
     })),
-    // Problem #3: Subtle warm interior backing (muted architectural lighting, NOT bright orange)
     aptInteriorWarm: getMaterial('aptIntWarm', () => new THREE.MeshStandardMaterial({
-      color: 0x3d3224,
+      color: 0x46392b,
       emissive: 0xd97706,
-      emissiveIntensity: 0.28,
+      emissiveIntensity: 0.22, // Soft architectural twilight glow
       roughness: 0.80,
       metalness: 0.0,
-    })),
-    aptBalconyDeck: getMaterial('aptBalconyDeck', () => new THREE.MeshStandardMaterial({
-      color: 0x5a5145,
-      roughness: 0.72,
-      metalness: 0.05,
     })),
     aptFoliage: getMaterial('aptFoliage', () => new THREE.MeshStandardMaterial({
       color: 0x365314,
       roughness: 0.88,
       metalness: 0.0,
     })),
+
+    // Backwards compatibility aliases
+    aptConcreteWarm: getMaterial('aptWallA', () => new THREE.MeshStandardMaterial()),
+    aptConcreteSlab: getMaterial('aptSlabA', () => new THREE.MeshStandardMaterial()),
+    aptConcreteAccent: getMaterial('aptSecA', () => new THREE.MeshStandardMaterial()),
+    aptCharcoalFrame: getMaterial('aptFrameA', () => new THREE.MeshStandardMaterial()),
+    aptGlassSmoky: getMaterial('aptGlassA', () => new THREE.MeshStandardMaterial()),
+    aptGlassRailing: getMaterial('aptRailA', () => new THREE.MeshStandardMaterial()),
+    aptBalconyDeck: getMaterial('aptDeckA', () => new THREE.MeshStandardMaterial()),
   };
 }
 
@@ -339,27 +438,32 @@ function createArchitecturalWindowBay(
   frameDepth: number,
   mats: ReturnType<typeof getArchMaterials>,
   hasTransom: boolean = false,
-  useWarmInterior: boolean = false
+  useWarmInterior: boolean = false,
+  glassMat?: THREE.Material,
+  frameMat?: THREE.Material
 ): THREE.Group {
   const g = new THREE.Group();
   const frameThick = 0.05;
 
-  // Outer frame box (clean charcoal graphite)
+  const fMat = frameMat || mats.aptFrameA;
+  const gMat = glassMat || mats.aptGlassA;
+
+  // Outer frame box (clean architectural metal)
   const frameGeo = new THREE.BoxGeometry(width, height, frameDepth);
-  const frameMesh = new THREE.Mesh(frameGeo, mats.aptCharcoalFrame);
+  const frameMesh = new THREE.Mesh(frameGeo, fMat);
   frameMesh.castShadow = true;
   frameMesh.receiveShadow = true;
   g.add(frameMesh);
 
-  // Recessed Smoky Glass Pane
+  // Recessed Glass Pane (with responsive daylight tint)
   const glassW = Math.max(0.08, width - frameThick * 2);
   const glassH = Math.max(0.08, height - frameThick * 2);
   const glassGeo = new THREE.BoxGeometry(glassW, glassH, 0.02);
-  const glassMesh = new THREE.Mesh(glassGeo, mats.aptGlassSmoky);
+  const glassMesh = new THREE.Mesh(glassGeo, gMat);
   glassMesh.position.z = frameDepth * 0.15;
   g.add(glassMesh);
 
-  // Interior Backing Plane behind glass: Dark slate vs subtle warm twilight glow
+  // Interior Backing Plane behind glass: Deep slate shadow vs subtle warm twilight glow
   const backGeo = new THREE.PlaneGeometry(glassW, glassH);
   const backMat = useWarmInterior ? mats.aptInteriorWarm : mats.aptInteriorDark;
   const backMesh = new THREE.Mesh(backGeo, backMat);
@@ -368,7 +472,7 @@ function createArchitecturalWindowBay(
 
   if (hasTransom) {
     const transomGeo = new THREE.BoxGeometry(glassW, 0.04, 0.04);
-    const transom = new THREE.Mesh(transomGeo, mats.aptCharcoalFrame);
+    const transom = new THREE.Mesh(transomGeo, fMat);
     transom.position.set(0, height * 0.22, frameDepth * 0.2);
     transom.castShadow = true;
     g.add(transom);
@@ -408,298 +512,436 @@ export function buildModernApartmentV1(
     mesh.receiveShadow = true;
   };
 
-  // 1. BASE AND CEILING SLABS FOR 100% FLUSH VERTICAL STACKING
-  // Reduced thickness (0.11) and precast warm grey tone to eliminate repetitive white stripes
   const slabH = 0.11;
-  const wallH = h - slabH * 2; // ~2.08
+  const wallH = h - slabH * 2;
+  const railH = 0.88;
 
-  const botSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), mats.aptConcreteSlab);
-  botSlab.position.y = -h / 2 + slabH / 2;
-  setupMesh(botSlab);
-  group.add(botSlab);
-
-  const topSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), mats.aptConcreteSlab);
-  topSlab.position.y = h / 2 - slabH / 2;
-  setupMesh(topSlab);
-  group.add(topSlab);
-
-  // Balcony parameters (0.88 outward projection, 1.72 width)
-  const projDist = 0.88;
-  const balcWidth = 1.72;
-  const railH = 0.82;
-  const railY = -h / 2 + slabH + railH / 2;
+  // Deterministic ~20% warm interior glow across floors
+  const isWarmFloor = Math.abs(floorIndex) % 5 === 2;
 
   // =========================================================================
-  // VARIANT A: Front-Right Balcony Projection (Outward to +X)
+  // VARIANT A: BALCONY WING (WARM MODERN)
+  // Palette: Warm Ivory/Limestone, Charcoal Frame, Smoky Blue-Grey Glass, Teak Deck
+  // Silhouette: Solid mass shifted LEFT, large open RIGHT-SIDE balcony wing
   // =========================================================================
   if (variantIndex === 0) {
-    // Enclosed main core volume
-    const core = new THREE.Mesh(
-      new THREE.BoxGeometry(w - 0.04, wallH, d - 0.04),
-      mats.aptConcreteWarm
-    );
-    setupMesh(core);
-    group.add(core);
+    const splitX = 0.25;
+    const leftW = splitX - (-w / 2); // ~2.35m
+    const rightW = w / 2 - splitX;    // ~1.85m
+    const zCut = -0.15;
+    const rearD = zCut - (-d / 2);    // ~1.95m
 
-    // Cantilevered Balcony Slab (Projects OUTWARD by 0.88 beyond right wall X = w/2)
-    const balcCenterZ = 1.22;
-    const balcCantilever = new THREE.Mesh(
-      new THREE.BoxGeometry(projDist, slabH, balcWidth),
-      mats.aptConcreteSlab
-    );
-    balcCantilever.position.set(w / 2 + projDist / 2, -h / 2 + slabH / 2, balcCenterZ);
-    setupMesh(balcCantilever);
-    group.add(balcCantilever);
+    // 1. BASE SLAB (Limestone)
+    const baseSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), mats.aptSlabA);
+    baseSlab.position.y = -h / 2 + slabH / 2;
+    setupMesh(baseSlab);
+    group.add(baseSlab);
 
-    // Teak Wood Balcony Deck
-    const balcDeck = new THREE.Mesh(
-      new THREE.BoxGeometry(projDist - 0.04, 0.04, balcWidth - 0.04),
-      mats.aptBalconyDeck
-    );
-    balcDeck.position.set(w / 2 + projDist / 2, -h / 2 + slabH + 0.02, balcCenterZ);
+    // 2. TOP SLAB (Limestone)
+    const topSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), mats.aptSlabA);
+    topSlab.position.y = h / 2 - slabH / 2;
+    setupMesh(topSlab);
+    group.add(topSlab);
+
+    // 3. MAIN SOLID APARTMENT MASS (Shifted Left, full depth)
+    const leftMassGeo = new THREE.BoxGeometry(leftW, wallH, d - 0.04);
+    const leftMass = new THREE.Mesh(leftMassGeo, mats.aptWallA);
+    leftMass.position.set(-w / 2 + leftW / 2, 0, 0);
+    setupMesh(leftMass);
+    group.add(leftMass);
+
+    // 4. RECESSED ENCLOSED BACK SECTION (Right side rear)
+    const rearMassGeo = new THREE.BoxGeometry(rightW, wallH, rearD);
+    const rearMass = new THREE.Mesh(rearMassGeo, mats.aptWallA);
+    rearMass.position.set(splitX + rightW / 2, 0, -d / 2 + rearD / 2);
+    setupMesh(rearMass);
+    group.add(rearMass);
+
+    // 5. LARGE RIGHT-SIDE BALCONY WING (Spans 60% of floor width, extends outward)
+    const balcW = rightW + 0.65; // ~2.50m wide
+    const balcD = d / 2 + 0.15 - zCut; // ~2.40m deep
+    const balcCenterX = splitX + balcW / 2;
+    const balcCenterZ = zCut + balcD / 2;
+
+    // Cantilever Base Slab under Balcony Wing
+    const balcSlab = new THREE.Mesh(new THREE.BoxGeometry(balcW, slabH, balcD), mats.aptSlabA);
+    balcSlab.position.set(balcCenterX, -h / 2 + slabH / 2, balcCenterZ);
+    setupMesh(balcSlab);
+    group.add(balcSlab);
+
+    // Muted Warm Timber Deck
+    const balcDeck = new THREE.Mesh(new THREE.BoxGeometry(balcW - 0.04, 0.04, balcD - 0.04), mats.aptDeckA);
+    balcDeck.position.set(balcCenterX, -h / 2 + slabH + 0.02, balcCenterZ);
     setupMesh(balcDeck);
     group.add(balcDeck);
 
-    // Sliding Glass Door connecting interior to projecting balcony (at X = w/2)
-    const door = createArchitecturalWindowBay(balcWidth - 0.08, wallH * 0.90, 0.14, mats, false, false);
-    door.rotation.y = Math.PI / 2;
-    door.position.set(w / 2 - 0.05, 0, balcCenterZ);
-    group.add(door);
-
-    // Sturdy dark graphite posts
-    const postGeo = new THREE.BoxGeometry(0.08, railH, 0.08);
-    const p1 = new THREE.Mesh(postGeo, mats.aptCharcoalFrame);
-    p1.position.set(w / 2 + projDist - 0.04, railY, balcCenterZ + balcWidth / 2 - 0.04);
-    setupMesh(p1);
-    group.add(p1);
-
-    const p2 = new THREE.Mesh(postGeo, mats.aptCharcoalFrame);
-    p2.position.set(w / 2 + projDist - 0.04, railY, balcCenterZ - balcWidth / 2 + 0.04);
-    setupMesh(p2);
-    group.add(p2);
-
-    const p3 = new THREE.Mesh(postGeo, mats.aptCharcoalFrame);
-    p3.position.set(w / 2, railY, balcCenterZ + balcWidth / 2 - 0.04);
-    setupMesh(p3);
-    group.add(p3);
-
-    const p4 = new THREE.Mesh(postGeo, mats.aptCharcoalFrame);
-    p4.position.set(w / 2, railY, balcCenterZ - balcWidth / 2 + 0.04);
-    setupMesh(p4);
-    group.add(p4);
-
-    // Top handrails (charcoal)
-    const outerRailX = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.05, balcWidth), mats.aptCharcoalFrame);
-    outerRailX.position.set(w / 2 + projDist - 0.04, railY + railH / 2, balcCenterZ);
-    setupMesh(outerRailX);
-    group.add(outerRailX);
-
-    const outerRailZ1 = new THREE.Mesh(new THREE.BoxGeometry(projDist, 0.05, 0.08), mats.aptCharcoalFrame);
-    outerRailZ1.position.set(w / 2 + projDist / 2, railY + railH / 2, balcCenterZ + balcWidth / 2 - 0.04);
-    setupMesh(outerRailZ1);
-    group.add(outerRailZ1);
-
-    const outerRailZ2 = new THREE.Mesh(new THREE.BoxGeometry(projDist, 0.05, 0.08), mats.aptCharcoalFrame);
-    outerRailZ2.position.set(w / 2 + projDist / 2, railY + railH / 2, balcCenterZ - balcWidth / 2 + 0.04);
-    setupMesh(outerRailZ2);
-    group.add(outerRailZ2);
-
-    // Smoky glass railing panels
-    const glassRailSide = new THREE.Mesh(
-      new THREE.BoxGeometry(0.03, railH - 0.12, balcWidth - 0.12),
-      mats.aptGlassRailing
+    // Recessed Full Sliding Door Bay behind Balcony Wing (Z = zCut)
+    const slidingBay = createArchitecturalWindowBay(
+      rightW - 0.08,
+      wallH * 0.88,
+      0.14,
+      mats,
+      true,
+      isWarmFloor,
+      mats.aptGlassA,
+      mats.aptFrameA
     );
-    glassRailSide.position.set(w / 2 + projDist - 0.04, railY, balcCenterZ);
-    group.add(glassRailSide);
+    slidingBay.position.set(splitX + rightW / 2, 0, zCut + 0.06);
+    group.add(slidingBay);
 
-    const glassRailFront = new THREE.Mesh(
-      new THREE.BoxGeometry(projDist - 0.12, railH - 0.12, 0.03),
-      mats.aptGlassRailing
+    // Signature Charcoal Vertical Frame at transition seam (X = splitX)
+    const vertFrame = new THREE.Mesh(new THREE.BoxGeometry(0.16, wallH, 0.24), mats.aptFrameA);
+    vertFrame.position.set(splitX, 0, d / 2 - 0.12);
+    setupMesh(vertFrame);
+    group.add(vertFrame);
+
+    // Front living room window bay on the Left Solid Wing
+    const livingBay = createArchitecturalWindowBay(
+      1.15,
+      wallH * 0.86,
+      0.14,
+      mats,
+      true,
+      false,
+      mats.aptGlassA,
+      mats.aptFrameA
     );
-    glassRailFront.position.set(w / 2 + projDist / 2, railY, balcCenterZ + balcWidth / 2 - 0.04);
-    group.add(glassRailFront);
+    livingBay.position.set(-0.45, 0, d / 2 - 0.06);
+    group.add(livingBay);
 
-    // PRIMARY SIGNATURE: The Charcoal Vertical Frame at X = +0.42
-    const frameA = new THREE.Mesh(new THREE.BoxGeometry(0.16, wallH, 0.22), mats.aptCharcoalFrame);
-    frameA.position.set(0.42, 0, d / 2 - 0.09);
-    setupMesh(frameA);
-    group.add(frameA);
+    // Architectural slit window on far left of front facade
+    const slitBay = createArchitecturalWindowBay(
+      0.32,
+      wallH * 0.70,
+      0.14,
+      mats,
+      false,
+      false,
+      mats.aptGlassA,
+      mats.aptFrameA
+    );
+    slitBay.position.set(-w / 2 + 0.55, 0.02, d / 2 - 0.06);
+    group.add(slitBay);
 
-    // Front Facade: Living room picture window (left of charcoal frame)
-    const mainGlazeA = createArchitecturalWindowBay(1.08, wallH * 0.88, 0.16, mats, true, false);
-    mainGlazeA.position.set(-0.20, 0, d / 2 - 0.06);
-    group.add(mainGlazeA);
+    // Balcony Railing: 3 strong charcoal posts + top handrail + smoky blue-grey glass panels
+    const postR = 0.04;
+    const railY = -h / 2 + slabH + railH / 2;
+    const postGeo = new THREE.BoxGeometry(postR * 2, railH, postR * 2);
 
-    // Front Facade: Solid wall with slit window on the far left
-    const slitWindowA = createArchitecturalWindowBay(0.32, wallH * 0.70, 0.14, mats, false, false);
-    slitWindowA.position.set(-w / 2 + 0.60, 0.02, d / 2 - 0.06);
-    group.add(slitWindowA);
+    const post1 = new THREE.Mesh(postGeo, mats.aptFrameA);
+    post1.position.set(splitX + balcW - 0.06, railY, balcCenterZ + balcD / 2 - 0.06);
+    setupMesh(post1);
+    group.add(post1);
 
-    // Right Facade: Solid rear wall with corner window bay
-    const cornerBayA = createArchitecturalWindowBay(0.85, wallH * 0.80, 0.14, mats, false, false);
-    cornerBayA.rotation.y = Math.PI / 2;
-    cornerBayA.position.set(w / 2 - 0.06, 0.02, -0.65);
-    group.add(cornerBayA);
+    const post2 = new THREE.Mesh(postGeo, mats.aptFrameA);
+    post2.position.set(splitX + 0.06, railY, balcCenterZ + balcD / 2 - 0.06);
+    setupMesh(post2);
+    group.add(post2);
 
-    // Left Facade: Two vertical recessed window bays
-    const leftBay1 = createArchitecturalWindowBay(0.55, wallH * 0.68, 0.14, mats, false, false);
+    const post3 = new THREE.Mesh(postGeo, mats.aptFrameA);
+    post3.position.set(splitX + balcW - 0.06, railY, zCut + 0.06);
+    setupMesh(post3);
+    group.add(post3);
+
+    // Charcoal Top Handrails (Front and Side)
+    const frontRailGeo = new THREE.BoxGeometry(balcW, 0.04, 0.06);
+    const frontRail = new THREE.Mesh(frontRailGeo, mats.aptFrameA);
+    frontRail.position.set(balcCenterX, -h / 2 + slabH + railH, balcCenterZ + balcD / 2 - 0.06);
+    setupMesh(frontRail);
+    group.add(frontRail);
+
+    const sideRailGeo = new THREE.BoxGeometry(0.06, 0.04, balcD);
+    const sideRail = new THREE.Mesh(sideRailGeo, mats.aptFrameA);
+    sideRail.position.set(splitX + balcW - 0.06, -h / 2 + slabH + railH, balcCenterZ);
+    setupMesh(sideRail);
+    group.add(sideRail);
+
+    // Large Smoky Blue-Grey Glass Railing Panels
+    const glassPanelFront = new THREE.Mesh(
+      new THREE.BoxGeometry(balcW - 0.16, railH - 0.12, 0.03),
+      mats.aptGlassRailA
+    );
+    glassPanelFront.position.set(balcCenterX, railY, balcCenterZ + balcD / 2 - 0.06);
+    group.add(glassPanelFront);
+
+    const glassPanelSide = new THREE.Mesh(
+      new THREE.BoxGeometry(0.03, railH - 0.12, balcD - 0.16),
+      mats.aptGlassRailA
+    );
+    glassPanelSide.position.set(splitX + balcW - 0.06, railY, balcCenterZ);
+    group.add(glassPanelSide);
+
+    // Left Facade: Two architectural window bays
+    const leftBay1 = createArchitecturalWindowBay(
+      1.15,
+      wallH * 0.74,
+      0.14,
+      mats,
+      false,
+      false,
+      mats.aptGlassA,
+      mats.aptFrameA
+    );
     leftBay1.rotation.y = -Math.PI / 2;
-    leftBay1.position.set(-w / 2 + 0.06, 0.04, -0.75);
+    leftBay1.position.set(-w / 2 + 0.06, 0, 0.85);
     group.add(leftBay1);
 
-    const leftBay2 = createArchitecturalWindowBay(0.55, wallH * 0.68, 0.14, mats, false, false);
+    const leftBay2 = createArchitecturalWindowBay(
+      1.15,
+      wallH * 0.74,
+      0.14,
+      mats,
+      false,
+      false,
+      mats.aptGlassA,
+      mats.aptFrameA
+    );
     leftBay2.rotation.y = -Math.PI / 2;
-    leftBay2.position.set(-w / 2 + 0.06, 0.04, 0.75);
+    leftBay2.position.set(-w / 2 + 0.06, 0, -0.85);
     group.add(leftBay2);
 
-    // Back Facade: Two large window bays + outdoor AC unit
-    const backBay1 = createArchitecturalWindowBay(1.15, wallH * 0.70, 0.14, mats, false, false);
-    backBay1.rotation.y = Math.PI;
-    backBay1.position.set(-0.85, 0.04, -d / 2 + 0.06);
-    group.add(backBay1);
-
-    const backBay2 = createArchitecturalWindowBay(1.15, wallH * 0.70, 0.14, mats, false, false);
-    backBay2.rotation.y = Math.PI;
-    backBay2.position.set(0.75, 0.04, -d / 2 + 0.06);
-    group.add(backBay2);
-
-    const acA = createAcUnit(mats);
-    acA.position.set(-w / 2 + 0.50, 0.20, -d / 2 - 0.16);
-    group.add(acA);
-  }
-
-  // =========================================================================
-  // VARIANT B: Mirrored Front-Left Balcony Projection (Outward to -X)
-  // Subtle Warm Twilight Interior Backing
-  // =========================================================================
-  else if (variantIndex === 1) {
-    const core = new THREE.Mesh(
-      new THREE.BoxGeometry(w - 0.04, wallH, d - 0.04),
-      mats.aptConcreteWarm
+    // Back Facade: Two architectural window bays + exactly 1 outdoor AC unit
+    const backBay1 = createArchitecturalWindowBay(
+      1.15,
+      wallH * 0.70,
+      0.14,
+      mats,
+      false,
+      false,
+      mats.aptGlassA,
+      mats.aptFrameA
     );
-    setupMesh(core);
-    group.add(core);
-
-    // Cantilevered Balcony Slab (Projects OUTWARD by 0.88 beyond left wall X = -w/2)
-    const balcCenterZ = 1.22;
-    const balcCantilever = new THREE.Mesh(
-      new THREE.BoxGeometry(projDist, slabH, balcWidth),
-      mats.aptConcreteSlab
-    );
-    balcCantilever.position.set(-w / 2 - projDist / 2, -h / 2 + slabH / 2, balcCenterZ);
-    setupMesh(balcCantilever);
-    group.add(balcCantilever);
-
-    // Teak Wood Balcony Deck
-    const balcDeck = new THREE.Mesh(
-      new THREE.BoxGeometry(projDist - 0.04, 0.04, balcWidth - 0.04),
-      mats.aptBalconyDeck
-    );
-    balcDeck.position.set(-w / 2 - projDist / 2, -h / 2 + slabH + 0.02, balcCenterZ);
-    setupMesh(balcDeck);
-    group.add(balcDeck);
-
-    // Sliding Glass Door connecting interior to left projecting balcony (at X = -w/2)
-    const door = createArchitecturalWindowBay(balcWidth - 0.08, wallH * 0.90, 0.14, mats, false, true);
-    door.rotation.y = -Math.PI / 2;
-    door.position.set(-w / 2 + 0.05, 0, balcCenterZ);
-    group.add(door);
-
-    // Sturdy dark graphite posts
-    const postGeo = new THREE.BoxGeometry(0.08, railH, 0.08);
-    const p1 = new THREE.Mesh(postGeo, mats.aptCharcoalFrame);
-    p1.position.set(-w / 2 - projDist + 0.04, railY, balcCenterZ + balcWidth / 2 - 0.04);
-    setupMesh(p1);
-    group.add(p1);
-
-    const p2 = new THREE.Mesh(postGeo, mats.aptCharcoalFrame);
-    p2.position.set(-w / 2 - projDist + 0.04, railY, balcCenterZ - balcWidth / 2 + 0.04);
-    setupMesh(p2);
-    group.add(p2);
-
-    const p3 = new THREE.Mesh(postGeo, mats.aptCharcoalFrame);
-    p3.position.set(-w / 2, railY, balcCenterZ + balcWidth / 2 - 0.04);
-    setupMesh(p3);
-    group.add(p3);
-
-    const p4 = new THREE.Mesh(postGeo, mats.aptCharcoalFrame);
-    p4.position.set(-w / 2, railY, balcCenterZ - balcWidth / 2 + 0.04);
-    setupMesh(p4);
-    group.add(p4);
-
-    // Top handrails (charcoal)
-    const outerRailX = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.05, balcWidth), mats.aptCharcoalFrame);
-    outerRailX.position.set(-w / 2 - projDist + 0.04, railY + railH / 2, balcCenterZ);
-    setupMesh(outerRailX);
-    group.add(outerRailX);
-
-    const outerRailZ1 = new THREE.Mesh(new THREE.BoxGeometry(projDist, 0.05, 0.08), mats.aptCharcoalFrame);
-    outerRailZ1.position.set(-w / 2 - projDist / 2, railY + railH / 2, balcCenterZ + balcWidth / 2 - 0.04);
-    setupMesh(outerRailZ1);
-    group.add(outerRailZ1);
-
-    const outerRailZ2 = new THREE.Mesh(new THREE.BoxGeometry(projDist, 0.05, 0.08), mats.aptCharcoalFrame);
-    outerRailZ2.position.set(-w / 2 - projDist / 2, railY + railH / 2, balcCenterZ - balcWidth / 2 + 0.04);
-    setupMesh(outerRailZ2);
-    group.add(outerRailZ2);
-
-    // Smoky glass railing panels
-    const glassRailSide = new THREE.Mesh(
-      new THREE.BoxGeometry(0.03, railH - 0.12, balcWidth - 0.12),
-      mats.aptGlassRailing
-    );
-    glassRailSide.position.set(-w / 2 - projDist + 0.04, railY, balcCenterZ);
-    group.add(glassRailSide);
-
-    const glassRailFront = new THREE.Mesh(
-      new THREE.BoxGeometry(projDist - 0.12, railH - 0.12, 0.03),
-      mats.aptGlassRailing
-    );
-    glassRailFront.position.set(-w / 2 - projDist / 2, railY, balcCenterZ + balcWidth / 2 - 0.04);
-    group.add(glassRailFront);
-
-    // PRIMARY SIGNATURE: The Charcoal Vertical Frame at X = -0.42 (Mirrored!)
-    const frameB = new THREE.Mesh(new THREE.BoxGeometry(0.16, wallH, 0.22), mats.aptCharcoalFrame);
-    frameB.position.set(-0.42, 0, d / 2 - 0.09);
-    setupMesh(frameB);
-    group.add(frameB);
-
-    // Front Facade: Living room picture window (right of charcoal frame, subtle warm twilight glow)
-    const mainGlazeB = createArchitecturalWindowBay(1.08, wallH * 0.88, 0.16, mats, true, true);
-    mainGlazeB.position.set(0.20, 0, d / 2 - 0.06);
-    group.add(mainGlazeB);
-
-    // Front Facade: Solid wall with slit window on the far right
-    const slitWindowB = createArchitecturalWindowBay(0.32, wallH * 0.70, 0.14, mats, false, false);
-    slitWindowB.position.set(w / 2 - 0.60, 0.02, d / 2 - 0.06);
-    group.add(slitWindowB);
-
-    // Left Facade: Solid rear wall with corner window bay
-    const cornerBayB = createArchitecturalWindowBay(0.85, wallH * 0.80, 0.14, mats, false, false);
-    cornerBayB.rotation.y = -Math.PI / 2;
-    cornerBayB.position.set(-w / 2 + 0.06, 0.02, -0.65);
-    group.add(cornerBayB);
-
-    // Right Facade: Two vertical recessed window bays
-    const rightBay1 = createArchitecturalWindowBay(0.55, wallH * 0.68, 0.14, mats, false, false);
-    rightBay1.rotation.y = Math.PI / 2;
-    rightBay1.position.set(w / 2 - 0.06, 0.04, -0.75);
-    group.add(rightBay1);
-
-    const rightBay2 = createArchitecturalWindowBay(0.55, wallH * 0.68, 0.14, mats, false, false);
-    rightBay2.rotation.y = Math.PI / 2;
-    rightBay2.position.set(w / 2 - 0.06, 0.04, 0.75);
-    group.add(rightBay2);
-
-    // Back Facade: Two large window bays + outdoor AC unit on opposite side
-    const backBay1 = createArchitecturalWindowBay(1.15, wallH * 0.70, 0.14, mats, false, false);
     backBay1.rotation.y = Math.PI;
     backBay1.position.set(-0.75, 0.04, -d / 2 + 0.06);
     group.add(backBay1);
 
-    const backBay2 = createArchitecturalWindowBay(1.15, wallH * 0.70, 0.14, mats, false, false);
+    const backBay2 = createArchitecturalWindowBay(
+      1.15,
+      wallH * 0.70,
+      0.14,
+      mats,
+      false,
+      false,
+      mats.aptGlassA,
+      mats.aptFrameA
+    );
     backBay2.rotation.y = Math.PI;
     backBay2.position.set(0.85, 0.04, -d / 2 + 0.06);
+    group.add(backBay2);
+
+    const ac = createAcUnit(mats);
+    ac.position.set(-w / 2 + 0.50, 0.20, -d / 2 - 0.16);
+    group.add(ac);
+  }
+
+  // =========================================================================
+  // VARIANT B: MIRRORED / OFFSET BALCONY (URBAN GREY)
+  // Palette: Light Concrete Grey, Graphite Frame, Steel Blue-Grey Glass, Slate Deck
+  // Silhouette: Solid mass shifted RIGHT, large offset LEFT-SIDE balcony wing
+  // =========================================================================
+  else if (variantIndex === 1) {
+    const splitX = -0.35;
+    const rightW = w / 2 - splitX;     // ~2.45m
+    const leftW = splitX - (-w / 2);   // ~1.75m
+    const zCut = 0.10;
+    const rearD = zCut - (-d / 2);     // ~2.18m
+
+    // 1. BASE SLAB (Urban Concrete)
+    const baseSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), mats.aptSlabB);
+    baseSlab.position.y = -h / 2 + slabH / 2;
+    setupMesh(baseSlab);
+    group.add(baseSlab);
+
+    // 2. TOP SLAB (Urban Concrete)
+    const topSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), mats.aptSlabB);
+    topSlab.position.y = h / 2 - slabH / 2;
+    setupMesh(topSlab);
+    group.add(topSlab);
+
+    // 3. MAIN SOLID APARTMENT MASS (Shifted Right, full depth)
+    const rightMassGeo = new THREE.BoxGeometry(rightW, wallH, d - 0.04);
+    const rightMass = new THREE.Mesh(rightMassGeo, mats.aptWallB);
+    rightMass.position.set(splitX + rightW / 2, 0, 0);
+    setupMesh(rightMass);
+    group.add(rightMass);
+
+    // 4. RECESSED ENCLOSED BACK SECTION (Left side rear)
+    const rearMassGeo = new THREE.BoxGeometry(leftW, wallH, rearD);
+    const rearMass = new THREE.Mesh(rearMassGeo, mats.aptWallB);
+    rearMass.position.set(-w / 2 + leftW / 2, 0, -d / 2 + rearD / 2);
+    setupMesh(rearMass);
+    group.add(rearMass);
+
+    // 5. LARGE LEFT-SIDE BALCONY WING (Offset cantilever extending left & forward)
+    const balcW = leftW + 0.65; // ~2.40m wide
+    const balcD = d / 2 + 0.20 - zCut; // ~2.20m deep
+    const balcCenterX = splitX - balcW / 2;
+    const balcCenterZ = zCut + balcD / 2;
+
+    // Cantilever Base Slab under Left Balcony Wing
+    const balcSlab = new THREE.Mesh(new THREE.BoxGeometry(balcW, slabH, balcD), mats.aptSlabB);
+    balcSlab.position.set(balcCenterX, -h / 2 + slabH / 2, balcCenterZ);
+    setupMesh(balcSlab);
+    group.add(balcSlab);
+
+    // Cool Architectural Slate Deck
+    const balcDeck = new THREE.Mesh(new THREE.BoxGeometry(balcW - 0.04, 0.04, balcD - 0.04), mats.aptDeckB);
+    balcDeck.position.set(balcCenterX, -h / 2 + slabH + 0.02, balcCenterZ);
+    setupMesh(balcDeck);
+    group.add(balcDeck);
+
+    // Recessed Sliding Door Bay behind Left Balcony Wing (Z = zCut)
+    const slidingBay = createArchitecturalWindowBay(
+      leftW - 0.08,
+      wallH * 0.88,
+      0.14,
+      mats,
+      false,
+      isWarmFloor,
+      mats.aptGlassB,
+      mats.aptFrameB
+    );
+    slidingBay.position.set(-w / 2 + leftW / 2, 0, zCut + 0.06);
+    group.add(slidingBay);
+
+    // Signature Graphite Vertical Frame at transition seam (X = splitX)
+    const vertFrame = new THREE.Mesh(new THREE.BoxGeometry(0.16, wallH, 0.24), mats.aptFrameB);
+    vertFrame.position.set(splitX, 0, d / 2 - 0.12);
+    setupMesh(vertFrame);
+    group.add(vertFrame);
+
+    // Wide Panoramic Living Room Window Bay on the Right Mass (different glass ratio)
+    const livingBay = createArchitecturalWindowBay(
+      1.45,
+      wallH * 0.86,
+      0.14,
+      mats,
+      true,
+      isWarmFloor,
+      mats.aptGlassB,
+      mats.aptFrameB
+    );
+    livingBay.position.set(0.50, 0, d / 2 - 0.06);
+    group.add(livingBay);
+
+    // Slit window on right mass far edge
+    const slitBay = createArchitecturalWindowBay(
+      0.32,
+      wallH * 0.70,
+      0.14,
+      mats,
+      false,
+      false,
+      mats.aptGlassB,
+      mats.aptFrameB
+    );
+    slitBay.position.set(w / 2 - 0.50, 0.02, d / 2 - 0.06);
+    group.add(slitBay);
+
+    // Balcony Railing: 3 graphite posts + top handrail + steel blue-grey glass panels
+    const postR = 0.04;
+    const railY = -h / 2 + slabH + railH / 2;
+    const postGeo = new THREE.BoxGeometry(postR * 2, railH, postR * 2);
+
+    const post1 = new THREE.Mesh(postGeo, mats.aptFrameB);
+    post1.position.set(splitX - balcW + 0.06, railY, balcCenterZ + balcD / 2 - 0.06);
+    setupMesh(post1);
+    group.add(post1);
+
+    const post2 = new THREE.Mesh(postGeo, mats.aptFrameB);
+    post2.position.set(splitX - 0.06, railY, balcCenterZ + balcD / 2 - 0.06);
+    setupMesh(post2);
+    group.add(post2);
+
+    const post3 = new THREE.Mesh(postGeo, mats.aptFrameB);
+    post3.position.set(splitX - balcW + 0.06, railY, zCut + 0.06);
+    setupMesh(post3);
+    group.add(post3);
+
+    // Graphite Top Handrails (Front and Side)
+    const frontRailGeo = new THREE.BoxGeometry(balcW, 0.04, 0.06);
+    const frontRail = new THREE.Mesh(frontRailGeo, mats.aptFrameB);
+    frontRail.position.set(balcCenterX, -h / 2 + slabH + railH, balcCenterZ + balcD / 2 - 0.06);
+    setupMesh(frontRail);
+    group.add(frontRail);
+
+    const sideRailGeo = new THREE.BoxGeometry(0.06, 0.04, balcD);
+    const sideRail = new THREE.Mesh(sideRailGeo, mats.aptFrameB);
+    sideRail.position.set(splitX - balcW + 0.06, -h / 2 + slabH + railH, balcCenterZ);
+    setupMesh(sideRail);
+    group.add(sideRail);
+
+    // Steel Blue-Grey Glass Railing Panels
+    const glassPanelFront = new THREE.Mesh(
+      new THREE.BoxGeometry(balcW - 0.16, railH - 0.12, 0.03),
+      mats.aptGlassRailB
+    );
+    glassPanelFront.position.set(balcCenterX, railY, balcCenterZ + balcD / 2 - 0.06);
+    group.add(glassPanelFront);
+
+    const glassPanelSide = new THREE.Mesh(
+      new THREE.BoxGeometry(0.03, railH - 0.12, balcD - 0.16),
+      mats.aptGlassRailB
+    );
+    glassPanelSide.position.set(splitX - balcW + 0.06, railY, balcCenterZ);
+    group.add(glassPanelSide);
+
+    // Right Facade: Two architectural window bays
+    const rightBay1 = createArchitecturalWindowBay(
+      1.15,
+      wallH * 0.74,
+      0.14,
+      mats,
+      false,
+      false,
+      mats.aptGlassB,
+      mats.aptFrameB
+    );
+    rightBay1.rotation.y = Math.PI / 2;
+    rightBay1.position.set(w / 2 - 0.06, 0, 0.85);
+    group.add(rightBay1);
+
+    const rightBay2 = createArchitecturalWindowBay(
+      1.15,
+      wallH * 0.74,
+      0.14,
+      mats,
+      false,
+      false,
+      mats.aptGlassB,
+      mats.aptFrameB
+    );
+    rightBay2.rotation.y = Math.PI / 2;
+    rightBay2.position.set(w / 2 - 0.06, 0, -0.85);
+    group.add(rightBay2);
+
+    // Back Facade: Two architectural window bays + exactly 1 outdoor AC unit
+    const backBay1 = createArchitecturalWindowBay(
+      1.15,
+      wallH * 0.70,
+      0.14,
+      mats,
+      false,
+      false,
+      mats.aptGlassB,
+      mats.aptFrameB
+    );
+    backBay1.rotation.y = Math.PI;
+    backBay1.position.set(-0.85, 0.04, -d / 2 + 0.06);
+    group.add(backBay1);
+
+    const backBay2 = createArchitecturalWindowBay(
+      1.15,
+      wallH * 0.70,
+      0.14,
+      mats,
+      false,
+      false,
+      mats.aptGlassB,
+      mats.aptFrameB
+    );
+    backBay2.rotation.y = Math.PI;
+    backBay2.position.set(0.75, 0.04, -d / 2 + 0.06);
     group.add(backBay2);
 
     const acB = createAcUnit(mats);
@@ -708,165 +950,259 @@ export function buildModernApartmentV1(
   }
 
   // =========================================================================
-  // VARIANT C: Forward-Projecting Balcony Terrace + Planter (Outward to +Z)
-  // Wide Panoramic Glazing + Subtle Warm Interior Glow
+  // VARIANT C: L-SHAPED / TERRACE CUTOUT (SAND / BRONZE)
+  // Palette: Warm Sand Concrete, Dark Bronze Frame, Green-Grey Smoke Glass, Composite Deck
+  // Silhouette: L-shaped massing with large forward-corner terrace cutout (78-85% massing)
   // =========================================================================
   else {
-    const core = new THREE.Mesh(
-      new THREE.BoxGeometry(w - 0.04, wallH, d - 0.04),
-      mats.aptConcreteWarm
+    const cutW = 1.95; // Terrace cutout width on right front
+    const cutD = 1.90; // Terrace cutout depth on front
+    const leftW = w - cutW; // ~2.25m solid front-to-back wing
+    const rearD = d - cutD; // ~2.25m rear section spanning full width
+
+    // 1. BASE SLAB (Sand Tone)
+    const baseSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), mats.aptSlabC);
+    baseSlab.position.y = -h / 2 + slabH / 2;
+    setupMesh(baseSlab);
+    group.add(baseSlab);
+
+    // 2. TOP SLAB (Sand Tone)
+    const topSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), mats.aptSlabC);
+    topSlab.position.y = h / 2 - slabH / 2;
+    setupMesh(topSlab);
+    group.add(topSlab);
+
+    // 3. SOLID MAIN L-VOLUME:
+    // Left Wing (Full depth from front to back)
+    const leftMassGeo = new THREE.BoxGeometry(leftW, wallH, d - 0.04);
+    const leftMass = new THREE.Mesh(leftMassGeo, mats.aptWallC);
+    leftMass.position.set(-w / 2 + leftW / 2, 0, 0);
+    setupMesh(leftMass);
+    group.add(leftMass);
+
+    // Rear Wing (Spans behind terrace on the right side)
+    const rearMassGeo = new THREE.BoxGeometry(cutW, wallH, rearD);
+    const rearMass = new THREE.Mesh(rearMassGeo, mats.aptWallC);
+    rearMass.position.set(w / 2 - cutW / 2, 0, -d / 2 + rearD / 2);
+    setupMesh(rearMass);
+    group.add(rearMass);
+
+    // 4. TERRACE / BALCONY CUTOUT (Right-front quadrant):
+    // Deck floor over the terrace
+    const terraceDeckGeo = new THREE.BoxGeometry(cutW + 0.35, 0.04, cutD + 0.30);
+    const terraceDeck = new THREE.Mesh(terraceDeckGeo, mats.aptDeckC);
+    const terrCenterX = w / 2 - cutW / 2 + 0.17;
+    const terrCenterZ = d / 2 - cutD / 2 + 0.15;
+    terraceDeck.position.set(terrCenterX, -h / 2 + slabH + 0.02, terrCenterZ);
+    setupMesh(terraceDeck);
+    group.add(terraceDeck);
+
+    // Cantilever slab extension under terrace
+    const terrSlabGeo = new THREE.BoxGeometry(cutW + 0.35, slabH, cutD + 0.30);
+    const terrSlab = new THREE.Mesh(terrSlabGeo, mats.aptSlabC);
+    terrSlab.position.set(terrCenterX, -h / 2 + slabH / 2, terrCenterZ);
+    setupMesh(terrSlab);
+    group.add(terrSlab);
+
+    // Sliding Glass Door connecting terrace to rear interior (facing +Z)
+    const terraceDoor = createArchitecturalWindowBay(
+      cutW - 0.15,
+      wallH * 0.88,
+      0.14,
+      mats,
+      false,
+      isWarmFloor,
+      mats.aptGlassC,
+      mats.aptFrameC
     );
-    setupMesh(core);
-    group.add(core);
+    terraceDoor.position.set(w / 2 - cutW / 2, 0, d / 2 - cutD + 0.06);
+    group.add(terraceDoor);
 
-    // Cantilevered Balcony Slab (Projects FORWARD by 0.88 beyond front wall Z = d/2)
-    const balcCenterX = 1.20;
-    const balcCantilever = new THREE.Mesh(
-      new THREE.BoxGeometry(balcWidth, slabH, projDist),
-      mats.aptConcreteSlab
+    // Side window looking onto the terrace from the Left Wing (facing +X)
+    const sideTerraceWindow = createArchitecturalWindowBay(
+      cutD - 0.25,
+      wallH * 0.82,
+      0.14,
+      mats,
+      false,
+      false,
+      mats.aptGlassC,
+      mats.aptFrameC
     );
-    balcCantilever.position.set(balcCenterX, -h / 2 + slabH / 2, d / 2 + projDist / 2);
-    setupMesh(balcCantilever);
-    group.add(balcCantilever);
+    sideTerraceWindow.rotation.y = Math.PI / 2;
+    sideTerraceWindow.position.set(-w / 2 + leftW - 0.06, 0, terrCenterZ);
+    group.add(sideTerraceWindow);
 
-    // Teak Wood Balcony Deck
-    const balcDeck = new THREE.Mesh(
-      new THREE.BoxGeometry(balcWidth - 0.04, 0.04, projDist - 0.04),
-      mats.aptBalconyDeck
+    // Bronze Vertical Accent Frame at corner of terrace
+    const bronzeFrame = new THREE.Mesh(new THREE.BoxGeometry(0.18, wallH, 0.22), mats.aptFrameC);
+    bronzeFrame.position.set(-w / 2 + leftW, 0, d / 2 - 0.10);
+    setupMesh(bronzeFrame);
+    group.add(bronzeFrame);
+
+    // Front living room window bay on the Left Solid Wing
+    const frontBayC = createArchitecturalWindowBay(
+      leftW * 0.75,
+      wallH * 0.86,
+      0.14,
+      mats,
+      true,
+      isWarmFloor,
+      mats.aptGlassC,
+      mats.aptFrameC
     );
-    balcDeck.position.set(balcCenterX, -h / 2 + slabH + 0.02, d / 2 + projDist / 2);
-    setupMesh(balcDeck);
-    group.add(balcDeck);
+    frontBayC.position.set(-w / 2 + leftW / 2 - 0.10, 0, d / 2 - 0.06);
+    group.add(frontBayC);
 
-    // Sliding Glass Door along front building wall (Z = d/2)
-    const door = createArchitecturalWindowBay(balcWidth - 0.08, wallH * 0.90, 0.14, mats, false, true);
-    door.position.set(balcCenterX, 0, d / 2 - 0.05);
-    group.add(door);
+    // Terrace Railing: Bronze posts + top handrail + green-grey glass panels
+    const postR = 0.04;
+    const railY = -h / 2 + slabH + railH / 2;
+    const postGeo = new THREE.BoxGeometry(postR * 2, railH, postR * 2);
 
-    // Balcony Posts
-    const postGeo = new THREE.BoxGeometry(0.08, railH, 0.08);
-    const p1 = new THREE.Mesh(postGeo, mats.aptCharcoalFrame);
-    p1.position.set(balcCenterX + balcWidth / 2 - 0.04, railY, d / 2 + projDist - 0.04);
+    const outerTerrX = terrCenterX + (cutW + 0.35) / 2 - 0.06;
+    const outerTerrZ = terrCenterZ + (cutD + 0.30) / 2 - 0.06;
+
+    const p1 = new THREE.Mesh(postGeo, mats.aptFrameC);
+    p1.position.set(outerTerrX, railY, outerTerrZ);
     setupMesh(p1);
     group.add(p1);
 
-    const p2 = new THREE.Mesh(postGeo, mats.aptCharcoalFrame);
-    p2.position.set(balcCenterX - balcWidth / 2 + 0.04, railY, d / 2 + projDist - 0.04);
+    const p2 = new THREE.Mesh(postGeo, mats.aptFrameC);
+    p2.position.set(-w / 2 + leftW + 0.08, railY, outerTerrZ);
     setupMesh(p2);
     group.add(p2);
 
-    const p3 = new THREE.Mesh(postGeo, mats.aptCharcoalFrame);
-    p3.position.set(balcCenterX + balcWidth / 2 - 0.04, railY, d / 2);
+    const p3 = new THREE.Mesh(postGeo, mats.aptFrameC);
+    p3.position.set(outerTerrX, railY, d / 2 - cutD + 0.06);
     setupMesh(p3);
     group.add(p3);
 
-    const p4 = new THREE.Mesh(postGeo, mats.aptCharcoalFrame);
-    p4.position.set(balcCenterX - balcWidth / 2 + 0.04, railY, d / 2);
-    setupMesh(p4);
-    group.add(p4);
+    // Bronze Top Handrails
+    const frontRailGeo = new THREE.BoxGeometry(cutW + 0.25, 0.04, 0.06);
+    const frontRail = new THREE.Mesh(frontRailGeo, mats.aptFrameC);
+    frontRail.position.set(terrCenterX, -h / 2 + slabH + railH, outerTerrZ);
+    setupMesh(frontRail);
+    group.add(frontRail);
 
-    // Top Handrails (charcoal)
-    const frontRailZ = new THREE.Mesh(new THREE.BoxGeometry(balcWidth, 0.05, 0.08), mats.aptCharcoalFrame);
-    frontRailZ.position.set(balcCenterX, railY + railH / 2, d / 2 + projDist - 0.04);
-    setupMesh(frontRailZ);
-    group.add(frontRailZ);
+    const sideRailGeo = new THREE.BoxGeometry(0.06, 0.04, cutD + 0.22);
+    const sideRail = new THREE.Mesh(sideRailGeo, mats.aptFrameC);
+    sideRail.position.set(outerTerrX, -h / 2 + slabH + railH, terrCenterZ);
+    setupMesh(sideRail);
+    group.add(sideRail);
 
-    const sideRailX1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.05, projDist), mats.aptCharcoalFrame);
-    sideRailX1.position.set(balcCenterX + balcWidth / 2 - 0.04, railY + railH / 2, d / 2 + projDist / 2);
-    setupMesh(sideRailX1);
-    group.add(sideRailX1);
-
-    const sideRailX2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.05, projDist), mats.aptCharcoalFrame);
-    sideRailX2.position.set(balcCenterX - balcWidth / 2 + 0.04, railY + railH / 2, d / 2 + projDist / 2);
-    setupMesh(sideRailX2);
-    group.add(sideRailX2);
-
-    // Smoky Glass Railing Panels
-    const glassFront = new THREE.Mesh(
-      new THREE.BoxGeometry(balcWidth - 0.12, railH - 0.12, 0.03),
-      mats.aptGlassRailing
+    // Green-Grey Smoke Glass Railing Panels
+    const glassPanelFront = new THREE.Mesh(
+      new THREE.BoxGeometry(cutW + 0.15, railH - 0.12, 0.03),
+      mats.aptGlassRailC
     );
-    glassFront.position.set(balcCenterX, railY, d / 2 + projDist - 0.04);
-    group.add(glassFront);
+    glassPanelFront.position.set(terrCenterX, railY, outerTerrZ);
+    group.add(glassPanelFront);
 
-    const glassSide = new THREE.Mesh(
-      new THREE.BoxGeometry(0.03, railH - 0.12, projDist - 0.12),
-      mats.aptGlassRailing
+    const glassPanelSide = new THREE.Mesh(
+      new THREE.BoxGeometry(0.03, railH - 0.12, cutD + 0.12),
+      mats.aptGlassRailC
     );
-    glassSide.position.set(balcCenterX + balcWidth / 2 - 0.04, railY, d / 2 + projDist / 2);
-    group.add(glassSide);
+    glassPanelSide.position.set(outerTerrX, railY, terrCenterZ);
+    group.add(glassPanelSide);
 
-    // Balcony Planter (Section 10: 1 sleek planter with 3 irregular foliage clumps)
-    const planterW = 1.12;
+    // Sleek Bronze Planter Box with 3 irregular foliage clumps
+    const planterW = 0.95;
     const planterH = 0.20;
     const planterD = 0.22;
     const planter = new THREE.Mesh(
       new THREE.BoxGeometry(planterW, planterH, planterD),
-      mats.aptCharcoalFrame
+      mats.aptFrameC
     );
-    planter.position.set(balcCenterX, -h / 2 + slabH + planterH / 2 + 0.03, d / 2 + projDist - 0.20);
+    planter.position.set(terrCenterX - 0.15, -h / 2 + slabH + planterH / 2 + 0.03, outerTerrZ - 0.18);
     setupMesh(planter);
     group.add(planter);
 
-    // 3 irregular stylized foliage clumps
-    const fol1 = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.22, 0.20), mats.aptFoliage);
-    fol1.position.set(balcCenterX - 0.32, -h / 2 + slabH + planterH + 0.08, d / 2 + projDist - 0.20);
-    fol1.rotation.set(0.12, 0.25, -0.06);
+    const fol1 = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.20, 0.18), mats.aptFoliage);
+    fol1.position.set(terrCenterX - 0.42, -h / 2 + slabH + planterH + 0.07, outerTerrZ - 0.18);
+    fol1.rotation.set(0.10, 0.20, -0.05);
     setupMesh(fol1);
     group.add(fol1);
 
-    const fol2 = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.28, 0.22), mats.aptFoliage);
-    fol2.position.set(balcCenterX, -h / 2 + slabH + planterH + 0.10, d / 2 + projDist - 0.19);
-    fol2.rotation.set(-0.06, -0.18, 0.07);
+    const fol2 = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.26, 0.20), mats.aptFoliage);
+    fol2.position.set(terrCenterX - 0.15, -h / 2 + slabH + planterH + 0.09, outerTerrZ - 0.17);
+    fol2.rotation.set(-0.05, -0.15, 0.06);
     setupMesh(fol2);
     group.add(fol2);
 
-    const fol3 = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.19, 0.18), mats.aptFoliage);
-    fol3.position.set(balcCenterX + 0.30, -h / 2 + slabH + planterH + 0.07, d / 2 + projDist - 0.21);
-    fol3.rotation.set(0.10, 0.20, 0.02);
+    const fol3 = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.18, 0.17), mats.aptFoliage);
+    fol3.position.set(terrCenterX + 0.12, -h / 2 + slabH + planterH + 0.06, outerTerrZ - 0.19);
+    fol3.rotation.set(0.08, 0.18, 0.02);
     setupMesh(fol3);
     group.add(fol3);
 
-    // PRIMARY SIGNATURE: The Charcoal Vertical Frame at X = +0.28 (Breaks alignment with A and B!)
-    const frameC = new THREE.Mesh(new THREE.BoxGeometry(0.16, wallH, 0.22), mats.aptCharcoalFrame);
-    frameC.position.set(0.28, 0, d / 2 - 0.09);
-    setupMesh(frameC);
-    group.add(frameC);
-
-    // Front Facade: Wide panoramic living room glazing bay (with subtle warm interior glow)
-    const panoGlazeC = createArchitecturalWindowBay(1.82, wallH * 0.86, 0.16, mats, true, true);
-    panoGlazeC.position.set(-0.82, 0, d / 2 - 0.06);
-    group.add(panoGlazeC);
-
-    // Right Facade: Corner wrap glazing bay + shadow reveal line
-    const cornerBayC = createArchitecturalWindowBay(0.95, wallH * 0.84, 0.14, mats, false, false);
-    cornerBayC.rotation.y = Math.PI / 2;
-    cornerBayC.position.set(w / 2 - 0.06, 0.02, 0.35);
-    group.add(cornerBayC);
-
-    const revealC = new THREE.Mesh(new THREE.BoxGeometry(0.04, wallH * 0.95, 0.04), mats.aptCharcoalFrame);
-    revealC.position.set(w / 2 + 0.01, 0, -0.65);
-    setupMesh(revealC);
-    group.add(revealC);
-
     // Left Facade: Two vertical recessed window bays
-    const leftBay1 = createArchitecturalWindowBay(0.55, wallH * 0.68, 0.14, mats, false, false);
+    const leftBay1 = createArchitecturalWindowBay(
+      1.15,
+      wallH * 0.74,
+      0.14,
+      mats,
+      false,
+      false,
+      mats.aptGlassC,
+      mats.aptFrameC
+    );
     leftBay1.rotation.y = -Math.PI / 2;
-    leftBay1.position.set(-w / 2 + 0.06, 0.04, -0.75);
+    leftBay1.position.set(-w / 2 + 0.06, 0, 0.85);
     group.add(leftBay1);
 
-    const leftBay2 = createArchitecturalWindowBay(0.55, wallH * 0.68, 0.14, mats, false, false);
+    const leftBay2 = createArchitecturalWindowBay(
+      1.15,
+      wallH * 0.74,
+      0.14,
+      mats,
+      false,
+      false,
+      mats.aptGlassC,
+      mats.aptFrameC
+    );
     leftBay2.rotation.y = -Math.PI / 2;
-    leftBay2.position.set(-w / 2 + 0.06, 0.04, 0.75);
+    leftBay2.position.set(-w / 2 + 0.06, 0, -0.85);
     group.add(leftBay2);
 
+    // Right Facade (Rear section): Architectural window bay
+    const rightBay = createArchitecturalWindowBay(
+      1.15,
+      wallH * 0.74,
+      0.14,
+      mats,
+      false,
+      false,
+      mats.aptGlassC,
+      mats.aptFrameC
+    );
+    rightBay.rotation.y = Math.PI / 2;
+    rightBay.position.set(w / 2 - 0.06, 0, -d / 2 + rearD / 2);
+    group.add(rightBay);
+
     // Back Facade: Two architectural window bays + outdoor AC unit
-    const backBay1 = createArchitecturalWindowBay(1.15, wallH * 0.70, 0.14, mats, false, false);
+    const backBay1 = createArchitecturalWindowBay(
+      1.15,
+      wallH * 0.70,
+      0.14,
+      mats,
+      false,
+      false,
+      mats.aptGlassC,
+      mats.aptFrameC
+    );
     backBay1.rotation.y = Math.PI;
     backBay1.position.set(-0.85, 0.04, -d / 2 + 0.06);
     group.add(backBay1);
 
-    const backBay2 = createArchitecturalWindowBay(1.15, wallH * 0.70, 0.14, mats, false, false);
+    const backBay2 = createArchitecturalWindowBay(
+      1.15,
+      wallH * 0.70,
+      0.14,
+      mats,
+      false,
+      false,
+      mats.aptGlassC,
+      mats.aptFrameC
+    );
     backBay2.rotation.y = Math.PI;
     backBay2.position.set(0.75, 0.04, -d / 2 + 0.06);
     group.add(backBay2);
