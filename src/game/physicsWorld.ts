@@ -1,6 +1,6 @@
 import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
-import { FloorDimensions } from '../types';
+import { FloorDimensions, PlacementQuality } from '../types';
 import { GAME_CONFIG } from './constants';
 import {
   getDifficultyForFloor,
@@ -9,6 +9,10 @@ import {
   getStabilizationMaxForce,
   getSettledDampingForFloor,
   getActivePhysicsWindowSize,
+  getEarlyGripFactor,
+  getEarlyGripWindowFactor,
+  getImpactMomentumRetention,
+  evaluatePlacementQuality,
   StabilizationStatus,
 } from './difficultyCurve';
 
@@ -31,6 +35,8 @@ export interface PhysicsFloorRecord {
   frozenQuaternion?: { x: number; y: number; z: number; w: number };
   isDetached?: boolean;
   detachedTime?: number;
+  placementQuality?: PlacementQuality;
+  contactImpactRetention?: number;
 }
 
 export class PhysicsWorld {
@@ -175,9 +181,14 @@ export class PhysicsWorld {
     };
 
     // HEAVY CONCRETE IMPACT DAMPING: Zero recoil upward on contact
-    // Part K Impact Philosophy:
-    // LOW FLOOR: more of player's horizontal release momentum survives impact (latDamp ~0.90, rotDamp ~0.82)
-    // HIGH FLOOR: more impact absorption to prevent tall-tower chaos (latDamp ~0.72, rotDamp ~0.55)
+    // Impact Momentum Philosophy (Section 10 & 8):
+    // Floors 1-15:
+    // PERFECT: strong impact absorption (~0.65 linear retention)
+    // GREAT: good impact absorption (~0.74 linear retention)
+    // NORMAL: less absorption (~0.86 linear retention) -> momentum survives contact!
+    // RISKY: much less absorption (~0.92 linear retention) -> slides outward!
+    // DANGEROUS: minimal artificial absorption (~0.97 linear retention)
+    // High Floors (30+): smooth transition toward ~0.72 linear absorption to prevent chaotic collapse
     body.addEventListener('collide', () => {
       if (record.firstContactTime === null) {
         record.firstContactTime = performance.now();
@@ -186,15 +197,33 @@ export class PhysicsWorld {
       if (body.velocity.y > 0) {
         body.velocity.y = 0;
       }
-      // Part K: Continuous impact damping across floor progression
-      const tImpact = Math.min(Math.max((id - 1) / 49, 0), 1.0);
-      const latDamp = 0.90 - tImpact * (0.90 - 0.72);
-      const rotDamp = 0.82 - tImpact * (0.82 - 0.55);
-      body.velocity.x *= latDamp;
-      body.velocity.z *= latDamp;
-      body.angularVelocity.x *= rotDamp;
-      body.angularVelocity.y *= rotDamp;
-      body.angularVelocity.z *= rotDamp;
+
+      // Estimate initial placement offset against the supporting floor below
+      let supX = 0;
+      let supZ = 0;
+      for (const r of this.records) {
+        if (r !== record && r.settled && !r.isDetached) {
+          const rTop = r.body.position.y + r.dimensions.height / 2;
+          if (rTop <= body.position.y + 0.5) {
+            supX = r.body.position.x;
+            supZ = r.body.position.z;
+          }
+        }
+      }
+      const dx = body.position.x - supX;
+      const dz = body.position.z - supZ;
+      const distOffset = Math.sqrt(dx * dx + dz * dz);
+      const rotOffset = 2 * Math.atan2(Math.abs(body.quaternion.y), Math.abs(body.quaternion.w));
+      const contactQuality = evaluatePlacementQuality(distOffset, rotOffset);
+
+      const retention = getImpactMomentumRetention(contactQuality, id);
+      record.contactImpactRetention = retention.linear;
+
+      body.velocity.x *= retention.linear;
+      body.velocity.z *= retention.linear;
+      body.angularVelocity.x *= retention.angular;
+      body.angularVelocity.y *= retention.angular;
+      body.angularVelocity.z *= retention.angular;
     });
 
     this.world.addBody(body);
@@ -218,10 +247,12 @@ export class PhysicsWorld {
       }
     }
 
-    // SETTLED FLOOR GRIP & RESIDUAL VELOCITY DEAD-ZONE (Part L):
+    // SETTLED FLOOR GRIP & RESIDUAL VELOCITY DEAD-ZONE (Section 6, 7, 11):
     // DANGEROUS placements (< 25% support): zero artificial dead-zone, zero artificial friction.
-    // RISKY at low floors: small dead-zone (0.015 m/s) to allow slow sliding/shifting.
-    // STABLE / VERY_STABLE at high floors: active dead-zone and compressive drift damping to suppress creep.
+    // Early window (Floors 1-15):
+    // - PERFECT/GREAT: normal micro-jitter suppression (0.035 m/s)
+    // - NORMAL: small dead-zone (0.015 m/s) so physical sliding >= 1.5 cm/s remains visible & active!
+    // - RISKY: minimal dead-zone (0.010 m/s) for float underflow only; full physical movement!
     for (const rec of this.records) {
       if (rec.settled && !rec.isFrozen && !rec.isDetached) {
         const isDangerous = rec.supportRatio < GAME_CONFIG.STABILIZATION_RISKY_SUPPORT;
@@ -231,8 +262,15 @@ export class PhysicsWorld {
           const hSpeed = Math.sqrt(vx * vx + vz * vz);
           const angSpeed = rec.body.angularVelocity.length();
 
-          const isRisky = rec.supportRatio < GAME_CONFIG.STABILIZATION_STABLE_SUPPORT;
-          const deadZoneThresh = rec.id <= 15 && isRisky ? 0.015 : 0.035;
+          const quality = rec.placementQuality || 'NORMAL';
+          const isEarly = rec.id <= 15;
+          const deadZoneThresh = isEarly
+            ? quality === 'PERFECT' || quality === 'GREAT'
+              ? 0.035
+              : quality === 'NORMAL'
+              ? 0.015
+              : 0.010
+            : 0.035;
 
           if (hSpeed < deadZoneThresh) {
             // Velocity Dead-Zone: zero out numerical micro-residual noise / sub-pixel drift
@@ -243,9 +281,17 @@ export class PhysicsWorld {
             }
           } else if (rec.supportRatio >= GAME_CONFIG.STABILIZATION_STABLE_SUPPORT) {
             // Well-supported floors get compressive friction resistance against lateral drift
-            const dampingFactor = Math.exp(-8.0 * clampedDelta);
-            rec.body.velocity.x *= dampingFactor;
-            rec.body.velocity.z *= dampingFactor;
+            // For NORMAL/RISKY at early floors, compressive damping is reduced/disabled
+            const gripFactor = isEarly && (quality === 'NORMAL' || quality === 'RISKY')
+              ? quality === 'NORMAL'
+                ? 0.35
+                : 0.10
+              : 1.0;
+            if (gripFactor > 0.15) {
+              const dampingFactor = Math.exp(-8.0 * gripFactor * clampedDelta);
+              rec.body.velocity.x *= dampingFactor;
+              rec.body.velocity.z *= dampingFactor;
+            }
           }
         }
       }
@@ -375,12 +421,14 @@ export class PhysicsWorld {
    */
   public applySoftStabilization(
     record: PhysicsFloorRecord,
-    currentFloorCount: number
+    currentFloorCount: number,
+    placementQuality: PlacementQuality = 'NORMAL'
   ): {
     supportRatio: number;
     status: 'VERY_STABLE' | 'STABLE' | 'RISKY' | 'DANGEROUS';
   } {
     record.settled = true;
+    record.placementQuality = placementQuality;
     record.stablePosition = {
       x: record.body.position.x,
       y: record.body.position.y,
@@ -453,9 +501,16 @@ export class PhysicsWorld {
       status = 'DANGEROUS';
     }
 
-    // Smooth difficulty progression
+    // Smooth difficulty progression & early grip scaling
     const difficulty = getDifficultyForFloor(currentFloorCount);
-    const maxForce = getStabilizationMaxForce(status, difficulty, currentFloorCount, supportRatio);
+    const earlyGripFactor = getEarlyGripFactor(placementQuality, currentFloorCount, status);
+    const maxForce = getStabilizationMaxForce(
+      status,
+      difficulty,
+      currentFloorCount,
+      supportRatio,
+      placementQuality
+    );
 
     if (maxForce > 0) {
       // LockConstraint locks current relative position and rotation (NO SNAPPING OR CENTERING!)
@@ -465,8 +520,8 @@ export class PhysicsWorld {
       this.constraints.push(lock);
     }
 
-    // Settled Damping according to Part H (scaled by floor height)
-    const damping = getSettledDampingForFloor(currentFloorCount);
+    // Settled Damping scaled by floor progression and placement quality
+    const damping = getSettledDampingForFloor(currentFloorCount, placementQuality);
     record.body.linearDamping = damping.linear;
     record.body.angularDamping = damping.angular;
 
@@ -474,28 +529,22 @@ export class PhysicsWorld {
     const activeWindowSize = getActivePhysicsWindowSize(currentFloorCount);
     this.enforceActivePhysicsWindow(activeWindowSize);
 
-    // Development-only required debug log (Part R)
+    // Development-only required debug log (Section 31)
     if (import.meta.env.DEV) {
-      const kinematics = getCraneKinematicsForFloor(currentFloorCount);
-      const momentum = getReleaseMomentumMultipliers(currentFloorCount);
-      const devKeyFloors = [1, 5, 10, 20, 30, 40, 50, 70];
-      if (devKeyFloors.includes(currentFloorCount) || currentFloorCount <= 5) {
-        console.log(`[DifficultyDiagnostics Floor ${currentFloorCount}]`, {
-          Floor: currentFloorCount,
-          Difficulty: Number(difficulty.toFixed(3)),
-          EffectiveMovementSpeed: Number(kinematics.speedMult.toFixed(3)),
-          AmpX: Number(kinematics.ampX.toFixed(2)),
-          AmpZ: Number(kinematics.ampZ.toFixed(2)),
-          Rotation: Number(((kinematics.rotY * 180) / Math.PI).toFixed(1)),
-          LinearMomentum: Number(momentum.linear.toFixed(2)),
-          AngularMomentum: Number(momentum.angular.toFixed(2)),
-          StabilizationStatus: status,
-          SupportRatio: (supportRatio * 100).toFixed(1) + '%',
-          ConstraintMaxForce: maxForce === 0 ? 0 : Number(maxForce.toExponential(2)),
-          SettledLinearDamping: Number(damping.linear.toFixed(2)),
-          SettledAngularDamping: Number(damping.angular.toFixed(2)),
-        });
-      }
+      const impactRetention =
+        record.contactImpactRetention ??
+        getImpactMomentumRetention(placementQuality, currentFloorCount).linear;
+      console.log('[EarlyGrip]', {
+        Floor: currentFloorCount,
+        PlacementQuality: placementQuality,
+        SupportRatio: (supportRatio * 100).toFixed(1) + '%',
+        SupportStatus: status,
+        EarlyGripFactor: Number(earlyGripFactor.toFixed(3)),
+        ImpactMomentumRetention: Number(impactRetention.toFixed(3)),
+        ConstraintMaxForce: maxForce === 0 ? 0 : Number(maxForce.toExponential(2)),
+        LinearDamping: Number(record.body.linearDamping.toFixed(3)),
+        AngularDamping: Number(record.body.angularDamping.toFixed(3)),
+      });
     }
 
     return { supportRatio, status };

@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import confetti from 'canvas-confetti';
-import { FeedbackEvent, FeedbackType, FloorDimensions, FloorModuleStyle, GameState, GameStats } from '../types';
+import { FeedbackEvent, FeedbackType, FloorDimensions, FloorModuleStyle, GameState, GameStats, PlacementQuality } from '../types';
 import { sounds } from '../audio/sound';
 import { CityScenery } from './cityScenery';
 import { CraneSystem } from './crane';
 import { createFloorModule, createTowerFoundation } from './floorGenerator';
 import { selectFloorModule } from './moduleSelector';
-import { getReleaseMomentumMultipliers, getCraneKinematicsForFloor, getDifficultyForFloor } from './difficultyCurve';
+import { getReleaseMomentumMultipliers, getCraneKinematicsForFloor, getDifficultyForFloor, evaluatePlacementQuality } from './difficultyCurve';
 import { PhysicsWorld } from './physicsWorld';
 import { GAME_CONFIG } from './constants';
 import { createMotionProfile, ModuleMotionProfile } from './motionProfile';
@@ -900,12 +900,7 @@ export class GameEngine {
     sounds.playImpact(1.0);
     this.floorCount++;
 
-    // Apply Hidden Soft Stabilization:
-    // Creates an invisible soft LockConstraint between floors (preserving exact position & rotation)
-    // and enforces the active physics window (top 4 floors)!
-    const { status } = this.physics.applySoftStabilization(fallenRec, this.floorCount);
-
-    // Alignment evaluation against previous floor (or foundation)
+    // 1. Calculate placement metrics against previous floor (or foundation)
     let distOffset = Math.sqrt(
       fallenRec.body.position.x * fallenRec.body.position.x +
       fallenRec.body.position.z * fallenRec.body.position.z
@@ -920,12 +915,31 @@ export class GameEngine {
 
     const rotOffset = Math.abs(this.craneRotY);
 
-    // Placement Scoring & Feedback (Parts 2, 3, 4, 5)
+    // 2. Authoritative placement quality (Section 32)
+    const placementQuality = evaluatePlacementQuality(distOffset, rotOffset, tiltAngle);
+
+    // 3. Apply Hidden Soft Stabilization with authoritative placement quality:
+    // Creates an invisible soft LockConstraint between floors (preserving exact position & rotation)
+    // and enforces the active physics window (top 4 floors)!
+    const { status } = this.physics.applySoftStabilization(
+      fallenRec,
+      this.floorCount,
+      placementQuality
+    );
+
+    // 4. Placement Scoring & Feedback using the SAME authoritative quality result (Section 32)
     let pointsAwarded = GAME_CONFIG.BASE_FLOOR_SCORE;
     let feedbackType: FeedbackType = null;
     let feedbackMessage = `+${GAME_CONFIG.BASE_FLOOR_SCORE}`;
 
-    if (distOffset < GAME_CONFIG.PERFECT_THRESHOLD_DIST && rotOffset < GAME_CONFIG.PERFECT_THRESHOLD_ROT) {
+    const effectiveFeedback: PlacementQuality =
+      (status === 'DANGEROUS' || status === 'RISKY') &&
+      placementQuality !== 'PERFECT' &&
+      placementQuality !== 'GREAT'
+        ? 'RISKY'
+        : placementQuality;
+
+    if (effectiveFeedback === 'PERFECT') {
       this.perfectStreak++;
       pointsAwarded += GAME_CONFIG.PERFECT_BONUS; // +2 bonus => 3 total
       feedbackType = 'PERFECT';
@@ -933,12 +947,12 @@ export class GameEngine {
         ? `PERFECT x${this.perfectStreak}! +${pointsAwarded}`
         : `PERFECT! +${pointsAwarded}`;
       sounds.playPerfectChime();
-    } else if (distOffset < GAME_CONFIG.GREAT_THRESHOLD_DIST) {
+    } else if (effectiveFeedback === 'GREAT') {
       this.perfectStreak = 0;
       pointsAwarded += GAME_CONFIG.GREAT_BONUS; // +1 bonus => 2 total
       feedbackType = 'GREAT';
       feedbackMessage = `GREAT! +${pointsAwarded}`;
-    } else if (status === 'RISKY' || status === 'DANGEROUS' || distOffset > 1.6 || tiltAngle > 0.45) {
+    } else if (effectiveFeedback === 'RISKY') {
       this.perfectStreak = 0;
       feedbackType = 'RISKY';
       feedbackMessage = `RISKY! +${pointsAwarded}`;

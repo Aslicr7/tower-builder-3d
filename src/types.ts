@@ -35,6 +35,8 @@ export interface FloorDimensions {
 
 export type FeedbackType = 'PERFECT' | 'GREAT' | 'BALANCED' | 'RISKY' | 'DANGEROUS' | null;
 
+export type PlacementQuality = 'PERFECT' | 'GREAT' | 'NORMAL' | 'RISKY';
+
 export type GameOverReason = 'MISSED_FLOOR' | 'REAL_TOP_COLLAPSE';
 
 export interface GameStats {
