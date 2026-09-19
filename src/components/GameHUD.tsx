@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Pause, Play, Volume2, VolumeX, Building2 } from 'lucide-react';
+import { Pause, Play, Volume2, VolumeX, Building2, RotateCw } from 'lucide-react';
 import { FeedbackEvent, GameStats } from '../types';
 import { sounds } from '../audio/sound';
 
@@ -9,6 +9,7 @@ interface GameHUDProps {
   isPaused: boolean;
   onPauseToggle: () => void;
   onDropFloor: () => void;
+  onRotateCamera: () => void;
 }
 
 export const GameHUD: React.FC<GameHUDProps> = ({
@@ -17,6 +18,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   isPaused,
   onPauseToggle,
   onDropFloor,
+  onRotateCamera,
 }) => {
   const [soundEnabled, setSoundEnabled] = useState(true);
 
@@ -45,7 +47,10 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               e.stopPropagation();
               onPauseToggle();
             }}
-            className="w-10 h-10 rounded-xl bg-slate-900/60 backdrop-blur-md border border-white/20 text-white flex items-center justify-center hover:bg-slate-800/80 active:scale-95 transition-all shadow-md"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+            }}
+            className="w-10 h-10 rounded-xl bg-slate-900/60 backdrop-blur-md border border-white/20 text-white flex items-center justify-center hover:bg-slate-800/80 active:scale-95 transition-all shadow-md cursor-pointer"
             aria-label={isPaused ? 'Resume' : 'Pause'}
           >
             {isPaused ? <Play className="w-4 h-4 fill-white" /> : <Pause className="w-4 h-4 fill-white" />}
@@ -68,12 +73,32 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           </div>
         </div>
 
-        {/* Right Card: Floor Count matching reference image */}
-        <div className="flex items-center gap-2 pointer-events-auto">
+        {/* Right Card: Camera Rotate + Sound + Floor Count */}
+        <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
+          {/* Camera Rotate Button (Visual 45° orbit) */}
+          <button
+            id="camera-rotate-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRotateCamera();
+            }}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+            }}
+            className="w-9 h-9 rounded-xl bg-slate-900/60 backdrop-blur-md border border-white/20 text-white flex items-center justify-center hover:bg-slate-800/80 active:scale-95 transition-all shadow-md cursor-pointer"
+            aria-label="Rotate camera view 45 degrees"
+            title="Rotate camera view (45° / Q,E)"
+          >
+            <RotateCw className="w-4 h-4 text-slate-200" />
+          </button>
+
           <button
             id="sound-toggle-btn"
             onClick={handleToggleSound}
-            className="w-9 h-9 rounded-xl bg-slate-900/60 backdrop-blur-md border border-white/20 text-white flex items-center justify-center hover:bg-slate-800/80 active:scale-95 transition-all shadow-md"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+            }}
+            className="w-9 h-9 rounded-xl bg-slate-900/60 backdrop-blur-md border border-white/20 text-white flex items-center justify-center hover:bg-slate-800/80 active:scale-95 transition-all shadow-md cursor-pointer"
             aria-label={soundEnabled ? 'Mute sound' : 'Enable sound'}
           >
             {soundEnabled ? (
@@ -85,7 +110,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
           <div
             id="floor-card"
-            className="bg-slate-900/65 backdrop-blur-md border border-white/20 rounded-xl px-3 py-1.5 shadow-md text-white flex items-center gap-2"
+            className="bg-slate-900/65 backdrop-blur-md border border-white/20 rounded-xl px-2.5 sm:px-3 py-1.5 shadow-md text-white flex items-center gap-2"
           >
             <div className="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-amber-400">
               <Building2 className="w-3.5 h-3.5" />

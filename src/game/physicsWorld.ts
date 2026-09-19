@@ -39,11 +39,18 @@ export class PhysicsWorld {
       gravity: new CANNON.Vec3(0, GAME_CONFIG.GRAVITY, 0),
     });
 
-    // Zero bounce, high friction, stable contact equations
+    // Solver configuration: Increase iterations to 20 to ensure high-mass frictional stacking stability
+    if ('iterations' in this.world.solver) {
+      (this.world.solver as CANNON.GSSolver).iterations = 20;
+    }
+
+    // Zero bounce, high friction, stiff contact & friction equations (stone/concrete resistance)
     this.world.defaultContactMaterial.friction = GAME_CONFIG.FLOOR_FRICTION;
     this.world.defaultContactMaterial.restitution = GAME_CONFIG.FLOOR_RESTITUTION;
-    this.world.defaultContactMaterial.contactEquationStiffness = 1e6;
+    this.world.defaultContactMaterial.contactEquationStiffness = 1e8;
     this.world.defaultContactMaterial.contactEquationRelaxation = 3;
+    this.world.defaultContactMaterial.frictionEquationStiffness = 1e8;
+    this.world.defaultContactMaterial.frictionEquationRelaxation = 3;
 
     this.floorMaterial = new CANNON.Material('floor');
     this.foundationMaterial = new CANNON.Material('foundation');
@@ -54,9 +61,9 @@ export class PhysicsWorld {
       {
         friction: GAME_CONFIG.FLOOR_FRICTION,
         restitution: GAME_CONFIG.FLOOR_RESTITUTION, // Strictly zero bounce
-        contactEquationStiffness: 1e6,
+        contactEquationStiffness: 1e8,
         contactEquationRelaxation: 3,
-        frictionEquationStiffness: 1e6,
+        frictionEquationStiffness: 1e8,
         frictionEquationRelaxation: 3,
       }
     );
@@ -68,8 +75,10 @@ export class PhysicsWorld {
       {
         friction: 0.98,
         restitution: 0.0,
-        contactEquationStiffness: 1e6,
+        contactEquationStiffness: 1e8,
         contactEquationRelaxation: 3,
+        frictionEquationStiffness: 1e8,
+        frictionEquationRelaxation: 3,
       }
     );
     this.world.addContactMaterial(groundContactMat);
@@ -192,6 +201,41 @@ export class PhysicsWorld {
       const b = this.currentFallingFloor.body;
       if (b.velocity.y > 0.02) {
         b.velocity.y = 0;
+      }
+    }
+
+    // SETTLED FLOOR GRIP & RESIDUAL VELOCITY DEAD-ZONE:
+    // Heavy architectural concrete modules that have landed, settled, and have valid support
+    // must strongly resist tiny residual horizontal sliding forces and numerical micro-skating.
+    for (const rec of this.records) {
+      if (rec.settled && !rec.isFrozen && !rec.isDetached) {
+        // Only apply grip if the floor has reasonable structural support.
+        // If support is DANGEROUS / < 25%, it must remain completely free to tilt, slide and collapse!
+        if (rec.supportRatio >= GAME_CONFIG.STABILIZATION_RISKY_SUPPORT) {
+          const vx = rec.body.velocity.x;
+          const vz = rec.body.velocity.z;
+          const hSpeed = Math.sqrt(vx * vx + vz * vz);
+          const angSpeed = rec.body.angularVelocity.length();
+
+          if (hSpeed < 0.06) {
+            // Velocity Dead-Zone: zero out micro-residual horizontal creep / ice sliding
+            rec.body.velocity.x = 0;
+            rec.body.velocity.z = 0;
+            if (angSpeed < 0.06) {
+              rec.body.angularVelocity.set(0, 0, 0);
+            }
+          } else if (hSpeed < 0.40) {
+            // Static-like compressive friction resistance:
+            // Dampen small lateral residual sliding quickly toward zero, scaled by support ratio
+            const dampingFactor = Math.exp(-14.0 * rec.supportRatio * clampedDelta);
+            rec.body.velocity.x *= dampingFactor;
+            rec.body.velocity.z *= dampingFactor;
+            rec.body.angularVelocity.x *= dampingFactor;
+            rec.body.angularVelocity.z *= dampingFactor;
+          }
+          // If hSpeed >= 0.40, do NOT damp! Large impacts or deliberate player-created momentum
+          // remain fully dynamic so severe shifts, tipping, and falls still occur physically.
+        }
       }
     }
 
@@ -416,9 +460,9 @@ export class PhysicsWorld {
       this.constraints.push(lock);
     }
 
-    // Dampen micro-jitter on settled floor
-    record.body.linearDamping = 0.55;
-    record.body.angularDamping = 0.75;
+    // Dampen micro-jitter on settled floor (architectural firmness)
+    record.body.linearDamping = 0.65;
+    record.body.angularDamping = 0.80;
 
     // Enforce Active Physics Window:
     // Only the top active floors (ACTIVE_PHYSICS_WINDOW = 4) remain fully dynamic.
@@ -524,21 +568,16 @@ export class PhysicsWorld {
       }
     }
 
-    // Constraint Rule:
-    // Do NOT leave an unstable chain of LockConstraints crossing
-    // the boundary between STATIC frozen floors and DYNAMIC active floors.
+    // Boundary floor stabilization:
+    // The boundary floor (bottom-most dynamic floor in the active window) rests directly
+    // upon the top static floor. Keep its LockConstraint to provide structural anchoring
+    // against sliding off the static lower tower, while dampening any numerical jitter.
     const boundaryFloor = survivingFloors[cutoff];
-    if (boundaryFloor && boundaryFloor.lockConstraint) {
-      this.world.removeConstraint(boundaryFloor.lockConstraint);
-      const idx = this.constraints.indexOf(boundaryFloor.lockConstraint);
-      if (idx !== -1) this.constraints.splice(idx, 1);
-      boundaryFloor.lockConstraint = undefined;
-
-      // Damp micro-jitter on the boundary floor as it rests upon the static top floor
-      boundaryFloor.body.velocity.set(0, 0, 0);
-      boundaryFloor.body.angularVelocity.set(0, 0, 0);
-      boundaryFloor.body.force.set(0, 0, 0);
-      boundaryFloor.body.torque.set(0, 0, 0);
+    if (boundaryFloor) {
+      if (boundaryFloor.body.velocity.length() < 0.15) {
+        boundaryFloor.body.velocity.set(0, 0, 0);
+        boundaryFloor.body.angularVelocity.set(0, 0, 0);
+      }
     }
   }
 

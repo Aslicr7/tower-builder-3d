@@ -30,8 +30,8 @@ export const GAME_CONFIG = {
   FLOOR_MASS: 3500, // kg - heavy architectural module
   FLOOR_FRICTION: 0.95, // high friction
   FLOOR_RESTITUTION: 0.0, // STRICTLY ZERO BOUNCE
-  LINEAR_DAMPING: 0.40, // absorbs kinetic bounce
-  ANGULAR_DAMPING: 0.65, // prevents rubbery rotational rebound
+  LINEAR_DAMPING: 0.48, // absorbs kinetic bounce & lateral slide
+  ANGULAR_DAMPING: 0.72, // prevents rubbery rotational rebound
   
   // Tolerances
   PERFECT_THRESHOLD_DIST: 0.25,

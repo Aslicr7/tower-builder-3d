@@ -55,12 +55,17 @@ export class GameEngine {
   private craneVelZ = 0;
   private craneRotVelY = 0;
 
-  // Camera tracking
+  // Camera tracking & Orbit View
   private cameraTarget = new THREE.Vector3(0, 3.2, 0);
   private cameraDesiredTarget = new THREE.Vector3(0, 3.2, 0);
   private cameraOffset = new THREE.Vector3(20, 13, 31);
   private cameraBaseDistance = 38.0;
   private collapseStartTime = 0;
+  private baseAzimuth = 28 * (Math.PI / 180);
+  private elevationAngle = 9.5 * (Math.PI / 180);
+  private currentOrbitAngle = 0; // Animated orbit angle around Y axis (radians)
+  private targetOrbitAngle = 0;  // Target orbit angle around Y axis (multiples of PI/4 = 45°)
+  private orbitAngleIndex = 0;   // 0 to 7 (0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°)
 
   // Game Over & Failure Timing States
   private gameOverTriggered = false;
@@ -164,6 +169,18 @@ export class GameEngine {
     this.scene.add(this.sunLight);
   }
 
+  private computeCameraOffsetVector(): THREE.Vector3 {
+    const azimuth = this.baseAzimuth + this.currentOrbitAngle;
+    const dirX = Math.sin(azimuth) * Math.cos(this.elevationAngle);
+    const dirY = Math.sin(this.elevationAngle);
+    const dirZ = Math.cos(azimuth) * Math.cos(this.elevationAngle);
+    return new THREE.Vector3(
+      dirX * this.cameraBaseDistance,
+      dirY * this.cameraBaseDistance,
+      dirZ * this.cameraBaseDistance
+    );
+  }
+
   /**
    * Dedicated responsive framing ensuring:
    * 1. Portrait mobile: FOV ~44°, elevated 3/4 perspective looking across city,
@@ -175,39 +192,39 @@ export class GameEngine {
     const aspect = width / height;
     this.camera.aspect = aspect;
 
-    // Cinematic elevated 3/4 viewing angle:
-    // Gentle 9.5° downward elevation looking across the city, world horizon and sky clearly visible!
-    const azimuth = 28 * (Math.PI / 180);
-    const elevation = 9.5 * (Math.PI / 180);
-    const dirX = Math.sin(azimuth) * Math.cos(elevation); // ~0.463
-    const dirY = Math.sin(elevation);                    // ~0.165
-    const dirZ = Math.cos(azimuth) * Math.cos(elevation); // ~0.871
-
     if (aspect < 0.75) {
       // Portrait mobile (e.g. 9:16, 9:19.5, 9:20)
-      const fov = 44;
-      this.camera.fov = fov;
-      const distance = 45.0;
-      this.cameraBaseDistance = distance;
-      this.cameraOffset.set(dirX * distance, dirY * distance, dirZ * distance);
+      this.camera.fov = 44;
+      this.cameraBaseDistance = 45.0;
     } else if (aspect <= 1.25) {
       // Tablet / square
-      const fov = 40;
-      this.camera.fov = fov;
-      const distance = 42.0;
-      this.cameraBaseDistance = distance;
-      this.cameraOffset.set(dirX * distance, dirY * distance, dirZ * distance);
+      this.camera.fov = 40;
+      this.cameraBaseDistance = 42.0;
     } else {
       // Desktop
-      const fov = 36;
-      this.camera.fov = fov;
-      const distance = 38.0;
-      this.cameraBaseDistance = distance;
-      this.cameraOffset.set(dirX * distance, dirY * distance, dirZ * distance);
+      this.camera.fov = 36;
+      this.cameraBaseDistance = 38.0;
     }
 
+    this.cameraOffset.copy(this.computeCameraOffsetVector());
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
+  }
+
+  /**
+   * Rotates camera orbit angle by 45 degrees around the vertical Y axis (visual only).
+   * Direction: 1 for clockwise (next 45°), -1 for counter-clockwise.
+   * Visual-only orbit around tower center: does NOT alter world coordinates, physics, or crane mechanics.
+   */
+  public rotateCamera(direction: number = 1) {
+    if (this.state === 'COLLAPSING' || this.state === 'GAMEOVER') return;
+
+    this.orbitAngleIndex = (this.orbitAngleIndex + direction + 8) % 8;
+    this.targetOrbitAngle += direction * (Math.PI / 4);
+  }
+
+  public getOrbitAngleDegrees(): number {
+    return ((this.orbitAngleIndex * 45) % 360 + 360) % 360;
   }
 
   private initWorld() {
@@ -253,6 +270,12 @@ export class GameEngine {
     this.callbacks.onStateChange(this.state);
 
     this.updateStatsUI();
+
+    // Reset camera orbit to default angle (0°) on new run
+    this.orbitAngleIndex = 0;
+    this.targetOrbitAngle = 0;
+    this.currentOrbitAngle = 0;
+    this.cameraOffset.copy(this.computeCameraOffsetVector());
 
     // Reset camera desired target with cinematic elevated 3/4 framing
     const towerTopY = this.physics.getTowerTopY();
@@ -727,6 +750,15 @@ export class GameEngine {
       }
       return;
     }
+
+    // Smooth camera orbit animation to target 45-degree angle (~0.25 - 0.35s)
+    const orbitSpeed = 11.0;
+    const orbitAlpha = 1.0 - Math.exp(-orbitSpeed * delta);
+    this.currentOrbitAngle = THREE.MathUtils.lerp(this.currentOrbitAngle, this.targetOrbitAngle, orbitAlpha);
+    if (Math.abs(this.currentOrbitAngle - this.targetOrbitAngle) < 0.0005) {
+      this.currentOrbitAngle = this.targetOrbitAngle;
+    }
+    this.cameraOffset.copy(this.computeCameraOffsetVector());
 
     // Smooth tracking during gameplay: delta-time-independent exponential smoothing
     const followSpeed = 2.4;

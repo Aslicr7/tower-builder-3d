@@ -57,12 +57,25 @@ export default function App() {
     }
   }, [gameState]);
 
-  // Keyboard controls (Spacebar to drop, Escape/P to pause)
+  // Camera rotation (visual 45° orbit)
+  const handleRotateCamera = useCallback((direction: number = 1) => {
+    if (engineRef.current) {
+      engineRef.current.rotateCamera(direction);
+    }
+  }, []);
+
+  // Keyboard controls (Spacebar to drop, Q/E to rotate camera, Escape/P to pause)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
         e.preventDefault();
         handleDrop();
+      } else if (e.code === 'KeyQ') {
+        e.preventDefault();
+        handleRotateCamera(-1);
+      } else if (e.code === 'KeyE') {
+        e.preventDefault();
+        handleRotateCamera(1);
       } else if (e.code === 'Escape' || e.key === 'p' || e.key === 'P') {
         e.preventDefault();
         if (gameState === 'PLAYING') {
@@ -75,7 +88,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleDrop, gameState]);
+  }, [handleDrop, handleRotateCamera, gameState]);
 
   // Restart game
   const handleRestart = () => {
@@ -113,6 +126,7 @@ export default function App() {
         isPaused={gameState === 'PAUSED'}
         onPauseToggle={handlePauseToggle}
         onDropFloor={handleDrop}
+        onRotateCamera={() => handleRotateCamera(1)}
       />
 
       {/* TEMP DEV: Environment region testing */}
