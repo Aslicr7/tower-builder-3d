@@ -1,6 +1,7 @@
 export type GameState = 'START' | 'PLAYING' | 'PAUSED' | 'COLLAPSING' | 'GAMEOVER';
 
 export type FloorModuleStyle =
+  | 'MODERN_APARTMENT_V1'
   | 'GLASS_MODERN'
   | 'BRUTALIST_CONCRETE'
   | 'RED_BRICK'
