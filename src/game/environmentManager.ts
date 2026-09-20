@@ -362,6 +362,7 @@ export class EnvironmentManager {
   private starsMesh: THREE.Points | null = null;
   private mountainEagles: THREE.Group | null = null;
   private cityBuildingFootprints: { x: number; z: number; radius: number }[] = [];
+  private lastLoggedFloor = -1;
 
   // Current calculated region state
   private currentRegion = 0;
@@ -552,12 +553,17 @@ export class EnvironmentManager {
     roadMesh.receiveShadow = true;
     boulevardGroup.add(roadMesh);
 
-    // Center divider double yellow line (Y = -5.98, +1cm above road surface)
+    // Center divider double yellow line (Y = -5.97, with polygonOffset to prevent depth-buffer flicker)
     const centerLineGeo = new THREE.PlaneGeometry(280, 0.35);
-    const centerLineMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
+    const centerLineMat = new THREE.MeshBasicMaterial({
+      color: 0xf59e0b,
+      polygonOffset: true,
+      polygonOffsetFactor: -1.0,
+      polygonOffsetUnits: -4.0,
+    });
     const centerLine = new THREE.Mesh(centerLineGeo, centerLineMat);
     centerLine.rotation.x = -Math.PI / 2;
-    centerLine.position.set(0, -5.98, -22.0);
+    centerLine.position.set(0, -5.97, -22.0);
     boulevardGroup.add(centerLine);
 
     // North and South curbs / sidewalks (3D box geometry with 16cm real height, top at Y = -5.84)
@@ -2335,8 +2341,9 @@ export class EnvironmentManager {
     // 10E. Update Sky Shader, Fog, and Sun/Ambient Lighting
     this.updateLightingAndSky(floorCount, regionIndex, transitionProgress, scene, sunLight, ambientLight);
 
-    // Development-only required debug log (Part G)
-    if (import.meta.env.DEV) {
+    // Development-only required debug log (logged only when floor count changes to avoid console spam)
+    if (import.meta.env.DEV && floorCount !== this.lastLoggedFloor) {
+      this.lastLoggedFloor = floorCount;
       console.debug('[EnvironmentTransition]', {
         Floor: floorCount,
         CurrentRegion: state.regionName,

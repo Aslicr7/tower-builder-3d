@@ -242,12 +242,27 @@ function createResidentialWindow(
     g.add(mullion);
   }
 
-  // Layer 4: Charcoal Window Frame (wraps around glass and backing, anchoring against wall)
-  const frameGeo = new THREE.BoxGeometry(width, height, 0.045);
-  const frame = new THREE.Mesh(frameGeo, mats.windowFrame);
-  frame.position.set(0, 0, 0.024);
-  frame.castShadow = true;
-  g.add(frame);
+  // Layer 4: Open Charcoal Perimeter Frame (leaves center clear for glass and backing)
+  const topRail = new THREE.Mesh(new THREE.BoxGeometry(width, frameThick, 0.045), mats.windowFrame);
+  topRail.position.set(0, height / 2 - frameThick / 2, 0.024);
+  topRail.castShadow = true;
+  g.add(topRail);
+
+  const btmRail = new THREE.Mesh(new THREE.BoxGeometry(width, frameThick, 0.045), mats.windowFrame);
+  btmRail.position.set(0, -height / 2 + frameThick / 2, 0.024);
+  btmRail.castShadow = true;
+  g.add(btmRail);
+
+  const jambH = Math.max(0.02, height - frameThick * 2);
+  const leftJamb = new THREE.Mesh(new THREE.BoxGeometry(frameThick, jambH, 0.045), mats.windowFrame);
+  leftJamb.position.set(-width / 2 + frameThick / 2, 0, 0.024);
+  leftJamb.castShadow = true;
+  g.add(leftJamb);
+
+  const rightJamb = new THREE.Mesh(new THREE.BoxGeometry(frameThick, jambH, 0.045), mats.windowFrame);
+  rightJamb.position.set(width / 2 - frameThick / 2, 0, 0.024);
+  rightJamb.castShadow = true;
+  g.add(rightJamb);
 
   // Layer 5: Clean Stone Sill at base (projects outward at Z = 0.038)
   const sillGeo = new THREE.BoxGeometry(width + sillOverhang * 2, sillH, sillD);
@@ -302,12 +317,27 @@ function createBalconyDoor(
     g.add(stile);
   }
 
-  // Layer 4: Perimeter Frame
-  const frameGeo = new THREE.BoxGeometry(width, height, 0.045);
-  const frame = new THREE.Mesh(frameGeo, mats.windowFrame);
-  frame.position.set(0, 0, 0.024);
-  frame.castShadow = true;
-  g.add(frame);
+  // Layer 4: Open Perimeter Frame (top, bottom, left, right members)
+  const doorTopRail = new THREE.Mesh(new THREE.BoxGeometry(width, frameThick, 0.045), mats.windowFrame);
+  doorTopRail.position.set(0, height / 2 - frameThick / 2, 0.024);
+  doorTopRail.castShadow = true;
+  g.add(doorTopRail);
+
+  const doorBtmRail = new THREE.Mesh(new THREE.BoxGeometry(width, frameThick, 0.045), mats.windowFrame);
+  doorBtmRail.position.set(0, -height / 2 + frameThick / 2, 0.024);
+  doorBtmRail.castShadow = true;
+  g.add(doorBtmRail);
+
+  const doorJambH = Math.max(0.02, height - frameThick * 2);
+  const doorLeftJamb = new THREE.Mesh(new THREE.BoxGeometry(frameThick, doorJambH, 0.045), mats.windowFrame);
+  doorLeftJamb.position.set(-width / 2 + frameThick / 2, 0, 0.024);
+  doorLeftJamb.castShadow = true;
+  g.add(doorLeftJamb);
+
+  const doorRightJamb = new THREE.Mesh(new THREE.BoxGeometry(frameThick, doorJambH, 0.045), mats.windowFrame);
+  doorRightJamb.position.set(width / 2 - frameThick / 2, 0, 0.024);
+  doorRightJamb.castShadow = true;
+  g.add(doorRightJamb);
 
   return g;
 }

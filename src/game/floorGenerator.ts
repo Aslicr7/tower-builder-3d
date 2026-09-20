@@ -468,26 +468,46 @@ function createArchitecturalWindowBay(
   const fMat = frameMat || mats.aptFrameA;
   const gMat = glassMat || mats.aptGlassA;
 
-  // Outer frame box (clean architectural metal)
-  const frameGeo = new THREE.BoxGeometry(width, height, frameDepth);
-  const frameMesh = new THREE.Mesh(frameGeo, fMat);
-  frameMesh.castShadow = true;
-  frameMesh.receiveShadow = true;
-  g.add(frameMesh);
+  // Perimeter architectural metal frame (top, bottom, left, right members)
+  // Leaves open central aperture for recessed glass and backing plane — prevents coplanar occlusion & z-fighting!
+  const topRail = new THREE.Mesh(new THREE.BoxGeometry(width, frameThick, frameDepth), fMat);
+  topRail.position.set(0, height / 2 - frameThick / 2, 0);
+  topRail.castShadow = true;
+  topRail.receiveShadow = true;
+  g.add(topRail);
+
+  const btmRail = new THREE.Mesh(new THREE.BoxGeometry(width, frameThick, frameDepth), fMat);
+  btmRail.position.set(0, -height / 2 + frameThick / 2, 0);
+  btmRail.castShadow = true;
+  btmRail.receiveShadow = true;
+  g.add(btmRail);
+
+  const jambH = Math.max(0.02, height - frameThick * 2);
+  const leftJamb = new THREE.Mesh(new THREE.BoxGeometry(frameThick, jambH, frameDepth), fMat);
+  leftJamb.position.set(-width / 2 + frameThick / 2, 0, 0);
+  leftJamb.castShadow = true;
+  leftJamb.receiveShadow = true;
+  g.add(leftJamb);
+
+  const rightJamb = new THREE.Mesh(new THREE.BoxGeometry(frameThick, jambH, frameDepth), fMat);
+  rightJamb.position.set(width / 2 - frameThick / 2, 0, 0);
+  rightJamb.castShadow = true;
+  rightJamb.receiveShadow = true;
+  g.add(rightJamb);
 
   // Recessed Glass Pane (with responsive daylight tint)
   const glassW = Math.max(0.08, width - frameThick * 2);
   const glassH = Math.max(0.08, height - frameThick * 2);
-  const glassGeo = new THREE.BoxGeometry(glassW, glassH, 0.02);
+  const glassGeo = new THREE.BoxGeometry(glassW, glassH, 0.012);
   const glassMesh = new THREE.Mesh(glassGeo, gMat);
-  glassMesh.position.z = frameDepth * 0.15;
+  glassMesh.position.z = 0;
   g.add(glassMesh);
 
   // Interior Backing Plane behind glass: Deep slate shadow vs subtle warm twilight glow
   const backGeo = new THREE.PlaneGeometry(glassW, glassH);
   const backMat = useWarmInterior ? mats.aptInteriorWarm : mats.aptInteriorDark;
   const backMesh = new THREE.Mesh(backGeo, backMat);
-  backMesh.position.z = -frameDepth * 0.44;
+  backMesh.position.z = -frameDepth * 0.46;
   g.add(backMesh);
 
   if (hasTransom) {
@@ -551,11 +571,18 @@ export function buildModernApartmentV1(
     const zCut = -0.15;
     const rearD = zCut - (-d / 2);    // ~1.95m
 
-    // 1. BASE SLAB (Limestone)
-    const baseSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), mats.aptSlabA);
-    baseSlab.position.y = -h / 2 + slabH / 2;
-    setupMesh(baseSlab);
-    group.add(baseSlab);
+    // 1. NON-OVERLAPPING BASE SLABS (Limestone):
+    // Left Base Slab (Under full-depth left wing, spans [-w/2, splitX])
+    const leftBaseSlab = new THREE.Mesh(new THREE.BoxGeometry(leftW, slabH, d), mats.aptSlabA);
+    leftBaseSlab.position.set(-w / 2 + leftW / 2, -h / 2 + slabH / 2, 0);
+    setupMesh(leftBaseSlab);
+    group.add(leftBaseSlab);
+
+    // Right Rear Base Slab (Under enclosed right rear section, spans [splitX, w/2], [-d/2, zCut])
+    const rightRearSlab = new THREE.Mesh(new THREE.BoxGeometry(rightW, slabH, rearD), mats.aptSlabA);
+    rightRearSlab.position.set(splitX + rightW / 2, -h / 2 + slabH / 2, -d / 2 + rearD / 2);
+    setupMesh(rightRearSlab);
+    group.add(rightRearSlab);
 
     // 2. TOP SLAB (Limestone)
     const topSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), mats.aptSlabA);
@@ -766,11 +793,18 @@ export function buildModernApartmentV1(
     const zCut = 0.10;
     const rearD = zCut - (-d / 2);     // ~2.18m
 
-    // 1. BASE SLAB (Urban Concrete)
-    const baseSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), mats.aptSlabB);
-    baseSlab.position.y = -h / 2 + slabH / 2;
-    setupMesh(baseSlab);
-    group.add(baseSlab);
+    // 1. NON-OVERLAPPING BASE SLABS (Urban Concrete):
+    // Right Base Slab (Under full-depth right wing, spans [splitX, w/2])
+    const rightBaseSlab = new THREE.Mesh(new THREE.BoxGeometry(rightW, slabH, d), mats.aptSlabB);
+    rightBaseSlab.position.set(splitX + rightW / 2, -h / 2 + slabH / 2, 0);
+    setupMesh(rightBaseSlab);
+    group.add(rightBaseSlab);
+
+    // Left Rear Base Slab (Under enclosed left rear section, spans [-w/2, splitX], [-d/2, zCut])
+    const leftRearSlab = new THREE.Mesh(new THREE.BoxGeometry(leftW, slabH, rearD), mats.aptSlabB);
+    leftRearSlab.position.set(-w / 2 + leftW / 2, -h / 2 + slabH / 2, -d / 2 + rearD / 2);
+    setupMesh(leftRearSlab);
+    group.add(leftRearSlab);
 
     // 2. TOP SLAB (Urban Concrete)
     const topSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), mats.aptSlabB);
@@ -980,11 +1014,18 @@ export function buildModernApartmentV1(
     const leftW = w - cutW; // ~2.25m solid front-to-back wing
     const rearD = d - cutD; // ~2.25m rear section spanning full width
 
-    // 1. BASE SLAB (Sand Tone)
-    const baseSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), mats.aptSlabC);
-    baseSlab.position.y = -h / 2 + slabH / 2;
-    setupMesh(baseSlab);
-    group.add(baseSlab);
+    // 1. NON-OVERLAPPING BASE SLABS (Sand Tone):
+    // Left Wing Base Slab (Full depth from front to back, spans [-w/2, w/2 - cutW])
+    const leftBaseSlab = new THREE.Mesh(new THREE.BoxGeometry(leftW, slabH, d), mats.aptSlabC);
+    leftBaseSlab.position.set(-w / 2 + leftW / 2, -h / 2 + slabH / 2, 0);
+    setupMesh(leftBaseSlab);
+    group.add(leftBaseSlab);
+
+    // Rear Wing Base Slab (Spans behind terrace on the right side)
+    const rearBaseSlab = new THREE.Mesh(new THREE.BoxGeometry(cutW, slabH, rearD), mats.aptSlabC);
+    rearBaseSlab.position.set(w / 2 - cutW / 2, -h / 2 + slabH / 2, -d / 2 + rearD / 2);
+    setupMesh(rearBaseSlab);
+    group.add(rearBaseSlab);
 
     // 2. TOP SLAB (Sand Tone)
     const topSlab = new THREE.Mesh(new THREE.BoxGeometry(w, slabH, d), mats.aptSlabC);
@@ -1736,19 +1777,20 @@ export function createTowerFoundation(): { group: THREE.Group } {
   topPlateMesh.receiveShadow = true;
   group.add(topPlateMesh);
 
-  // Recessed center landing bed (clear visual target for Floor 1 placement)
+  // Recessed center landing bed (flush with top landing plate at topY)
   const targetBedW = fw * 0.82;
   const targetBedD = fd * 0.82;
   const targetBedMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(targetBedW, 0.02, targetBedD),
+    new THREE.BoxGeometry(targetBedW, 0.015, targetBedD),
     mats.concreteDark
   );
-  targetBedMesh.position.set(0, topY + 0.005, 0);
+  targetBedMesh.position.set(0, topY - 0.0075, 0);
   targetBedMesh.receiveShadow = true;
   group.add(targetBedMesh);
 
-  // 4 corner heavy anchor shoes / shear keys on top plate
+  // 4 corner heavy anchor shoes / shear keys flush with top plate (no upward penetration into Floor 1)
   const shoeSize = 0.36;
+  const shoeH = 0.025;
   const shoeOffsetX = fw / 2 - shoeSize / 2;
   const shoeOffsetZ = fd / 2 - shoeSize / 2;
   [
@@ -1758,10 +1800,10 @@ export function createTowerFoundation(): { group: THREE.Group } {
     [shoeOffsetX, shoeOffsetZ],
   ].forEach(([sx, sz]) => {
     const shoe = new THREE.Mesh(
-      new THREE.BoxGeometry(shoeSize, 0.04, shoeSize),
+      new THREE.BoxGeometry(shoeSize, shoeH, shoeSize),
       mats.blackMetal
     );
-    shoe.position.set(sx, topY + 0.015, sz);
+    shoe.position.set(sx, topY - shoeH / 2, sz);
     shoe.castShadow = true;
     group.add(shoe);
   });

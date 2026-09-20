@@ -292,10 +292,10 @@ export function buildGlassOffice(
     setupMesh(mainGlass);
     group.add(mainGlass);
 
-    // Spandrel Bands across Primary Glass Wing
+    // Spandrel Bands across Primary Glass Wing (with clean 20mm architectural projection to eliminate z-fighting)
     const spandrelH = 0.20;
     const topSpandrel = new THREE.Mesh(
-      new THREE.BoxGeometry(mainWingW + 0.01, spandrelH, mainWingD + 0.01),
+      new THREE.BoxGeometry(mainWingW + 0.04, spandrelH, mainWingD + 0.04),
       mats.spandrelPanel
     );
     topSpandrel.position.set(mainWingCenterX, bodyH / 2 - spandrelH / 2, mainWingCenterZ);
@@ -303,7 +303,7 @@ export function buildGlassOffice(
     group.add(topSpandrel);
 
     const botSpandrel = new THREE.Mesh(
-      new THREE.BoxGeometry(mainWingW + 0.01, spandrelH, mainWingD + 0.01),
+      new THREE.BoxGeometry(mainWingW + 0.04, spandrelH, mainWingD + 0.04),
       mats.spandrelPanel
     );
     botSpandrel.position.set(mainWingCenterX, -bodyH / 2 + spandrelH / 2, mainWingCenterZ);
@@ -412,10 +412,10 @@ export function buildGlassOffice(
     setupMesh(mainGlass);
     group.add(mainGlass);
 
-    // Main Wing Spandrels
+    // Main Wing Spandrels (clean 20mm architectural projection)
     const spandrelH = 0.20;
     const mainSpandrel = new THREE.Mesh(
-      new THREE.BoxGeometry(mainW + 0.01, spandrelH, mainD + 0.01),
+      new THREE.BoxGeometry(mainW + 0.04, spandrelH, mainD + 0.04),
       mats.spandrelPanel
     );
     mainSpandrel.position.set(mainCenterX, bodyH / 2 - spandrelH / 2, mainCenterZ);
@@ -521,10 +521,10 @@ export function buildGlassOffice(
     setupMesh(rightGlass);
     group.add(rightGlass);
 
-    // Spandrel Headers on Left and Right Pavilions
+    // Spandrel Headers on Left and Right Pavilions (clean 20mm architectural projection)
     const spandrelH = 0.20;
     const leftSpandrel = new THREE.Mesh(
-      new THREE.BoxGeometry(wingW + 0.01, spandrelH, wingD + 0.01),
+      new THREE.BoxGeometry(wingW + 0.04, spandrelH, wingD + 0.04),
       mats.spandrelPanel
     );
     leftSpandrel.position.set(leftWingCenterX, bodyH / 2 - spandrelH / 2, wingCenterZ);
@@ -532,7 +532,7 @@ export function buildGlassOffice(
     group.add(leftSpandrel);
 
     const rightSpandrel = new THREE.Mesh(
-      new THREE.BoxGeometry(wingW + 0.01, spandrelH, wingD + 0.01),
+      new THREE.BoxGeometry(wingW + 0.04, spandrelH, wingD + 0.04),
       mats.spandrelPanel
     );
     rightSpandrel.position.set(rightWingCenterX, bodyH / 2 - spandrelH / 2, wingCenterZ);

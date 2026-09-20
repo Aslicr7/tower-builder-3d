@@ -272,9 +272,11 @@ export function buildIndustrialFrame(
       group.add(col);
     }
 
-    // 3. Bottom Perimeter Beams (Heavy structural ties)
-    const beamGeomX = new THREE.BoxGeometry(colInsetX * 2, beamThick, colW);
-    const beamGeomZ = new THREE.BoxGeometry(colW, beamThick, colInsetZ * 2);
+    // 3. Bottom Perimeter Beams (Structural ties spanning between column inner faces)
+    const beamSpanX = colInsetX * 2 - colW;
+    const beamSpanZ = colInsetZ * 2 - colW;
+    const beamGeomX = new THREE.BoxGeometry(beamSpanX, beamThick, colW - 0.01);
+    const beamGeomZ = new THREE.BoxGeometry(colW - 0.01, beamThick, beamSpanZ);
 
     const bBeamFront = new THREE.Mesh(beamGeomX, mats.darkSteel);
     bBeamFront.position.set(0, yBottom + platH / 2, colInsetZ);
@@ -433,9 +435,11 @@ export function buildIndustrialFrame(
       group.add(col);
     }
 
-    // 3. Perimeter Girders (Top & Bottom)
-    const beamGeomX = new THREE.BoxGeometry(colInsetX * 2, beamThick, colW);
-    const beamGeomZ = new THREE.BoxGeometry(colW, beamThick, colInsetZ * 2);
+    // 3. Perimeter Girders (Top & Bottom, spanning between column inner faces)
+    const beamSpanX = colInsetX * 2 - colW;
+    const beamSpanZ = colInsetZ * 2 - colW;
+    const beamGeomX = new THREE.BoxGeometry(beamSpanX, beamThick, colW - 0.01);
+    const beamGeomZ = new THREE.BoxGeometry(colW - 0.01, beamThick, beamSpanZ);
 
     const bBeamFront = new THREE.Mesh(beamGeomX, mats.darkSteel);
     bBeamFront.position.set(0, yBottom + platH / 2, colInsetZ);

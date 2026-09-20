@@ -288,51 +288,51 @@ export type StabilizationStatus = 'VERY_STABLE' | 'STABLE' | 'RISKY' | 'DANGEROU
 
 /**
  * Drop Height Multiplier progression across floors:
- * Floor 1  = 2.00x
- * Floor 2  = 2.00x
- * Floor 3  = 1.95x
- * Floor 4  = 1.90x
- * Floor 5  = 1.85x
- * Floor 6  = 1.80x
- * Floor 7  = 1.75x
- * Floor 8  = 1.70x
- * Floor 9  = 1.65x
- * Floor 10 = 1.60x
- * Floor 11 = 1.50x
- * Floor 12 = 1.42x
- * Floor 13 = 1.34x
- * Floor 14 = 1.26x
- * Floor 15 = 1.18x
- * Floor 16 = 1.15x
- * Floor 18 = 1.08x
- * Floor 20 = 1.04x
- * Floor 21+ = 1.00x
+ * Floor 1–2: 2.10x
+ * Floor 3: 2.08x, Floor 4: 2.05x, Floor 5: 2.02x
+ * Floor 6: 2.00x, Floor 7: 1.97x, Floor 8: 1.94x, Floor 9: 1.91x, Floor 10: 1.88x
+ * Floor 11: 1.84x, Floor 12: 1.80x, Floor 13: 1.76x, Floor 14: 1.72x, Floor 15: 1.68x
+ * Floor 16: 1.64x, Floor 17: 1.60x, Floor 18: 1.56x, Floor 19: 1.52x, Floor 20: 1.48x
+ * Floor 21: 1.43x, Floor 22: 1.38x, Floor 23: 1.33x, Floor 24: 1.28x, Floor 25: 1.23x
+ * Floors 26–30: smooth transition down to standard baseline 1.00x
+ * Floor 30+: 1.00x
  */
 export const DROP_HEIGHT_KEYFRAMES: Record<number, number> = {
-  1: 2.00,
-  2: 2.00,
-  3: 1.95,
-  4: 1.90,
-  5: 1.85,
-  6: 1.80,
-  7: 1.75,
-  8: 1.70,
-  9: 1.65,
-  10: 1.60,
-  11: 1.50,
-  12: 1.42,
-  13: 1.34,
-  14: 1.26,
-  15: 1.18,
-  16: 1.15,
-  18: 1.08,
-  20: 1.04,
-  21: 1.00,
+  1: 2.10,
+  2: 2.10,
+  3: 2.08,
+  4: 2.05,
+  5: 2.02,
+  6: 2.00,
+  7: 1.97,
+  8: 1.94,
+  9: 1.91,
+  10: 1.88,
+  11: 1.84,
+  12: 1.80,
+  13: 1.76,
+  14: 1.72,
+  15: 1.68,
+  16: 1.64,
+  17: 1.60,
+  18: 1.56,
+  19: 1.52,
+  20: 1.48,
+  21: 1.43,
+  22: 1.38,
+  23: 1.33,
+  24: 1.28,
+  25: 1.23,
+  26: 1.18,
+  27: 1.13,
+  28: 1.08,
+  29: 1.04,
+  30: 1.00,
 };
 
 export function getDropHeightMultiplierForFloor(floorNumber: number): number {
-  if (floorNumber <= 1) return 2.00;
-  if (floorNumber >= 21) return 1.00;
+  if (floorNumber <= 1) return 2.10;
+  if (floorNumber >= 30) return 1.00;
 
   const fLow = Math.floor(floorNumber);
   const fHigh = Math.ceil(floorNumber);
