@@ -1673,52 +1673,136 @@ export function createFloorModule(
 }
 
 /**
- * Creates the robust tower foundation base matching the city ground.
+ * Creates the compact industrial concrete foundation and structural platform.
+ * 
+ * Simple strong silhouette:
+ *         ┌─────────────┐
+ *         │  TOP PLATE  │  (Dark structural steel landing platform, flush with 75% collider)
+ *         └─────────────┘
+ *        ┌───────────────┐
+ *        │ CONCRETE CORE │  (Low poured concrete mass with heavy structural steel angle corners)
+ *        └───────────────┘
+ *      ┌───────────────────┐
+ *      │ FOUNDATION / BASE │  (Stepped concrete spread footing anchored into city ground)
+ *      └───────────────────┘
+ * 
+ * Visual footprint exactly matches the 75% x 75% physical collider at Y = 0.0.
+ * Zero residential props, zero windows, zero balconies, zero awnings.
  */
 export function createTowerFoundation(): { group: THREE.Group } {
   const mats = getArchMaterials();
   const group = new THREE.Group();
   group.name = 'TowerFoundation';
 
-  const fw = GAME_CONFIG.BASE_WIDTH * 1.35;
-  const fd = GAME_CONFIG.BASE_DEPTH * 1.35;
-  const fh = GAME_CONFIG.FOUNDATION_HEIGHT;
+  const fw = GAME_CONFIG.BASE_WIDTH * GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE;
+  const fd = GAME_CONFIG.BASE_DEPTH * GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE;
 
-  // Solid concrete base pedestal
-  const baseGeo = new THREE.BoxGeometry(fw, fh, fd);
-  const baseMesh = new THREE.Mesh(baseGeo, mats.concreteLight);
-  baseMesh.position.y = fh / 2 - 6.0;
-  baseMesh.castShadow = true;
-  baseMesh.receiveShadow = true;
-  group.add(baseMesh);
+  // 1. FOUNDATION / SUB-BASE: Stepped spread footing anchored into the city ground (Y: -6.0 to -3.8)
+  const footingH = 1.8;
+  const footingW = fw * 1.35;
+  const footingD = fd * 1.35;
+  const footingMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(footingW, footingH, footingD),
+    mats.concreteWarm
+  );
+  footingMesh.position.set(0, -6.0 + footingH / 2, 0);
+  footingMesh.castShadow = true;
+  footingMesh.receiveShadow = true;
+  group.add(footingMesh);
 
-  // Grand lobby glass entrance on ground level
-  const lobbyGlassGeo = new THREE.BoxGeometry(fw * 0.75, 2.6, 0.12);
-  const lobbyGlass = new THREE.Mesh(lobbyGlassGeo, mats.glassWarmLit);
-  lobbyGlass.position.set(0, 1.3 - 6.0, fd / 2 + 0.04);
-  lobbyGlass.castShadow = true;
-  group.add(lobbyGlass);
+  // Stepped transition collar plinth (Y: -4.2 to -3.8)
+  const plinthH = 0.4;
+  const plinthW = fw * 1.15;
+  const plinthD = fd * 1.15;
+  const plinthMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(plinthW, plinthH, plinthD),
+    mats.concreteDark
+  );
+  plinthMesh.position.set(0, -4.0, 0);
+  plinthMesh.castShadow = true;
+  plinthMesh.receiveShadow = true;
+  group.add(plinthMesh);
 
-  // Entrance canopy
-  const canopy = new THREE.Mesh(new THREE.BoxGeometry(fw * 0.85, 0.18, 1.8), mats.blackMetal);
-  canopy.position.set(0, 2.65 - 6.0, fd / 2 + 0.9);
-  canopy.castShadow = true;
-  group.add(canopy);
+  // 2. CONCRETE CORE: Heavy raw structural monolith (Y: -3.8 to -0.22)
+  const coreH = 3.58;
+  const coreMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(fw, coreH, fd),
+    mats.concreteLight
+  );
+  coreMesh.position.set(0, -3.8 + coreH / 2, 0);
+  coreMesh.castShadow = true;
+  coreMesh.receiveShadow = true;
+  group.add(coreMesh);
 
-  // Steel entrance pillars
-  [-fw * 0.38, fw * 0.38].forEach((px) => {
-    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 2.6, 12), mats.blackMetal);
-    col.position.set(px, 1.3 - 6.0, fd / 2 + 1.7);
+  // Heavy vertical structural steel corner pilasters
+  const cornerSize = 0.16;
+  const cornerOffsetX = fw / 2 - cornerSize / 2;
+  const cornerOffsetZ = fd / 2 - cornerSize / 2;
+  [
+    [-cornerOffsetX, -cornerOffsetZ],
+    [cornerOffsetX, -cornerOffsetZ],
+    [-cornerOffsetX, cornerOffsetZ],
+    [cornerOffsetX, cornerOffsetZ],
+  ].forEach(([cx, cz]) => {
+    const col = new THREE.Mesh(
+      new THREE.BoxGeometry(cornerSize, coreH, cornerSize),
+      mats.blackMetal
+    );
+    col.position.set(cx, -3.8 + coreH / 2, cz);
     col.castShadow = true;
     group.add(col);
   });
 
-  // Top foundation platform rim
-  const rimGeo = new THREE.BoxGeometry(fw + 0.2, 0.25, fd + 0.2);
-  const rimMesh = new THREE.Mesh(rimGeo, mats.blackMetal);
-  rimMesh.position.y = fh - 6.0 - 0.12;
-  rimMesh.castShadow = true;
-  group.add(rimMesh);
+  // Horizontal perimeter steel reinforcement band (waler) around core center
+  const walerMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(fw + 0.04, 0.22, fd + 0.04),
+    mats.blackMetal
+  );
+  walerMesh.position.set(0, -2.0, 0);
+  walerMesh.castShadow = true;
+  group.add(walerMesh);
+
+  // 3. TOP PLATE: Dark structural steel landing platform (Y: -0.22 to 0.00)
+  // Perfectly matches the 75% physical collider boundary (fw x fd) at Y = 0.00
+  const topPlateH = 0.22;
+  const topPlateMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(fw, topPlateH, fd),
+    mats.blackMetal
+  );
+  topPlateMesh.position.set(0, -topPlateH / 2, 0);
+  topPlateMesh.castShadow = true;
+  topPlateMesh.receiveShadow = true;
+  group.add(topPlateMesh);
+
+  // Recessed center landing bed (clear visual target for Floor 1 placement)
+  const targetBedW = fw * 0.82;
+  const targetBedD = fd * 0.82;
+  const targetBedMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(targetBedW, 0.03, targetBedD),
+    mats.concreteDark
+  );
+  targetBedMesh.position.set(0, -0.015, 0);
+  targetBedMesh.receiveShadow = true;
+  group.add(targetBedMesh);
+
+  // 4 corner heavy anchor shoes / shear keys
+  const shoeSize = 0.38;
+  const shoeOffsetX = fw / 2 - shoeSize / 2;
+  const shoeOffsetZ = fd / 2 - shoeSize / 2;
+  [
+    [-shoeOffsetX, -shoeOffsetZ],
+    [shoeOffsetX, -shoeOffsetZ],
+    [-shoeOffsetX, shoeOffsetZ],
+    [shoeOffsetX, shoeOffsetZ],
+  ].forEach(([sx, sz]) => {
+    const shoe = new THREE.Mesh(
+      new THREE.BoxGeometry(shoeSize, 0.06, shoeSize),
+      mats.blackMetal
+    );
+    shoe.position.set(sx, -0.03, sz);
+    shoe.castShadow = true;
+    group.add(shoe);
+  });
 
   return { group };
 }

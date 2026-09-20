@@ -6,7 +6,17 @@ import { CityScenery } from './cityScenery';
 import { CraneSystem } from './crane';
 import { createFloorModule, createTowerFoundation } from './floorGenerator';
 import { selectFloorModule } from './moduleSelector';
-import { getReleaseMomentumMultipliers, getCraneKinematicsForFloor, getDifficultyForFloor, evaluatePlacementQuality } from './difficultyCurve';
+import {
+  getReleaseMomentumMultipliers,
+  getCraneKinematicsForFloor,
+  getDifficultyForFloor,
+  evaluatePlacementQuality,
+  getBaseStabilityAssist,
+  getEarlySlipStrength,
+  getSpeedMultiplierForFloor,
+  getDropHeightMultiplierForFloor,
+  getActualDropDistanceForFloor,
+} from './difficultyCurve';
 import { PhysicsWorld } from './physicsWorld';
 import { GAME_CONFIG } from './constants';
 import { createMotionProfile, ModuleMotionProfile } from './motionProfile';
@@ -331,7 +341,8 @@ export class GameEngine {
     this.camera.lookAt(this.cameraTarget);
 
     // Initialize crane positions (spacious vertical hoist cables and suspended slings)
-    const initialFloorTopY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + 2.3;
+    const initialDropDistance = getActualDropDistanceForFloor(1);
+    const initialFloorTopY = towerTopY + initialDropDistance + 2.3;
     this.currentCraneY = initialFloorTopY + 12.0;
     this.currentHookY = initialFloorTopY + 6.56;
     this.currentTrolleyX = 0;
@@ -436,10 +447,11 @@ export class GameEngine {
 
     const entrySide = this.nextEntrySide || this.selectNextEntrySide();
 
-    // Crane height: above highest placed floor
+    // Crane height: above highest placed floor (scaled by early drop distance curve)
     const towerTopY = this.physics.getTowerTopY();
     const floorH = dimensions.height;
-    const hangingY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + floorH / 2;
+    const dropDistance = getActualDropDistanceForFloor(this.floorCount + 1);
+    const hangingY = towerTopY + dropDistance + floorH / 2;
 
     // Guaranteed off-screen spawn point calculated from active camera view
     const spawnX = this.computeOffscreenSpawnX(entrySide, hangingY);
@@ -530,6 +542,24 @@ export class GameEngine {
     this.logFloorMovementSpeed();
     this.logSuspensionPhysics('SPAWN_ENTRY');
     this.logMotionProfile(this.currentMotionProfile);
+
+    const spawnFloor = this.floorCount + 1;
+    const spawnSpeed = getSpeedMultiplierForFloor(spawnFloor);
+    const spawnAssist = getBaseStabilityAssist(spawnFloor);
+    const spawnGrip = getEarlySlipStrength(spawnFloor);
+    const dropMultiplier = getDropHeightMultiplierForFloor(spawnFloor);
+    const actualDrop = getActualDropDistanceForFloor(spawnFloor);
+    const spawnNominalSpeed = spawnSpeed * 3.8;
+    console.log(
+      `[DifficultyCheck] Spawn Floor: ${spawnFloor} | ` +
+      `EffectiveSpeedMultiplier: ${spawnSpeed.toFixed(2)}x | ` +
+      `EffectiveMovementSpeed: ${spawnNominalSpeed.toFixed(2)} m/s | ` +
+      `DropHeightMultiplier: ${dropMultiplier.toFixed(2)}x | ` +
+      `ActualDropDistance: ${actualDrop.toFixed(2)}m | ` +
+      `FoundationAssist: ${(spawnAssist * 100).toFixed(0)}% | ` +
+      `FoundationFootprintScale: ${GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE} | ` +
+      `EarlySlipStrength: ${spawnGrip.toFixed(2)}`
+    );
   }
 
   public static readonly DROP_ZONE_X_MAX = 8.5;
@@ -687,7 +717,9 @@ export class GameEngine {
     // Smooth continuous crane body elevation relative to current surviving tower top
     const towerTopY = this.physics.getTowerTopY();
     const activeFloorH = this.hangingFloorDims ? this.hangingFloorDims.height : 2.3;
-    const floorY = towerTopY + GAME_CONFIG.CRANE_CLEARANCE + activeFloorH / 2;
+    const activeFloorNum = this.isFloorHanging ? this.floorCount + 1 : Math.max(1, this.floorCount);
+    const dropDistance = getActualDropDistanceForFloor(activeFloorNum);
+    const floorY = towerTopY + dropDistance + activeFloorH / 2;
     const floorTopY = floorY + activeFloorH / 2;
 
     const targetCraneY = floorTopY + 12.0;
@@ -955,7 +987,7 @@ export class GameEngine {
     } else if (effectiveFeedback === 'RISKY') {
       this.perfectStreak = 0;
       feedbackType = 'RISKY';
-      feedbackMessage = `RISKY! +${pointsAwarded}`;
+      feedbackMessage = 'RISKY!';
       sounds.playCreak();
     } else {
       this.perfectStreak = 0;
@@ -987,6 +1019,26 @@ export class GameEngine {
       type: feedbackType,
       message: feedbackMessage,
     });
+
+    const currentSpeed = getSpeedMultiplierForFloor(this.floorCount);
+    const currentAssist = getBaseStabilityAssist(this.floorCount);
+    const currentGripWindow = getEarlySlipStrength(this.floorCount);
+    const dropMultiplier = getDropHeightMultiplierForFloor(this.floorCount);
+    const actualDrop = getActualDropDistanceForFloor(this.floorCount);
+    const effectiveMovementSpeed = currentSpeed * 3.8;
+
+    console.log(
+      `[DifficultyCheck] Floor: ${this.floorCount} | ` +
+      `EffectiveSpeedMultiplier: ${currentSpeed.toFixed(2)}x | ` +
+      `EffectiveMovementSpeed: ${effectiveMovementSpeed.toFixed(2)} m/s | ` +
+      `DropHeightMultiplier: ${dropMultiplier.toFixed(2)}x | ` +
+      `ActualDropDistance: ${actualDrop.toFixed(2)}m | ` +
+      `FoundationAssist: ${(currentAssist * 100).toFixed(0)}% | ` +
+      `FoundationFootprintScale: ${GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE} | ` +
+      `EarlySlipStrength: ${currentGripWindow.toFixed(2)} | ` +
+      `PlacementQuality: ${effectiveFeedback} | ` +
+      `SupportRatio: ${fallenRec.supportRatio !== undefined ? Number(fallenRec.supportRatio.toFixed(3)) : 'N/A'}`
+    );
 
     this.updateStatsUI();
 
@@ -1024,6 +1076,21 @@ export class GameEngine {
     this.gameOverReason = reason;
     this.state = 'COLLAPSING';
     this.collapseStartTime = performance.now();
+
+    const currentSpeed = getSpeedMultiplierForFloor(this.floorCount);
+    const currentAssist = getBaseStabilityAssist(this.floorCount);
+    const currentGripWindow = getEarlySlipStrength(this.floorCount);
+    const dropMultiplier = getDropHeightMultiplierForFloor(this.floorCount);
+    const actualDrop = getActualDropDistanceForFloor(this.floorCount);
+    console.log(
+      `[DifficultyCheck] Collapse Triggered | Floor: ${this.floorCount} | Reason: ${reason} | ` +
+      `EffectiveSpeedMultiplier: ${currentSpeed.toFixed(2)}x | ` +
+      `DropHeightMultiplier: ${dropMultiplier.toFixed(2)}x | ` +
+      `ActualDropDistance: ${actualDrop.toFixed(2)}m | ` +
+      `FoundationAssist: ${(currentAssist * 100).toFixed(0)}% | ` +
+      `FoundationFootprintScale: ${GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE} | ` +
+      `EarlySlipStrength: ${currentGripWindow.toFixed(2)}`
+    );
 
     // Debug logging matching Requirement 12:
     const activeFloor =

@@ -15,6 +15,7 @@ import {
   getEarlySlipStrength,
   getImpactMomentumRetention,
   evaluatePlacementQuality,
+  getBaseStabilityAssist,
   StabilizationStatus,
 } from './difficultyCurve';
 
@@ -46,6 +47,9 @@ export interface PhysicsFloorRecord {
   rotRetention?: number;
   deadZone?: number;
   extraVeryStableDampingApplied?: boolean;
+  initialPlacementForce?: number;
+  initialLinearDamping?: number;
+  initialAngularDamping?: number;
 }
 
 export class PhysicsWorld {
@@ -56,6 +60,9 @@ export class PhysicsWorld {
   public currentFallingFloor: PhysicsFloorRecord | null = null;
   private foundationBody: CANNON.Body;
   private constraints: CANNON.Constraint[] = [];
+  private foundationConstraint: CANNON.LockConstraint | null = null;
+  private foundationConstraintMaxForce: number = 0;
+  private foundationConstraintInitializedForProgression: boolean = false;
 
   constructor() {
     this.world = new CANNON.World({
@@ -116,9 +123,9 @@ export class PhysicsWorld {
     groundBody.position.set(0, -6.0, 0);
     this.world.addBody(groundBody);
 
-    // Tower Foundation rigid body
-    const fw = (GAME_CONFIG.BASE_WIDTH * 1.3) / 2;
-    const fd = (GAME_CONFIG.BASE_DEPTH * 1.3) / 2;
+    // Tower Foundation rigid body (matches physical and visual 75% footprint scale)
+    const fw = (GAME_CONFIG.BASE_WIDTH * GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE) / 2;
+    const fd = (GAME_CONFIG.BASE_DEPTH * GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE) / 2;
     const fh = GAME_CONFIG.FOUNDATION_HEIGHT / 2;
     this.foundationBody = new CANNON.Body({
       type: CANNON.Body.STATIC,
@@ -494,8 +501,8 @@ export class PhysicsWorld {
 
     let supX = 0;
     let supZ = 0;
-    let supW = GAME_CONFIG.BASE_WIDTH * 1.3;
-    let supD = GAME_CONFIG.BASE_DEPTH * 1.3;
+    let supW = GAME_CONFIG.BASE_WIDTH * GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE;
+    let supD = GAME_CONFIG.BASE_DEPTH * GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE;
     let supBody: CANNON.Body = this.foundationBody;
 
     if (prevRec) {
@@ -567,6 +574,28 @@ export class PhysicsWorld {
     record.body.linearDamping = damping.linear;
     record.body.angularDamping = damping.angular;
 
+    // Foundation ↔ Floor 1 Connection
+    if (record.id === 1) {
+      record.initialPlacementForce = maxForce;
+      record.initialLinearDamping = damping.linear;
+      record.initialAngularDamping = damping.angular;
+
+      // Ensure a LockConstraint exists between Floor 1 and foundationBody.
+      // If maxForce was 0 (NORMAL/RISKY in early game), create it with maxForce: 0
+      // so it registers the exact resting transform without applying artificial early grip.
+      if (!record.lockConstraint) {
+        const lock = new CANNON.LockConstraint(record.body, this.foundationBody, { maxForce: 0 });
+        this.world.addConstraint(lock);
+        record.lockConstraint = lock;
+        this.constraints.push(lock);
+      }
+      this.foundationConstraint = record.lockConstraint;
+      this.foundationConstraintMaxForce = maxForce;
+    }
+
+    // Update progressive foundation stabilization for the current tower floor count
+    this.updateFoundationStabilization(currentFloorCount);
+
     // Enforce Active Physics Window
     const activeWindowSize = getActivePhysicsWindowSize(currentFloorCount);
     this.enforceActivePhysicsWindow(activeWindowSize);
@@ -615,9 +644,110 @@ export class PhysicsWorld {
         AngularSpeedAfterImpact: Number((record.angularSpeedAfterImpact ?? 0).toFixed(3)),
         ExtraVeryStableDampingApplied: extraVeryStableDampingApplied,
       });
+
+      // DEV mode FoundationPhysics diagnostics
+      const floor1 = this.records.find((r) => r.id === 1);
+      const assist = getBaseStabilityAssist(currentFloorCount);
+      const constraintActive =
+        this.foundationConstraint !== null && this.foundationConstraintMaxForce > 0;
+      const constraintMaxForce = this.foundationConstraint ? this.foundationConstraintMaxForce : 0;
+      const f1Pos = floor1 ? floor1.body.position : { x: 0, z: 0 };
+      const f1Rot = floor1
+        ? 2 * Math.atan2(Math.abs(floor1.body.quaternion.y), Math.abs(floor1.body.quaternion.w))
+        : 0;
+      const topRec = this.records[this.records.length - 1];
+      const towerLeanEst =
+        topRec && floor1 && topRec !== floor1
+          ? Math.sqrt(
+              (topRec.body.position.x - f1Pos.x) ** 2 + (topRec.body.position.z - f1Pos.z) ** 2
+            )
+          : 0;
+
+      console.log('[FoundationPhysics]', {
+        TowerFloorCount: currentFloorCount,
+        FoundationFootprintScale: GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE,
+        BaseAssistFactor: Number(assist.toFixed(3)),
+        ConstraintActive: constraintActive,
+        ConstraintMaxForce: constraintMaxForce === 0 ? 0 : Number(constraintMaxForce.toExponential(2)),
+        Floor1OffsetX: Number(f1Pos.x.toFixed(3)),
+        Floor1OffsetZ: Number(f1Pos.z.toFixed(3)),
+        Floor1Rotation: Number(f1Rot.toFixed(3)),
+        TowerLeanEstimate: Number(towerLeanEst.toFixed(3)),
+      });
     }
 
     return { supportRatio, status };
+  }
+
+  /**
+   * Progressive Foundation ↔ Floor 1 Stabilization:
+   * Floors 1-15: 0% assistance (full smaller base effect, tower can lean/tip/collapse from bottom).
+   * Floors 16-20: Ramp ~5% to ~18%.
+   * Floors 21-25: Ramp ~25% to ~65%.
+   * Floors 26-30: Ramp ~72% to 100%.
+   * Floors 30+: 100% solid anchor (1.2e7 N).
+   *
+   * CRITICAL:
+   * - Only modifies the Foundation ↔ Floor 1 constraint!
+   * - Does NOT propagate upward to Floor 2, 3, etc.
+   * - Preserves the exact resting transform (position, tilt, rotation) of Floor 1.
+   * - No snap, no auto-center, no auto-straighten.
+   */
+  public updateFoundationStabilization(currentFloorCount: number) {
+    if (!this.foundationConstraint) return;
+
+    const floor1 = this.records.find((r) => r.id === 1);
+    if (!floor1 || floor1.isDetached) return;
+
+    // If Floor 1 is in DANGEROUS status (<25% support), do not save it
+    if (floor1.supportRatio < 0.25) return;
+
+    const assist = getBaseStabilityAssist(currentFloorCount);
+
+    // When assistance first begins at Floor 16, re-anchor constraint to Floor 1's
+    // exact achieved transform so that any accumulated early lean is 100% preserved
+    // with ZERO snap, jerk, or rotation jump!
+    if (currentFloorCount >= 16 && !this.foundationConstraintInitializedForProgression) {
+      this.reanchorFoundationConstraint(floor1);
+      this.foundationConstraintInitializedForProgression = true;
+    }
+
+    const BASE_MAX_ANCHOR_FORCE = 1.2e7; // Firm anchor for 30+ tall towers
+    const progressiveForce = assist * BASE_MAX_ANCHOR_FORCE;
+    const initialForce = floor1.initialPlacementForce ?? 0;
+    const targetForce = Math.max(initialForce, progressiveForce);
+
+    this.foundationConstraintMaxForce = targetForce;
+    for (const eq of this.foundationConstraint.equations) {
+      eq.maxForce = targetForce;
+      eq.minForce = -targetForce;
+    }
+
+    // Blend Floor 1 damping smoothly with progression assistance
+    if (assist > 0) {
+      const initLin = floor1.initialLinearDamping ?? 0.22;
+      const initAng = floor1.initialAngularDamping ?? 0.30;
+      floor1.body.linearDamping = initLin + assist * (0.85 - initLin);
+      floor1.body.angularDamping = initAng + assist * (0.90 - initAng);
+    }
+  }
+
+  private reanchorFoundationConstraint(floor1: PhysicsFloorRecord) {
+    if (this.foundationConstraint) {
+      this.world.removeConstraint(this.foundationConstraint);
+      const idx = this.constraints.indexOf(this.foundationConstraint);
+      if (idx !== -1) this.constraints.splice(idx, 1);
+      floor1.lockConstraint = undefined;
+      this.foundationConstraint = null;
+    }
+
+    // Create fresh LockConstraint capturing Floor 1's exact current transform relative to foundationBody
+    const lock = new CANNON.LockConstraint(floor1.body, this.foundationBody, { maxForce: 0 });
+    this.world.addConstraint(lock);
+    floor1.lockConstraint = lock;
+    this.constraints.push(lock);
+    this.foundationConstraint = lock;
+    this.foundationConstraintMaxForce = 0;
   }
 
   /**
@@ -705,6 +835,10 @@ export class PhysicsWorld {
 
     for (let i = 0; i < cutoff; i++) {
       const rec = survivingFloors[i];
+      // Floor 1 is the dynamic anchor to the foundation - it is stabilized via foundationConstraint,
+      // never frozen to world-static!
+      if (rec.id === 1) continue;
+
       if (!rec.isFrozen) {
         // A floor may enter the frozen section ONLY if settled === true,
         // and it has already been stable (not falling or sliding significantly).
@@ -1001,5 +1135,7 @@ export class PhysicsWorld {
     }
     this.records = [];
     this.currentFallingFloor = null;
+    this.foundationConstraint = null;
+    this.foundationConstraintInitializedForProgression = false;
   }
 }

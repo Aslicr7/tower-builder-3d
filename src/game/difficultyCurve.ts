@@ -47,80 +47,95 @@ export interface DifficultyKnot {
  */
 export const DIFFICULTY_KNOTS: DifficultyKnot[] = [
   { floor: 1,  difficulty: 0.08, speedMult: 1.00, ampX: 1.70, ampZ: 0.12, rotY: 0.04, swayFactor: 0.020, linearMomentum: 0.42, angularMomentum: 0.20 },
-  { floor: 5,  difficulty: 0.12, speedMult: 1.05, ampX: 1.75, ampZ: 0.16, rotY: 0.06, swayFactor: 0.022, linearMomentum: 0.45, angularMomentum: 0.22 },
-  { floor: 10, difficulty: 0.18, speedMult: 1.15, ampX: 1.85, ampZ: 0.22, rotY: 0.08, swayFactor: 0.025, linearMomentum: 0.48, angularMomentum: 0.25 },
-  { floor: 15, difficulty: 0.25, speedMult: 1.25, ampX: 1.98, ampZ: 0.35, rotY: 0.11, swayFactor: 0.029, linearMomentum: 0.52, angularMomentum: 0.28 },
-  { floor: 20, difficulty: 0.32, speedMult: 1.35, ampX: 2.15, ampZ: 0.55, rotY: 0.15, swayFactor: 0.035, linearMomentum: 0.56, angularMomentum: 0.32 },
-  { floor: 25, difficulty: 0.40, speedMult: 1.47, ampX: 2.35, ampZ: 0.75, rotY: 0.20, swayFactor: 0.042, linearMomentum: 0.60, angularMomentum: 0.35 },
-  { floor: 30, difficulty: 0.48, speedMult: 1.60, ampX: 2.55, ampZ: 0.95, rotY: 0.26, swayFactor: 0.050, linearMomentum: 0.64, angularMomentum: 0.38 },
-  { floor: 35, difficulty: 0.56, speedMult: 1.72, ampX: 2.75, ampZ: 1.15, rotY: 0.32, swayFactor: 0.058, linearMomentum: 0.68, angularMomentum: 0.41 },
-  { floor: 40, difficulty: 0.65, speedMult: 1.85, ampX: 2.95, ampZ: 1.35, rotY: 0.38, swayFactor: 0.065, linearMomentum: 0.72, angularMomentum: 0.44 },
-  { floor: 45, difficulty: 0.74, speedMult: 1.95, ampX: 3.12, ampZ: 1.50, rotY: 0.43, swayFactor: 0.070, linearMomentum: 0.75, angularMomentum: 0.46 },
-  { floor: 50, difficulty: 0.83, speedMult: 2.05, ampX: 3.30, ampZ: 1.65, rotY: 0.48, swayFactor: 0.075, linearMomentum: 0.78, angularMomentum: 0.48 },
-  { floor: 55, difficulty: 0.89, speedMult: 2.14, ampX: 3.40, ampZ: 1.72, rotY: 0.50, swayFactor: 0.078, linearMomentum: 0.81, angularMomentum: 0.50 },
-  { floor: 60, difficulty: 0.94, speedMult: 2.21, ampX: 3.48, ampZ: 1.78, rotY: 0.52, swayFactor: 0.080, linearMomentum: 0.83, angularMomentum: 0.52 },
-  { floor: 65, difficulty: 0.97, speedMult: 2.26, ampX: 3.54, ampZ: 1.82, rotY: 0.54, swayFactor: 0.082, linearMomentum: 0.85, angularMomentum: 0.53 },
-  { floor: 70, difficulty: 1.00, speedMult: 2.30, ampX: 3.58, ampZ: 1.86, rotY: 0.55, swayFactor: 0.085, linearMomentum: 0.86, angularMomentum: 0.55 },
-];
-
-// Reference nodes and tangents for monotonic C1 cubic Hermite speed interpolation
-const SPEED_NODES: [number, number, number][] = [
-  // [floor, speedTarget, tangentSlope]
-  [1,  1.00, 0.0125],
-  [5,  1.05, 0.01625],
-  [10, 1.15, 0.0200],
-  [20, 1.35, 0.0225],
-  [30, 1.60, 0.0250],
-  [40, 1.85, 0.0225],
-  [50, 2.05, 0.0200],
+  { floor: 5,  difficulty: 0.12, speedMult: 1.12, ampX: 1.75, ampZ: 0.16, rotY: 0.06, swayFactor: 0.022, linearMomentum: 0.45, angularMomentum: 0.22 },
+  { floor: 10, difficulty: 0.18, speedMult: 1.42, ampX: 1.85, ampZ: 0.22, rotY: 0.08, swayFactor: 0.025, linearMomentum: 0.48, angularMomentum: 0.25 },
+  { floor: 15, difficulty: 0.25, speedMult: 1.65, ampX: 1.98, ampZ: 0.35, rotY: 0.11, swayFactor: 0.029, linearMomentum: 0.52, angularMomentum: 0.28 },
+  { floor: 20, difficulty: 0.32, speedMult: 1.85, ampX: 2.15, ampZ: 0.55, rotY: 0.15, swayFactor: 0.035, linearMomentum: 0.56, angularMomentum: 0.32 },
+  { floor: 25, difficulty: 0.40, speedMult: 2.05, ampX: 2.35, ampZ: 0.75, rotY: 0.20, swayFactor: 0.042, linearMomentum: 0.60, angularMomentum: 0.35 },
+  { floor: 30, difficulty: 0.48, speedMult: 2.20, ampX: 2.55, ampZ: 0.95, rotY: 0.26, swayFactor: 0.050, linearMomentum: 0.64, angularMomentum: 0.38 },
+  { floor: 35, difficulty: 0.56, speedMult: 2.32, ampX: 2.75, ampZ: 1.15, rotY: 0.32, swayFactor: 0.058, linearMomentum: 0.68, angularMomentum: 0.41 },
+  { floor: 40, difficulty: 0.65, speedMult: 2.40, ampX: 2.95, ampZ: 1.35, rotY: 0.38, swayFactor: 0.065, linearMomentum: 0.72, angularMomentum: 0.44 },
+  { floor: 45, difficulty: 0.74, speedMult: 2.45, ampX: 3.12, ampZ: 1.50, rotY: 0.43, swayFactor: 0.070, linearMomentum: 0.75, angularMomentum: 0.46 },
+  { floor: 50, difficulty: 0.83, speedMult: 2.49, ampX: 3.30, ampZ: 1.65, rotY: 0.48, swayFactor: 0.075, linearMomentum: 0.78, angularMomentum: 0.48 },
+  { floor: 55, difficulty: 0.89, speedMult: 2.51, ampX: 3.40, ampZ: 1.72, rotY: 0.50, swayFactor: 0.078, linearMomentum: 0.81, angularMomentum: 0.50 },
+  { floor: 60, difficulty: 0.94, speedMult: 2.53, ampX: 3.48, ampZ: 1.78, rotY: 0.52, swayFactor: 0.080, linearMomentum: 0.83, angularMomentum: 0.52 },
+  { floor: 65, difficulty: 0.97, speedMult: 2.54, ampX: 3.54, ampZ: 1.82, rotY: 0.54, swayFactor: 0.082, linearMomentum: 0.85, angularMomentum: 0.53 },
+  { floor: 70, difficulty: 1.00, speedMult: 2.55, ampX: 3.58, ampZ: 1.86, rotY: 0.55, swayFactor: 0.085, linearMomentum: 0.86, angularMomentum: 0.55 },
 ];
 
 /**
- * Calculates the strictly continuous, monotonic speed multiplier based on the placed floor count.
- * Every successfully placed floor increases the speed of the next floor:
- * S(N + 1) > S(N) for all N >= 1.
+ * Calculates the authoritative, strictly monotonic speed multiplier based on the placed floor count:
  * 
- * Progression targets:
- * - Floor 1:   1.00x
- * - Floor 5:   1.05x
- * - Floor 10:  1.15x
- * - Floor 20:  1.35x
- * - Floor 30:  1.60x
- * - Floor 40:  1.85x
- * - Floor 50:  2.05x
- * - Floor 50+: Continuous diminishing asymptotic approach toward a soft cap of 2.45x.
- *   C^1 continuous derivative at Floor 50 (slope matches 0.020/floor).
+ * Target progression:
+ * Floors 1–4 (introductory phase, gentle learning progression):
+ * - Floor 1: 1.00x
+ * - Floor 2: 1.02x
+ * - Floor 3: 1.04x
+ * - Floor 4: 1.06x
+ * 
+ * From Floor 5 (noticeable beginning of real difficulty, increases noticeably EVERY floor):
+ * - Floor 5:  1.12x (+0.06 step)
+ * - Floor 6:  1.18x (+0.06)
+ * - Floor 7:  1.24x (+0.06)
+ * - Floor 8:  1.30x (+0.06)
+ * - Floor 9:  1.36x (+0.06)
+ * - Floor 10: 1.42x (+0.06)
+ * 
+ * Floors 11–30 (continual smooth progression):
+ * - Floor 15: ~1.65x
+ * - Floor 20: ~1.85x
+ * - Floor 25: ~2.05x
+ * - Floor 30: ~2.20x
+ * 
+ * Floors 30+: Progressively reduce growth rate, approaching a soft cap (~2.55x).
+ * Continuous C^1 derivative at Floor 30 (slope matches 0.030/floor).
+ * For every floor N: speed(N + 1) > speed(N) strictly holds. Zero plateaus.
  */
 export function getSpeedMultiplierForFloor(floorNumber: number): number {
   if (floorNumber <= 1) return 1.00;
-  if (floorNumber >= 50) {
-    const s50 = 2.05;
-    const sCap = 2.45;
-    const k = 0.020 / (sCap - s50);
-    const m = floorNumber - 50;
-    return sCap - (sCap - s50) * Math.exp(-k * m);
+
+  // Floors 1–4: Gentle learning progression (+0.02/floor)
+  if (floorNumber <= 4) {
+    return 1.00 + (floorNumber - 1) * 0.02;
   }
 
-  for (let i = 0; i < SPEED_NODES.length - 1; i++) {
-    const [x0, y0, m0] = SPEED_NODES[i];
-    const [x1, y1, m1] = SPEED_NODES[i + 1];
-    if (floorNumber >= x0 && floorNumber <= x1) {
-      const h = x1 - x0;
-      const t = (floorNumber - x0) / h;
-      const t2 = t * t;
-      const t3 = t2 * t;
-
-      // Standard cubic Hermite basis functions
-      const h00 = 2 * t3 - 3 * t2 + 1;
-      const h10 = t3 - 2 * t2 + t;
-      const h01 = -2 * t3 + 3 * t2;
-      const h11 = t3 - t2;
-
-      return h00 * y0 + h10 * h * m0 + h01 * y1 + h11 * h * m1;
-    }
+  // Floor 4 -> 5: Noticeable jump (+0.06 step) into real difficulty
+  if (floorNumber <= 5) {
+    return 1.06 + (floorNumber - 4) * 0.06;
   }
 
-  return 2.05;
+  // Floors 5–10: Noticeable increase every floor (+0.06/floor)
+  if (floorNumber <= 10) {
+    return 1.12 + (floorNumber - 5) * 0.06;
+  }
+
+  // Floors 10–15: Smooth progression to ~1.65x (+0.046/floor)
+  if (floorNumber <= 15) {
+    return 1.42 + (floorNumber - 10) * ((1.65 - 1.42) / 5);
+  }
+
+  // Floors 15–20: Smooth progression to ~1.85x (+0.040/floor)
+  if (floorNumber <= 20) {
+    return 1.65 + (floorNumber - 15) * ((1.85 - 1.65) / 5);
+  }
+
+  // Floors 20–25: Smooth progression to ~2.05x (+0.040/floor)
+  if (floorNumber <= 25) {
+    return 1.85 + (floorNumber - 20) * ((2.05 - 1.85) / 5);
+  }
+
+  // Floors 25–30: Smooth progression to ~2.20x (+0.030/floor)
+  if (floorNumber <= 30) {
+    return 2.05 + (floorNumber - 25) * ((2.20 - 2.05) / 5);
+  }
+
+  // Floors 30+: Progressively diminishing growth rate approaching soft cap of 2.55x.
+  // Maintains C^1 continuity with preceding slope (0.030/floor).
+  const s30 = 2.20;
+  const sCap = 2.55;
+  const k = 0.030 / (sCap - s30); // ~0.085714
+  const m = floorNumber - 30;
+  return sCap - (sCap - s30) * Math.exp(-k * m);
 }
 
 /**
@@ -216,6 +231,64 @@ export function getReleaseMomentumMultipliers(floorNumber: number): {
 }
 
 export type StabilizationStatus = 'VERY_STABLE' | 'STABLE' | 'RISKY' | 'DANGEROUS';
+
+/**
+ * Drop Height Multiplier progression across floors:
+ * Floors 1–4: ~1.40x (extra drop distance gives horizontal/angular swing more time to manifest)
+ * Floors 5–8: 1.38x -> 1.32x (gradual taper begins)
+ * Floors 9–10: 1.28x -> 1.25x
+ * Floor 12: ~1.20x
+ * Floor 15: ~1.14x
+ * Floor 18: ~1.08x
+ * Floor 20: ~1.04x
+ * Floor 21+: exactly 1.00x (returns to current normal suspended-floor drop distance with no jumps)
+ */
+export const DROP_HEIGHT_KEYFRAMES: Record<number, number> = {
+  1: 1.40,
+  2: 1.40,
+  3: 1.40,
+  4: 1.40,
+  5: 1.38,
+  6: 1.36,
+  7: 1.34,
+  8: 1.32,
+  9: 1.28,
+  10: 1.25,
+  12: 1.20,
+  15: 1.14,
+  18: 1.08,
+  20: 1.04,
+  21: 1.00,
+};
+
+export function getDropHeightMultiplierForFloor(floorNumber: number): number {
+  if (floorNumber <= 4) return 1.40;
+  if (floorNumber >= 21) return 1.00;
+
+  const fLow = Math.floor(floorNumber);
+  const fHigh = Math.ceil(floorNumber);
+  if (fLow === fHigh && DROP_HEIGHT_KEYFRAMES[fLow] !== undefined) {
+    return DROP_HEIGHT_KEYFRAMES[fLow];
+  }
+
+  const keys = Object.keys(DROP_HEIGHT_KEYFRAMES)
+    .map(Number)
+    .sort((a, b) => a - b);
+  for (let i = 0; i < keys.length - 1; i++) {
+    const k0 = keys[i];
+    const k1 = keys[i + 1];
+    if (floorNumber >= k0 && floorNumber <= k1) {
+      const t = (floorNumber - k0) / (k1 - k0);
+      return DROP_HEIGHT_KEYFRAMES[k0] + t * (DROP_HEIGHT_KEYFRAMES[k1] - DROP_HEIGHT_KEYFRAMES[k0]);
+    }
+  }
+
+  return 1.00;
+}
+
+export function getActualDropDistanceForFloor(floorNumber: number): number {
+  return GAME_CONFIG.CRANE_CLEARANCE * getDropHeightMultiplierForFloor(floorNumber);
+}
 
 /**
  * Authoritative placement quality evaluator matching GAME_CONFIG scoring thresholds.
@@ -582,18 +655,68 @@ export function getSettledDampingForFloor(
 }
 
 /**
- * Active Physics Window scaling (Part C10):
- * Floor 1-20:  4 active upper floors
- * Floor 21-35: 5
- * Floor 36-50: 6
- * Floor 51-65: 7
- * Floor 66+:   8 (capped at 8)
+ * Progressive Foundation Stabilization Assistance (Floors 1-30+):
+ * - Floors 1-15: 0% assistance (full smaller base effect, tower can lean/tip/collapse from bottom)
+ * - Floor 16: ~5% (0.05)
+ * - Floor 18: ~10% (0.10)
+ * - Floor 20: ~18% (0.18)
+ * - Floor 21: ~25% (0.25)
+ * - Floor 22: ~35% (0.35)
+ * - Floor 23: ~45% (0.45)
+ * - Floor 24: ~55% (0.55)
+ * - Floor 25: ~65% (0.65)
+ * - Floor 26: ~72% (0.72)
+ * - Floor 27: ~80% (0.80)
+ * - Floor 28: ~88% (0.88)
+ * - Floor 29: ~95% (0.95)
+ * - Floor 30+: 100% (1.00)
+ */
+export const BASE_STABILITY_ASSIST_KEYFRAMES: Record<number, number> = {
+  1: 0.0,
+  15: 0.0,
+  16: 0.05,
+  17: 0.075,
+  18: 0.10,
+  19: 0.14,
+  20: 0.18,
+  21: 0.25,
+  22: 0.35,
+  23: 0.45,
+  24: 0.55,
+  25: 0.65,
+  26: 0.72,
+  27: 0.80,
+  28: 0.88,
+  29: 0.95,
+  30: 1.0,
+};
+
+export function getBaseStabilityAssist(floorNumber: number): number {
+  if (floorNumber <= 15) return 0.0;
+  if (floorNumber >= 30) return 1.0;
+
+  const fLow = Math.floor(floorNumber);
+  const fHigh = Math.ceil(floorNumber);
+  if (fLow === fHigh) {
+    return BASE_STABILITY_ASSIST_KEYFRAMES[fLow] ?? 0.0;
+  }
+  const vLow = BASE_STABILITY_ASSIST_KEYFRAMES[fLow] ?? 0.0;
+  const vHigh = BASE_STABILITY_ASSIST_KEYFRAMES[fHigh] ?? 0.0;
+  const frac = floorNumber - fLow;
+  return vLow + frac * (vHigh - vLow);
+}
+
+/**
+ * Active Physics Window scaling:
+ * Floors 1-15: All floors remain dynamic (window size 16) so early tower center-of-mass
+ *              can physically lean, tip, or collapse on the smaller foundation.
+ * Floors 16-25: 8 active dynamic upper floors.
+ * Floors 26+: 6 active dynamic upper floors.
  */
 export function getActivePhysicsWindowSize(floorNumber: number): number {
-  if (floorNumber <= 20) return 4;
-  if (floorNumber <= 35) return 5;
-  if (floorNumber <= 50) return 6;
-  if (floorNumber <= 65) return 7;
-  return 8;
+  if (floorNumber <= 15) return 16;
+  if (floorNumber <= 25) return 8;
+  return 6;
 }
+
 

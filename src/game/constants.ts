@@ -4,6 +4,7 @@ export const GAME_CONFIG = {
   BASE_DEPTH: 4.2,
   BASE_HEIGHT: 2.3,
   FOUNDATION_HEIGHT: 6.0,
+  FOUNDATION_FOOTPRINT_SCALE: 0.75, // 75% of normal floor footprint width & depth
   
   // Height metric ratio (matches reference image: ~26m per floor)
   METERS_PER_FLOOR: 26.0,
@@ -23,7 +24,7 @@ export const GAME_CONFIG = {
   CRANE_MIN_ROTATION_Y: 0.05, // ~3 degrees
   CRANE_MAX_ROTATION_Y: 0.38, // ~22 degrees
   CRANE_MIN_SPEED: 0.75,
-  CRANE_MAX_SPEED: 1.65,
+  CRANE_MAX_SPEED: 2.55,
   
   // Physics parameters - ZERO BOUNCE, HIGH FRICTION & DAMPING
   GRAVITY: -28.0,

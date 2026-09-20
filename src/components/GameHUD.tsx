@@ -195,6 +195,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({
                 ? 'bg-amber-500/90 text-amber-50 border-amber-300 shadow-amber-500/50'
                 : feedback.type === 'GREAT'
                 ? 'bg-emerald-500/90 text-white border-emerald-300 shadow-emerald-500/40'
+                : feedback.type === 'RISKY'
+                ? 'bg-red-600 text-white border-red-400 shadow-[0_4px_20px_rgba(220,38,38,0.55)]'
                 : 'bg-slate-900/85 text-white border-white/20 shadow-slate-950/40'
             }`}
           >
