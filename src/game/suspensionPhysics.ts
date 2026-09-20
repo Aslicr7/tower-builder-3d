@@ -43,6 +43,11 @@ export interface SuspensionConfig {
   suspensionHeight: number;
   maxSwingDist: number;
   initialAngularOffset?: number;
+  zInfluence?: number;
+  riggingDir?: number;
+  suspensionPlaneBiasZ?: number;
+  initialOffsetZ?: number;
+  initialVelocityZ?: number;
 }
 
 export class SuspensionSimulator {
@@ -58,13 +63,19 @@ export class SuspensionSimulator {
   constructor(config: SuspensionConfig) {
     this.config = { ...config };
     this.angularOffsetY = config.initialAngularOffset || 0;
+    this.swingOffsetZ = config.initialOffsetZ || 0;
+    this.swingVelocityZ = config.initialVelocityZ || 0;
   }
 
-  public reset(initialAngularOffset: number = 0) {
+  public reset(
+    initialAngularOffset: number = 0,
+    initialOffsetZ: number = 0,
+    initialVelocityZ: number = 0
+  ) {
     this.swingOffsetX = 0;
-    this.swingOffsetZ = 0;
+    this.swingOffsetZ = initialOffsetZ;
     this.swingVelocityX = 0;
-    this.swingVelocityZ = 0;
+    this.swingVelocityZ = initialVelocityZ;
     this.angularOffsetY = initialAngularOffset;
     this.angularVelocityY = 0;
   }
@@ -84,17 +95,38 @@ export class SuspensionSimulator {
   ): SuspensionState {
     const stepDt = Math.min(Math.max(dt, 0.001), 0.05);
 
+    const biasZ = this.config.suspensionPlaneBiasZ ?? 0;
+    const invNormBias = 1.0 / (1.0 + biasZ * biasZ);
+
+    // Dynamic inertial excitation on the 3D suspension:
+    // Trolley traversal acceleration along X projects primarily into X and via the suspension plane orientation into Z.
+    // In steady cruise (trolleyAccX = 0), this is 0; during offscreen entry, turnaround, and S-curve modulation it smoothly excites the 3D pendulum.
+    const accExtX = -trolleyAccX * invNormBias * this.config.inertiaFactor;
+    const accExtZ =
+      -trolleyAccX * (biasZ * invNormBias) * this.config.inertiaFactor -
+      trolleyAccZ * this.config.inertiaFactor;
+
+    // Cross-axis physical restoring stiffness from rectangular 4-sling attachment & suspension skew:
+    // When the load swings along X, the skewed suspension plane and rectangular geometry difference
+    // (springKX vs springKZ) naturally exerts a continuous restoring force on Z, and vice versa.
+    const crossK =
+      this.config.springKX * biasZ * 0.42 +
+      (this.config.springKX - this.config.springKZ) * 0.5 * Math.sin(2 * this.angularOffsetY + 0.35);
+
     // Dynamic acceleration on the suspended module (relative to support point)
-    // Support acceleration exerts opposite inertial influence on the relative offset
+    // Primary X axis
     const accX =
       -this.config.springKX * this.swingOffsetX -
-      this.config.damping * this.swingVelocityX -
-      trolleyAccX * this.config.inertiaFactor;
+      crossK * this.swingOffsetZ -
+      this.config.damping * this.swingVelocityX +
+      accExtX;
 
+    // Secondary Z axis (depth)
     const accZ =
       -this.config.springKZ * this.swingOffsetZ -
-      this.config.damping * this.swingVelocityZ -
-      trolleyAccZ * this.config.inertiaFactor;
+      crossK * this.swingOffsetX -
+      this.config.damping * this.swingVelocityZ +
+      accExtZ;
 
     this.swingVelocityX += accX * stepDt;
     this.swingOffsetX += this.swingVelocityX * stepDt;
@@ -128,12 +160,12 @@ export class SuspensionSimulator {
     this.angularVelocityY += rotAccY * stepDt;
     this.angularOffsetY += this.angularVelocityY * stepDt;
 
-    // Compute visual tilt resulting from cable angle
+    // Compute visual tilt resulting from cable angle in 3D
     const rollTilt = -this.swingOffsetX / this.config.suspensionHeight;
     const pitchTilt = this.swingOffsetZ / this.config.suspensionHeight;
     const yawRot = this.angularOffsetY;
 
-    // Natural vertical lift due to cable geometry
+    // Natural vertical lift due to spherical cable geometry
     const liftY = (this.swingOffsetX * this.swingOffsetX + this.swingOffsetZ * this.swingOffsetZ) / (2 * this.config.suspensionHeight);
 
     return {

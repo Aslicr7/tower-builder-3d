@@ -21,3 +21,35 @@ canvas {
   touch-action: none;
   display: block;
 }
+
+@keyframes orbitSweepLeft {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  35% {
+    transform: translate3d(-7px, -2px, 0);
+  }
+  65% {
+    transform: translate3d(-1px, 0, 0);
+  }
+}
+
+@keyframes orbitSweepRight {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  35% {
+    transform: translate3d(7px, -2px, 0);
+  }
+  65% {
+    transform: translate3d(1px, 0, 0);
+  }
+}
+
+.animate-orbit-sweep-left {
+  animation: orbitSweepLeft 2.2s ease-in-out infinite;
+}
+
+.animate-orbit-sweep-right {
+  animation: orbitSweepRight 2.2s ease-in-out infinite;
+}

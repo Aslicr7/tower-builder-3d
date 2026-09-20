@@ -16,6 +16,8 @@ import {
   getImpactMomentumRetention,
   evaluatePlacementQuality,
   getBaseStabilityAssist,
+  getDropHeightMultiplierForFloor,
+  getActualDropDistanceForFloor,
   StabilizationStatus,
 } from './difficultyCurve';
 
@@ -31,6 +33,15 @@ export interface PhysicsFloorRecord {
   supportRatio: number;
   lockConstraint?: CANNON.LockConstraint;
   expectedSupportY: number;
+  releaseY?: number;
+  dropDistance?: number;
+  dropMultiplier?: number;
+  verticalDistance?: number;
+  impactVelocityY?: number;
+  impactHorizontalSpeed?: number;
+  impactAngularSpeed?: number;
+  postImpactLinearVelocity?: { x: number; y: number; z: number };
+  postImpactAngularVelocity?: { x: number; y: number; z: number };
   stablePosition?: { x: number; y: number; z: number };
   stableY?: number;
   isFrozen?: boolean;
@@ -182,6 +193,10 @@ export class PhysicsWorld {
     body.angularVelocity.set(0, angularVelocityY, 0);
 
     const expectedSupportY = this.getSettledTowerTopY();
+    const dropMultiplier = getDropHeightMultiplierForFloor(id);
+    const dropDistance = getActualDropDistanceForFloor(id);
+    const releaseY = mesh.position.y;
+    const verticalDistance = Math.max(0, releaseY - dimensions.height / 2 - expectedSupportY);
 
     const record: PhysicsFloorRecord = {
       id,
@@ -194,6 +209,10 @@ export class PhysicsWorld {
       lowVelocityDuration: 0,
       supportRatio: 1.0,
       expectedSupportY,
+      releaseY,
+      dropDistance,
+      dropMultiplier,
+      verticalDistance,
     };
 
     // HEAVY CONCRETE IMPACT DAMPING: Zero recoil upward on contact
@@ -205,55 +224,95 @@ export class PhysicsWorld {
     // RISKY: minimal absorption (~0.96 linear, ~0.94 angular retention) -> slides outward!
     // High Floors (30+): smooth transition toward ~0.72 linear absorption to prevent chaotic collapse
     body.addEventListener('collide', () => {
-      if (record.firstContactTime === null) {
+      const isFirstContact = record.firstContactTime === null;
+      if (isFirstContact) {
         record.firstContactTime = performance.now();
-      }
-      // Strictly prevent upward bouncing (restitution = 0)
-      if (body.velocity.y > 0) {
-        body.velocity.y = 0;
-      }
+        record.impactVelocityY = body.velocity.y;
 
-      // Record speeds right before impact retention multiplier
-      const hSpeedAtImpact = Math.sqrt(
-        body.velocity.x * body.velocity.x + body.velocity.z * body.velocity.z
-      );
-      const angSpeedAtImpact = body.angularVelocity.length();
+        // Strictly prevent upward bouncing (restitution = 0)
+        if (body.velocity.y > 0) {
+          body.velocity.y = 0;
+        }
 
-      // Estimate initial placement offset against the supporting floor below
-      let supX = 0;
-      let supZ = 0;
-      for (const r of this.records) {
-        if (r !== record && r.settled && !r.isDetached) {
-          const rTop = r.body.position.y + r.dimensions.height / 2;
-          if (rTop <= body.position.y + 0.5) {
-            supX = r.body.position.x;
-            supZ = r.body.position.z;
+        // Record speeds right before impact retention multiplier
+        const hSpeedAtImpact = Math.sqrt(
+          body.velocity.x * body.velocity.x + body.velocity.z * body.velocity.z
+        );
+        const angSpeedAtImpact = body.angularVelocity.length();
+        record.horizontalSpeedAtImpact = hSpeedAtImpact;
+        record.angularSpeedAtImpact = angSpeedAtImpact;
+
+        // Estimate initial placement offset against the supporting floor below
+        let supX = 0;
+        let supZ = 0;
+        for (const r of this.records) {
+          if (r !== record && r.settled && !r.isDetached) {
+            const rTop = r.body.position.y + r.dimensions.height / 2;
+            if (rTop <= body.position.y + 0.5) {
+              supX = r.body.position.x;
+              supZ = r.body.position.z;
+            }
           }
         }
+        const dx = body.position.x - supX;
+        const dz = body.position.z - supZ;
+        const distOffset = Math.sqrt(dx * dx + dz * dz);
+        const rotOffset = 2 * Math.atan2(Math.abs(body.quaternion.y), Math.abs(body.quaternion.w));
+        const contactQuality = evaluatePlacementQuality(distOffset, rotOffset);
+        record.placementQuality = contactQuality;
+
+        const retention = getImpactMomentumRetention(contactQuality, id);
+        record.impactRetention = retention.linear;
+        record.rotRetention = retention.angular;
+
+        // Apply first-contact momentum retention ONCE on initial impact
+        body.velocity.x *= retention.linear;
+        body.velocity.z *= retention.linear;
+        body.angularVelocity.x *= retention.angular;
+        body.angularVelocity.y *= retention.angular;
+        body.angularVelocity.z *= retention.angular;
+
+        record.horizontalSpeedAfterImpact = Math.sqrt(
+          body.velocity.x * body.velocity.x + body.velocity.z * body.velocity.z
+        );
+        record.angularSpeedAfterImpact = body.angularVelocity.length();
+
+        record.postImpactLinearVelocity = {
+          x: body.velocity.x,
+          y: body.velocity.y,
+          z: body.velocity.z,
+        };
+        record.postImpactAngularVelocity = {
+          x: body.angularVelocity.x,
+          y: body.angularVelocity.y,
+          z: body.angularVelocity.z,
+        };
+
+        if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+          console.debug(
+            `[DropImpact]\n` +
+            `  Floor: ${id}\n` +
+            `  DropDistance: ${record.dropDistance?.toFixed(3) ?? 'N/A'}m\n` +
+            `  DropMultiplier: ${record.dropMultiplier?.toFixed(3) ?? 'N/A'}x\n` +
+            `  ReleaseY: ${record.releaseY?.toFixed(3) ?? 'N/A'}m\n` +
+            `  SupportTopY: ${record.expectedSupportY?.toFixed(3) ?? 'N/A'}m\n` +
+            `  VerticalDistance: ${record.verticalDistance?.toFixed(3) ?? 'N/A'}m\n` +
+            `  ImpactVelocityY: ${record.impactVelocityY?.toFixed(3) ?? 'N/A'} m/s\n` +
+            `  ImpactHorizontalSpeed: ${hSpeedAtImpact.toFixed(3)} m/s\n` +
+            `  ImpactAngularSpeed: ${angSpeedAtImpact.toFixed(3)} rad/s\n` +
+            `  SupportRatio: ${record.supportRatio?.toFixed(3) ?? 'N/A'}\n` +
+            `  PlacementQuality: ${contactQuality}\n` +
+            `  PostImpactLinearVelocity: (${body.velocity.x.toFixed(3)}, ${body.velocity.y.toFixed(3)}, ${body.velocity.z.toFixed(3)}) m/s\n` +
+            `  PostImpactAngularVelocity: (${body.angularVelocity.x.toFixed(3)}, ${body.angularVelocity.y.toFixed(3)}, ${body.angularVelocity.z.toFixed(3)}) rad/s`
+          );
+        }
+      } else {
+        // Subsequent contacts during sliding/settling:
+        // Only prevent upward bouncing without repeatedly multiplying retention
+        if (body.velocity.y > 0) {
+          body.velocity.y = 0;
+        }
       }
-      const dx = body.position.x - supX;
-      const dz = body.position.z - supZ;
-      const distOffset = Math.sqrt(dx * dx + dz * dz);
-      const rotOffset = 2 * Math.atan2(Math.abs(body.quaternion.y), Math.abs(body.quaternion.w));
-      const contactQuality = evaluatePlacementQuality(distOffset, rotOffset);
-      record.placementQuality = contactQuality;
-
-      const retention = getImpactMomentumRetention(contactQuality, id);
-      record.impactRetention = retention.linear;
-      record.rotRetention = retention.angular;
-
-      body.velocity.x *= retention.linear;
-      body.velocity.z *= retention.linear;
-      body.angularVelocity.x *= retention.angular;
-      body.angularVelocity.y *= retention.angular;
-      body.angularVelocity.z *= retention.angular;
-
-      record.horizontalSpeedAtImpact = hSpeedAtImpact;
-      record.horizontalSpeedAfterImpact = Math.sqrt(
-        body.velocity.x * body.velocity.x + body.velocity.z * body.velocity.z
-      );
-      record.angularSpeedAtImpact = angSpeedAtImpact;
-      record.angularSpeedAfterImpact = body.angularVelocity.length();
     });
 
     this.world.addBody(body);
@@ -420,18 +479,13 @@ export class PhysicsWorld {
     }
 
     // Settling Phase Logic:
-    // For floors with active slip (w > 0.40) and NORMAL/RISKY placements, allow active physical motion to complete
-    // before declaring settled, so visible physical sliding/tipping does not get cut short!
     if (firstContactTime !== null) {
       const contactDuration = (now - firstContactTime) / 1000;
-      const w = getEarlySlipStrength(this.currentFallingFloor.id);
-      const quality = this.currentFallingFloor.placementQuality || 'NORMAL';
-      const isEarlyUnsafe = w > 0.40 && (quality === 'NORMAL' || quality === 'RISKY');
 
-      const velThresh = isEarlyUnsafe ? 0.14 : GAME_CONFIG.SETTLING_VELOCITY_THRESH;
-      const angThresh = isEarlyUnsafe ? 0.12 : GAME_CONFIG.SETTLING_ANGULAR_THRESH;
-      const minDuration = isEarlyUnsafe ? 0.35 : 0.20;
-      const minContactTime = isEarlyUnsafe ? 0.70 : GAME_CONFIG.SETTLING_MIN_TIME_S;
+      const velThresh = GAME_CONFIG.SETTLING_VELOCITY_THRESH; // 0.28 m/s
+      const angThresh = GAME_CONFIG.SETTLING_ANGULAR_THRESH;  // 0.24 rad/s
+      const minDuration = 0.20;
+      const minContactTime = GAME_CONFIG.SETTLING_MIN_TIME_S; // 0.55s
 
       if (linearSpeed < velThresh && angularSpeed < angThresh) {
         this.currentFallingFloor.lowVelocityDuration += delta;
@@ -451,11 +505,10 @@ export class PhysicsWorld {
       }
 
       // Safety limit: if contact has lasted >= maxTime and floor is resting safely on a physical surface (ground Y=-6.0)
-      const maxTime = isEarlyUnsafe ? 1.50 : GAME_CONFIG.SETTLING_MAX_TIME_S;
-      const maxSpeed = isEarlyUnsafe ? 0.22 : 0.65;
+      const maxTime = GAME_CONFIG.SETTLING_MAX_TIME_S;
       if (
         contactDuration >= maxTime &&
-        linearSpeed < maxSpeed &&
+        linearSpeed < 0.65 &&
         body.position.y >= -5.5
       ) {
         return { settled: true, missed: false, impactSpeed: linearSpeed, tiltAngle };
@@ -681,7 +734,7 @@ export class PhysicsWorld {
     this.enforceActivePhysicsWindow(activeWindowSize);
 
     // Development-only required debug log (Part 19)
-    if (import.meta.env.DEV) {
+    if (Boolean(import.meta.env?.DEV)) {
       const retention = getImpactMomentumRetention(placementQuality, currentFloorCount);
       const slipStrength = getEarlySlipStrength(currentFloorCount);
       const craneSpeedMult = getSpeedMultiplierForFloor(currentFloorCount);
@@ -725,6 +778,25 @@ export class PhysicsWorld {
         ExtraVeryStableDampingApplied: extraVeryStableDampingApplied,
       });
 
+      if (currentFloorCount <= 16) {
+        const dropDist = getActualDropDistanceForFloor(currentFloorCount);
+        const dropMult = getDropHeightMultiplierForFloor(currentFloorCount);
+        console.log('[EarlyDifficultyCheck]', {
+          Floor: currentFloorCount,
+          EffectiveSpeedMult: Number(craneSpeedMult.toFixed(3)),
+          ActualDropDistance: Number(dropDist.toFixed(3)),
+          DropHeightMult: Number(dropMult.toFixed(3)),
+          PlacementQuality: placementQuality,
+          SupportRatio: Number(supportRatio.toFixed(3)),
+          EarlySlipStrength: Number(slipStrength.toFixed(3)),
+          ImpactLinearRetention: Number((record.impactRetention ?? retention.linear).toFixed(3)),
+          ImpactAngularRetention: Number((record.rotRetention ?? retention.angular).toFixed(3)),
+          SettledLinearDamping: Number(record.body.linearDamping.toFixed(3)),
+          SettledAngularDamping: Number(record.body.angularDamping.toFixed(3)),
+          StabilizationMaxForce: maxForce === 0 ? 0 : Number(maxForce.toExponential(2)),
+        });
+      }
+
       // DEV mode FoundationPhysics diagnostics
       const floor1 = this.records.find((r) => r.id === 1);
       const assist = getBaseStabilityAssist(currentFloorCount);
@@ -754,6 +826,14 @@ export class PhysicsWorld {
         Floor1Rotation: Number(f1Rot.toFixed(3)),
         TowerLeanEstimate: Number(towerLeanEst.toFixed(3)),
       });
+
+      // Diagnostic logging for Floor Progression and Stability Check (Requirement 30)
+      const activeBodies = this.records.filter((r) => !r.isFrozen && !r.isDetached).length;
+      const frozenBodies = this.records.filter((r) => r.isFrozen).length;
+      const detachedBodies = this.records.filter((r) => r.isDetached).length;
+      console.log(
+        `[PhysicsCliffCheck] Floor: ${currentFloorCount} | Quality: ${placementQuality} | Status: ${status} | SupportRatio: ${(supportRatio * 100).toFixed(1)}% | ConstraintForce: ${maxForce.toExponential(2)} | Damping: lin=${damping.linear.toFixed(2)}, ang=${damping.angular.toFixed(2)} | ActiveBodies: ${activeBodies} | FrozenBodies: ${frozenBodies} | Detached: ${detachedBodies}`
+      );
     }
 
     return { supportRatio, status };
@@ -761,11 +841,7 @@ export class PhysicsWorld {
 
   /**
    * Progressive Foundation ↔ Floor 1 Stabilization:
-   * Floors 1-15: 0% assistance (full smaller base effect, tower can lean/tip/collapse from bottom).
-   * Floors 16-20: Ramp ~5% to ~18%.
-   * Floors 21-25: Ramp ~25% to ~65%.
-   * Floors 26-30: Ramp ~72% to 100%.
-   * Floors 30+: 100% solid anchor (1.2e7 N).
+   * Smoothly scales foundation stability with tower height.
    *
    * CRITICAL:
    * - Only modifies the Foundation ↔ Floor 1 constraint!
@@ -786,10 +862,9 @@ export class PhysicsWorld {
 
     const assist = getBaseStabilityAssist(currentFloorCount);
 
-    // When assistance first begins at Floor 16, re-anchor constraint to Floor 1's
-    // exact achieved transform so that any accumulated early lean is 100% preserved
-    // with ZERO snap, jerk, or rotation jump!
-    if (currentFloorCount >= 16 && !this.foundationConstraintInitializedForProgression) {
+    // Re-anchor constraint to Floor 1's exact achieved transform so that any
+    // accumulated early lean is 100% preserved with ZERO snap, jerk, or rotation jump!
+    if (currentFloorCount >= 5 && !this.foundationConstraintInitializedForProgression) {
       this.reanchorFoundationConstraint(floor1);
       this.foundationConstraintInitializedForProgression = true;
     }
@@ -899,6 +974,8 @@ export class PhysicsWorld {
     rec.mesh.quaternion.set(quatX, quatY, quatZ, quatW);
   }
 
+  public isEndgameCollapsing = false;
+
   /**
    * ACTIVE PHYSICS WINDOW (Part C10):
    * Keeps the newest floors fully dynamic based on activeWindowSize.
@@ -908,6 +985,7 @@ export class PhysicsWorld {
    * and ensuring smooth 60fps on mobile for runs of 100-200+ floors!
    */
   public enforceActivePhysicsWindow(customWindowSize?: number) {
+    if (this.isEndgameCollapsing) return;
     const activeWindowSize =
       customWindowSize || getActivePhysicsWindowSize(this.records.filter((r) => r.settled).length);
     // Only count surviving settled floors for the active window cutoff
@@ -917,16 +995,18 @@ export class PhysicsWorld {
 
     for (let i = 0; i < cutoff; i++) {
       const rec = survivingFloors[i];
-      // Floor 1 is the dynamic anchor to the foundation - it is stabilized via foundationConstraint,
-      // never frozen to world-static!
-      if (rec.id === 1) continue;
 
       if (!rec.isFrozen) {
         // A floor may enter the frozen section ONLY if settled === true,
         // and it has already been stable (not falling or sliding significantly).
         const speed = rec.body.velocity.length();
         const angSpeed = rec.body.angularVelocity.length();
-        if (rec.settled && speed < 0.25 && angSpeed < 0.25) {
+        if (rec.settled && speed < 0.35 && angSpeed < 0.35) {
+          if (rec.id === 1 && this.foundationConstraint) {
+            this.world.removeConstraint(this.foundationConstraint);
+            const idx = this.constraints.indexOf(this.foundationConstraint);
+            if (idx !== -1) this.constraints.splice(idx, 1);
+          }
           this.freezeFloor(rec);
         }
       }
@@ -1091,7 +1171,7 @@ export class PhysicsWorld {
           this.world.removeBody(rec.body);
           onRemoveMesh(rec.mesh);
 
-          if (import.meta.env.DEV) {
+          if (Boolean(import.meta.env?.DEV)) {
             console.debug(`[Collapse] Cleaned up fallen floor #${rec.id}`);
           }
           continue; // Do not keep in records
@@ -1179,6 +1259,7 @@ export class PhysicsWorld {
    * Converts all bodies back to dynamic so the entire crooked tower tumbles down!
    */
   public wakeAllForCollapse() {
+    this.isEndgameCollapsing = true;
     for (const c of this.constraints) {
       this.world.removeConstraint(c);
     }
@@ -1208,6 +1289,7 @@ export class PhysicsWorld {
    * Reset physics world
    */
   public reset() {
+    this.isEndgameCollapsing = false;
     for (const c of this.constraints) {
       this.world.removeConstraint(c);
     }

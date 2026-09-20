@@ -1,5 +1,7 @@
 export type GameState = 'START' | 'PLAYING' | 'PAUSED' | 'COLLAPSING' | 'GAMEOVER';
 
+export type CameraMode = 'NORMAL_GAMEPLAY' | 'COLLAPSE_VIEW' | 'GAME_OVER';
+
 export type FloorModuleStyle =
   | 'MODERN_APARTMENT_V1'
   | 'BRICK_APARTMENT'

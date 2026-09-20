@@ -55,9 +55,15 @@ export const GAME_CONFIG = {
   SETTLING_VELOCITY_THRESH: 0.28,
   SETTLING_ANGULAR_THRESH: 0.24,
   
-  // Collapse criteria
+  // Collapse criteria & camera observation settings
   COLLAPSE_TILT_LIMIT_RAD: 1.15, // ~66 degrees tilt before active top collapse
   COLLAPSE_FALL_THRESHOLD_Y: -4.0,
-  COLLAPSE_OBSERVE_DURATION_MS: 2400, // let player watch the collapse before menu
+  COLLAPSE_OBSERVE_DURATION_MS: 2400, // legacy fallback duration
+  COLLAPSE_MIN_OBSERVE_DURATION_S: 2.2, // ~2-2.5s minimum viewing time
+  COLLAPSE_MAX_OBSERVE_DURATION_S: 5.0, // ~5.0s maximum viewing ceiling
+  COLLAPSE_SETTLE_REQUIRED_S: 0.6,      // continuous low velocity to consider pile settled
+  COLLAPSE_POST_SETTLE_HOLD_S: 0.8,     // hold camera on settled wreckage before Game Over UI
+  COLLAPSE_GROUND_TARGET_MIN_Y: -2.0,   // sensible clamp to keep foundation & ground in view
+  COLLAPSE_DEAD_ZONE_M: 0.20,           // dead zone to prevent camera jitter from micro-bounces
 };
 

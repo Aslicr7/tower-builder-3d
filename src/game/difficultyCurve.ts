@@ -46,94 +46,104 @@ export interface DifficultyKnot {
  * Floor 70+: diff 1.00, speed 2.65x, ampX 3.58m, ampZ 1.86m, rotY 0.55 rad, linear 0.86, angular 0.55
  */
 export const DIFFICULTY_KNOTS: DifficultyKnot[] = [
-  { floor: 1,  difficulty: 0.08, speedMult: 1.00, ampX: 1.70, ampZ: 0.12, rotY: 0.04, swayFactor: 0.020, linearMomentum: 0.42, angularMomentum: 0.20 },
-  { floor: 5,  difficulty: 0.12, speedMult: 1.12, ampX: 1.75, ampZ: 0.16, rotY: 0.06, swayFactor: 0.022, linearMomentum: 0.45, angularMomentum: 0.22 },
-  { floor: 10, difficulty: 0.18, speedMult: 1.42, ampX: 1.85, ampZ: 0.22, rotY: 0.08, swayFactor: 0.025, linearMomentum: 0.48, angularMomentum: 0.25 },
-  { floor: 15, difficulty: 0.25, speedMult: 1.65, ampX: 1.98, ampZ: 0.35, rotY: 0.11, swayFactor: 0.029, linearMomentum: 0.52, angularMomentum: 0.28 },
-  { floor: 20, difficulty: 0.32, speedMult: 1.85, ampX: 2.15, ampZ: 0.55, rotY: 0.15, swayFactor: 0.035, linearMomentum: 0.56, angularMomentum: 0.32 },
-  { floor: 25, difficulty: 0.40, speedMult: 2.05, ampX: 2.35, ampZ: 0.75, rotY: 0.20, swayFactor: 0.042, linearMomentum: 0.60, angularMomentum: 0.35 },
-  { floor: 30, difficulty: 0.48, speedMult: 2.20, ampX: 2.55, ampZ: 0.95, rotY: 0.26, swayFactor: 0.050, linearMomentum: 0.64, angularMomentum: 0.38 },
-  { floor: 35, difficulty: 0.56, speedMult: 2.32, ampX: 2.75, ampZ: 1.15, rotY: 0.32, swayFactor: 0.058, linearMomentum: 0.68, angularMomentum: 0.41 },
-  { floor: 40, difficulty: 0.65, speedMult: 2.40, ampX: 2.95, ampZ: 1.35, rotY: 0.38, swayFactor: 0.065, linearMomentum: 0.72, angularMomentum: 0.44 },
-  { floor: 45, difficulty: 0.74, speedMult: 2.45, ampX: 3.12, ampZ: 1.50, rotY: 0.43, swayFactor: 0.070, linearMomentum: 0.75, angularMomentum: 0.46 },
-  { floor: 50, difficulty: 0.83, speedMult: 2.49, ampX: 3.30, ampZ: 1.65, rotY: 0.48, swayFactor: 0.075, linearMomentum: 0.78, angularMomentum: 0.48 },
-  { floor: 55, difficulty: 0.89, speedMult: 2.51, ampX: 3.40, ampZ: 1.72, rotY: 0.50, swayFactor: 0.078, linearMomentum: 0.81, angularMomentum: 0.50 },
-  { floor: 60, difficulty: 0.94, speedMult: 2.53, ampX: 3.48, ampZ: 1.78, rotY: 0.52, swayFactor: 0.080, linearMomentum: 0.83, angularMomentum: 0.52 },
-  { floor: 65, difficulty: 0.97, speedMult: 2.54, ampX: 3.54, ampZ: 1.82, rotY: 0.54, swayFactor: 0.082, linearMomentum: 0.85, angularMomentum: 0.53 },
+  { floor: 1,  difficulty: 0.08, speedMult: 1.08, ampX: 1.70, ampZ: 0.12, rotY: 0.04, swayFactor: 0.020, linearMomentum: 0.42, angularMomentum: 0.20 },
+  { floor: 5,  difficulty: 0.12, speedMult: 1.33, ampX: 1.75, ampZ: 0.16, rotY: 0.06, swayFactor: 0.022, linearMomentum: 0.45, angularMomentum: 0.22 },
+  { floor: 10, difficulty: 0.18, speedMult: 1.73, ampX: 1.85, ampZ: 0.22, rotY: 0.08, swayFactor: 0.025, linearMomentum: 0.48, angularMomentum: 0.25 },
+  { floor: 15, difficulty: 0.25, speedMult: 2.08, ampX: 1.98, ampZ: 0.35, rotY: 0.11, swayFactor: 0.029, linearMomentum: 0.52, angularMomentum: 0.28 },
+  { floor: 20, difficulty: 0.32, speedMult: 2.26, ampX: 2.15, ampZ: 0.55, rotY: 0.15, swayFactor: 0.035, linearMomentum: 0.56, angularMomentum: 0.32 },
+  { floor: 25, difficulty: 0.40, speedMult: 2.38, ampX: 2.35, ampZ: 0.75, rotY: 0.20, swayFactor: 0.042, linearMomentum: 0.60, angularMomentum: 0.35 },
+  { floor: 30, difficulty: 0.48, speedMult: 2.45, ampX: 2.55, ampZ: 0.95, rotY: 0.26, swayFactor: 0.050, linearMomentum: 0.64, angularMomentum: 0.38 },
+  { floor: 35, difficulty: 0.56, speedMult: 2.48, ampX: 2.75, ampZ: 1.15, rotY: 0.32, swayFactor: 0.058, linearMomentum: 0.68, angularMomentum: 0.41 },
+  { floor: 40, difficulty: 0.65, speedMult: 2.50, ampX: 2.95, ampZ: 1.35, rotY: 0.38, swayFactor: 0.065, linearMomentum: 0.72, angularMomentum: 0.44 },
+  { floor: 45, difficulty: 0.74, speedMult: 2.52, ampX: 3.12, ampZ: 1.50, rotY: 0.43, swayFactor: 0.070, linearMomentum: 0.75, angularMomentum: 0.46 },
+  { floor: 50, difficulty: 0.83, speedMult: 2.53, ampX: 3.30, ampZ: 1.65, rotY: 0.48, swayFactor: 0.075, linearMomentum: 0.78, angularMomentum: 0.48 },
+  { floor: 55, difficulty: 0.89, speedMult: 2.54, ampX: 3.40, ampZ: 1.72, rotY: 0.50, swayFactor: 0.078, linearMomentum: 0.81, angularMomentum: 0.50 },
+  { floor: 60, difficulty: 0.94, speedMult: 2.545, ampX: 3.48, ampZ: 1.78, rotY: 0.52, swayFactor: 0.080, linearMomentum: 0.83, angularMomentum: 0.52 },
+  { floor: 65, difficulty: 0.97, speedMult: 2.55, ampX: 3.54, ampZ: 1.82, rotY: 0.54, swayFactor: 0.082, linearMomentum: 0.85, angularMomentum: 0.53 },
   { floor: 70, difficulty: 1.00, speedMult: 2.55, ampX: 3.58, ampZ: 1.86, rotY: 0.55, swayFactor: 0.085, linearMomentum: 0.86, angularMomentum: 0.55 },
 ];
 
 /**
- * Calculates the authoritative, strictly monotonic speed multiplier based on the placed floor count:
- * 
- * Target progression:
- * Floors 1–4 (introductory phase, gentle learning progression):
- * - Floor 1: 1.00x
- * - Floor 2: 1.02x
- * - Floor 3: 1.04x
- * - Floor 4: 1.06x
- * 
- * From Floor 5 (noticeable beginning of real difficulty, increases noticeably EVERY floor):
- * - Floor 5:  1.12x (+0.06 step)
- * - Floor 6:  1.18x (+0.06)
- * - Floor 7:  1.24x (+0.06)
- * - Floor 8:  1.30x (+0.06)
- * - Floor 9:  1.36x (+0.06)
- * - Floor 10: 1.42x (+0.06)
- * 
- * Floors 11–30 (continual smooth progression):
- * - Floor 15: ~1.65x
- * - Floor 20: ~1.85x
- * - Floor 25: ~2.05x
- * - Floor 30: ~2.20x
- * 
- * Floors 30+: Progressively reduce growth rate, approaching a soft cap (~2.55x).
- * Continuous C^1 derivative at Floor 30 (slope matches 0.030/floor).
- * For every floor N: speed(N + 1) > speed(N) strictly holds. Zero plateaus.
+ * Exact target speed progression for early game:
+ * Floor 1  = 1.08x
+ * Floor 2  = 1.13x
+ * Floor 3  = 1.18x
+ * Floor 4  = 1.25x
+ * Floor 5  = 1.33x
+ * Floor 6  = 1.41x
+ * Floor 7  = 1.49x
+ * Floor 8  = 1.57x
+ * Floor 9  = 1.65x
+ * Floor 10 = 1.73x
+ * Floor 11 = 1.80x
+ * Floor 12 = 1.87x
+ * Floor 13 = 1.94x
+ * Floor 14 = 2.01x
+ * Floor 15 = 2.08x
+ */
+export const EARLY_SPEED_TABLE: Record<number, number> = {
+  1: 1.08,
+  2: 1.13,
+  3: 1.18,
+  4: 1.25,
+  5: 1.33,
+  6: 1.41,
+  7: 1.49,
+  8: 1.57,
+  9: 1.65,
+  10: 1.73,
+  11: 1.80,
+  12: 1.87,
+  13: 1.94,
+  14: 2.01,
+  15: 2.08,
+};
+
+/**
+ * Calculates the authoritative, strictly monotonic speed multiplier based on the placed floor count.
+ * Single source of truth — NO double speed multiplier.
+ * Smoothly transitions Floor 15 (2.08x) into Floor 16 (2.13x) and connects to late-game curve.
  */
 export function getSpeedMultiplierForFloor(floorNumber: number): number {
-  if (floorNumber <= 1) return 1.00;
+  if (floorNumber <= 1) return 1.08;
 
-  // Floors 1–4: Gentle learning progression (+0.02/floor)
-  if (floorNumber <= 4) {
-    return 1.00 + (floorNumber - 1) * 0.02;
-  }
-
-  // Floor 4 -> 5: Noticeable jump (+0.06 step) into real difficulty
-  if (floorNumber <= 5) {
-    return 1.06 + (floorNumber - 4) * 0.06;
-  }
-
-  // Floors 5–10: Noticeable increase every floor (+0.06/floor)
-  if (floorNumber <= 10) {
-    return 1.12 + (floorNumber - 5) * 0.06;
-  }
-
-  // Floors 10–15: Smooth progression to ~1.65x (+0.046/floor)
+  // Exact target speed progression for Floors 1–15
   if (floorNumber <= 15) {
-    return 1.42 + (floorNumber - 10) * ((1.65 - 1.42) / 5);
+    const fLow = Math.floor(floorNumber);
+    const fHigh = Math.ceil(floorNumber);
+    if (fLow === fHigh) {
+      return EARLY_SPEED_TABLE[fLow] ?? 1.08;
+    }
+    const vLow = EARLY_SPEED_TABLE[fLow] ?? 1.08;
+    const vHigh = EARLY_SPEED_TABLE[fHigh] ?? 2.08;
+    return vLow + (floorNumber - fLow) * (vHigh - vLow);
   }
 
-  // Floors 15–20: Smooth progression to ~1.85x (+0.040/floor)
+  // Floor 15 -> 16 smooth transition (+0.05 step to 2.13x)
+  if (floorNumber <= 16) {
+    return 2.08 + (floorNumber - 15) * (2.13 - 2.08);
+  }
+
+  // Floors 16–20: smooth transition into later game (2.13x -> 2.26x)
   if (floorNumber <= 20) {
-    return 1.65 + (floorNumber - 15) * ((1.85 - 1.65) / 5);
+    return 2.13 + (floorNumber - 16) * ((2.26 - 2.13) / 4);
   }
 
-  // Floors 20–25: Smooth progression to ~2.05x (+0.040/floor)
+  // Floors 20–25: smooth progression (2.26x -> 2.38x)
   if (floorNumber <= 25) {
-    return 1.85 + (floorNumber - 20) * ((2.05 - 1.85) / 5);
+    return 2.26 + (floorNumber - 20) * ((2.38 - 2.26) / 5);
   }
 
-  // Floors 25–30: Smooth progression to ~2.20x (+0.030/floor)
+  // Floors 25–30: smooth progression (2.38x -> 2.45x)
   if (floorNumber <= 30) {
-    return 2.05 + (floorNumber - 25) * ((2.20 - 2.05) / 5);
+    return 2.38 + (floorNumber - 25) * ((2.45 - 2.38) / 5);
   }
 
   // Floors 30+: Progressively diminishing growth rate approaching soft cap of 2.55x.
-  // Maintains C^1 continuity with preceding slope (0.030/floor).
-  const s30 = 2.20;
+  // Maintains C^1 continuity with preceding slope (0.014/floor).
+  const s30 = 2.45;
   const sCap = 2.55;
-  const k = 0.030 / (sCap - s30); // ~0.085714
+  const k = 0.014 / (sCap - s30); // 0.14
   const m = floorNumber - 30;
   return sCap - (sCap - s30) * Math.exp(-k * m);
 }
@@ -195,20 +205,64 @@ export function getDifficultyForFloor(floorNumber: number): number {
 }
 
 /**
+ * Authoritative Z-influence factor for 3D suspended load dynamics.
+ * Represents the relative secondary-axis (Z depth) coupling/amplitude relative to primary X traversal.
+ * 
+ * Target progression:
+ * Floor 1 = 0.05
+ * Floor 2 = 0.07
+ * Floor 3 = 0.10
+ * Floor 4 = 0.14
+ * Floor 5 = 0.18
+ * Floor 6 = 0.22
+ * Floor 7 = 0.27
+ * Floor 8 = 0.32
+ * Floor 1 = 0.12
+ * Floor 2 = 0.15
+ * Floor 5 = 0.26
+ * Floor 10 = 0.48
+ * Floors 11–15: smoothly approach ~0.54
+ * Floors 16–25: smoothly approach ~0.60
+ * Floors 25+: soft-capped at 0.60 to remain skill-based, readable, and bounded.
+ */
+export function getZInfluenceForFloor(floorNumber: number): number {
+  if (floorNumber <= 1) return 0.12;
+  if (floorNumber === 2) return 0.15;
+  if (floorNumber === 3) return 0.18;
+  if (floorNumber === 4) return 0.22;
+  if (floorNumber === 5) return 0.26;
+  if (floorNumber === 6) return 0.31;
+  if (floorNumber === 7) return 0.36;
+  if (floorNumber === 8) return 0.40;
+  if (floorNumber === 9) return 0.44;
+  if (floorNumber === 10) return 0.48;
+  if (floorNumber <= 15) {
+    return 0.48 + (floorNumber - 10) * ((0.54 - 0.48) / 5);
+  }
+  if (floorNumber <= 25) {
+    return 0.54 + (floorNumber - 15) * ((0.60 - 0.54) / 10);
+  }
+  return 0.60;
+}
+
+/**
  * Returns crane kinematics parameters for a given floor number.
  */
 export function getCraneKinematicsForFloor(floorNumber: number): {
   speedMult: number;
   ampX: number;
   ampZ: number;
+  zInfluence: number;
   rotY: number;
   swayFactor: number;
 } {
   const knot = getDifficultyKnotForFloor(floorNumber);
+  const zInfluence = getZInfluenceForFloor(floorNumber);
   return {
     speedMult: knot.speedMult,
     ampX: knot.ampX,
     ampZ: knot.ampZ,
+    zInfluence,
     rotY: knot.rotY,
     swayFactor: knot.swayFactor,
   };
@@ -234,34 +288,50 @@ export type StabilizationStatus = 'VERY_STABLE' | 'STABLE' | 'RISKY' | 'DANGEROU
 
 /**
  * Drop Height Multiplier progression across floors:
- * Floors 1–3: 1.75x (very high early drop for noticeable fall time)
- * Floors 4–5: 1.65x (still clearly high)
- * Floors 6–7: 1.55x (moderately high)
- * Floor 8:    1.45x (beginning to approach normal)
- * Floor 9:    1.35x (closer)
- * Floor 10:   1.25x (smooth transition into standard game curve)
- * Floor 11+:  Preserves current existing behavior (Floor 11 ~1.225x, Floor 12 1.20x, Floor 15 1.14x, Floor 18 1.08x, Floor 20 1.04x, Floor 21+ 1.00x)
+ * Floor 1  = 2.00x
+ * Floor 2  = 2.00x
+ * Floor 3  = 1.95x
+ * Floor 4  = 1.90x
+ * Floor 5  = 1.85x
+ * Floor 6  = 1.80x
+ * Floor 7  = 1.75x
+ * Floor 8  = 1.70x
+ * Floor 9  = 1.65x
+ * Floor 10 = 1.60x
+ * Floor 11 = 1.50x
+ * Floor 12 = 1.42x
+ * Floor 13 = 1.34x
+ * Floor 14 = 1.26x
+ * Floor 15 = 1.18x
+ * Floor 16 = 1.15x
+ * Floor 18 = 1.08x
+ * Floor 20 = 1.04x
+ * Floor 21+ = 1.00x
  */
 export const DROP_HEIGHT_KEYFRAMES: Record<number, number> = {
-  1: 1.75,
-  2: 1.75,
-  3: 1.75,
-  4: 1.65,
-  5: 1.65,
-  6: 1.55,
-  7: 1.55,
-  8: 1.45,
-  9: 1.35,
-  10: 1.25,
-  12: 1.20,
-  15: 1.14,
+  1: 2.00,
+  2: 2.00,
+  3: 1.95,
+  4: 1.90,
+  5: 1.85,
+  6: 1.80,
+  7: 1.75,
+  8: 1.70,
+  9: 1.65,
+  10: 1.60,
+  11: 1.50,
+  12: 1.42,
+  13: 1.34,
+  14: 1.26,
+  15: 1.18,
+  16: 1.15,
   18: 1.08,
   20: 1.04,
   21: 1.00,
 };
 
 export function getDropHeightMultiplierForFloor(floorNumber: number): number {
-  if (floorNumber <= 1) return 1.75;
+  if (floorNumber <= 1) return 2.00;
   if (floorNumber >= 21) return 1.00;
 
   const fLow = Math.floor(floorNumber);
@@ -405,18 +475,19 @@ export function getEarlyGripFactor(
 
 /**
  * Returns impact momentum retention multipliers (first contact damping).
- * For Floors 1-15:
- * - PERFECT: strong impact absorption (retention ~0.50 linear, ~0.45 angular)
- * - GREAT:   good impact absorption (~0.60 linear, ~0.60 angular)
- * - NORMAL:  less absorption (~0.85 linear, ~0.80 angular) -> release momentum survives contact!
- * - RISKY:   much less absorption (~0.96 linear, ~0.94 angular) -> slides easily!
- * - DANGEROUS: minimal artificial absorption (~0.98 linear, ~0.96 angular)
+ * For Floors 1-15 (Target feel per Part D):
+ * - PERFECT:   horizontal momentum retention ≈ 0.55, angular ≈ 0.50
+ * - GREAT:     horizontal ≈ 0.68, angular ≈ 0.65
+ * - NORMAL:    horizontal ≈ 0.90, angular ≈ 0.86 (release momentum survives contact!)
+ * - RISKY:     horizontal ≈ 0.98, angular ≈ 0.96 (slides outward easily!)
+ * - DANGEROUS: horizontal ≈ 1.00, angular ≈ 0.99 (zero artificial damping)
  *
  * Smoothly transitions from Floor 16 to 35 into baseline high-tower continuous impact damping.
  */
 export function getImpactMomentumRetention(
   quality: PlacementQuality,
-  floorNumber: number
+  floorNumber: number,
+  status?: StabilizationStatus
 ): { linear: number; angular: number } {
   // Baseline high-tower continuous impact damping
   const tImpact = Math.min(Math.max((floorNumber - 1) / 49, 0), 1.0);
@@ -444,23 +515,28 @@ export function getImpactMomentumRetention(
   let targetLat: number;
   let targetRot: number;
 
-  switch (quality) {
-    case 'PERFECT':
-      targetLat = 0.50;
-      targetRot = 0.45;
-      break;
-    case 'GREAT':
-      targetLat = 0.60;
-      targetRot = 0.60;
-      break;
-    case 'NORMAL':
-      targetLat = 0.85;
-      targetRot = 0.80;
-      break;
-    case 'RISKY':
-      targetLat = 0.96;
-      targetRot = 0.94;
-      break;
+  if (status === 'DANGEROUS') {
+    targetLat = 1.00;
+    targetRot = 0.99;
+  } else {
+    switch (quality) {
+      case 'PERFECT':
+        targetLat = 0.55;
+        targetRot = 0.50;
+        break;
+      case 'GREAT':
+        targetLat = 0.68;
+        targetRot = 0.65;
+        break;
+      case 'NORMAL':
+        targetLat = 0.90;
+        targetRot = 0.86;
+        break;
+      case 'RISKY':
+        targetLat = 0.98;
+        targetRot = 0.96;
+        break;
+    }
   }
 
   const linear = (1.0 - w) * highLat + w * targetLat;
@@ -472,16 +548,17 @@ export function getImpactMomentumRetention(
  * Computes the LockConstraint maxForce dynamically based on placement status, support ratio,
  * floor progression, and placement quality.
  *
- * Reverse Assistance & Early-Game Philosophy (Parts 11 & 15):
+ * Reverse Assistance & Early-Game Philosophy (Parts 11 & 15, and Part E):
  * - DANGEROUS (<25% support): Strictly 0 at ALL floors. Real physics dictates collapse.
- * - PERFECT / GREAT: Safe and reliable grip (provided supportRatio >= 0.25).
+ * - PERFECT: limited stabilization allowed (provided supportRatio >= 0.25).
+ * - GREAT: small/moderate stabilization allowed (provided supportRatio >= 0.25).
  * - NORMAL (Floors 1-15): STRICTLY ZERO LockConstraint (maxForce = 0).
+ * - RISKY (Floors 1-15): STRICTLY ZERO LockConstraint (maxForce = 0).
+ * - SUPPORT GEOMETRY ALWAYS WINS: Even PERFECT/GREAT cannot override genuinely poor physical support (<35% support).
  * - NORMAL (Floors 16-20): Still little or no LockConstraint (w=0.98..0.88).
  * - NORMAL (Floors 21-25): Small assistance begins returning (w=0.82..0.52).
  * - NORMAL (Floors 26-35): Progressively restore reasonable stabilization (w=0.44..0.00).
  * - NORMAL (Floor 35+): Normal high-tower support-aware stabilization.
- * - RISKY: Never receives powerful LockConstraint. Strictly 0 during Floors 1-15,
- *   very small/negligible during Floors 16-25, and capped at limited assistance for high floors.
  */
 export function getStabilizationMaxForce(
   status: StabilizationStatus,
@@ -521,7 +598,7 @@ export function getStabilizationMaxForce(
   }
 
   // Cap assistance for RISKY placement quality so off-center/tilted floors
-  // NEVER receive powerful lock constraint (Part 11 & Part 15):
+  // NEVER receive powerful lock constraint:
   if (quality === 'RISKY') {
     if (supportRatio !== undefined && supportRatio < 0.35) {
       highTowerForce = Math.min(highTowerForce, 8.0e4);
@@ -534,23 +611,25 @@ export function getStabilizationMaxForce(
   // NORMAL: NO LockConstraint (0)
   // RISKY: NO LockConstraint (0)
   // DANGEROUS: NO LockConstraint (0)
-  // PERFECT / GREAT: only allowed if supportRatio >= 0.25
+  // PERFECT / GREAT: only allowed if supportRatio >= 0.25, and heavily diminished if supportRatio < 0.35
   let earlyForce = 0;
+  const isMarginalSupport = supportRatio !== undefined && supportRatio < 0.35;
+
   if (quality === 'PERFECT') {
     if (status === 'VERY_STABLE') {
-      earlyForce = 3.0e6;
+      earlyForce = 2.5e6;
     } else if (status === 'STABLE') {
-      earlyForce = 1.8e6;
+      earlyForce = 1.5e6;
     } else if (status === 'RISKY') {
-      earlyForce = 5.0e4;
+      earlyForce = isMarginalSupport ? 0 : 1.5e4;
     }
   } else if (quality === 'GREAT') {
     if (status === 'VERY_STABLE') {
-      earlyForce = 1.8e6;
+      earlyForce = 1.5e6;
     } else if (status === 'STABLE') {
-      earlyForce = 1.0e6;
+      earlyForce = 8.0e5;
     } else if (status === 'RISKY') {
-      earlyForce = 2.5e4;
+      earlyForce = isMarginalSupport ? 0 : 8.0e3;
     }
   } else {
     // NORMAL or RISKY during Floors 1-15: STRICTLY 0 LockConstraint!
@@ -568,15 +647,15 @@ export function getStabilizationMaxForce(
 }
 
 /**
- * Returns settled linear and angular damping based on floor progression and placement quality (Part 13).
+ * Returns settled linear and angular damping based on floor progression and placement quality (Part 13 & Part F).
  *
  * Philosophy:
  * - Lower floors (1-15):
- *   - PERFECT: linear 0.60, angular 0.75
- *   - GREAT: linear 0.48, angular 0.62
- *   - NORMAL: linear 0.22, angular 0.30 (allows visible sliding/tilting)
- *   - RISKY: linear 0.12, angular 0.15 (very low damping)
- *   - DANGEROUS: linear 0.05, angular 0.08
+ *   - PERFECT: linear 0.58, angular 0.70 (settles relatively quickly)
+ *   - GREAT: linear 0.45, angular 0.58 (settles reasonably)
+ *   - NORMAL: linear 0.18, angular 0.24 (takes longer and may continue sliding/rotating)
+ *   - RISKY: linear 0.10, angular 0.12 (clearly remains physically active)
+ *   - DANGEROUS: linear 0.04, angular 0.06 (almost no artificial settling assistance)
  * - Floors 16-20: Still relatively low damping (w=0.98..0.88).
  * - Floors 21-25: Gradually increasing damping (w=0.82..0.52).
  * - Floors 26-35: More clearly increasing damping (w=0.44..0.00).
@@ -625,25 +704,25 @@ export function getSettledDampingForFloor(
   let earlyAngular: number;
 
   if (status === 'DANGEROUS') {
-    earlyLinear = 0.05;
-    earlyAngular = 0.08;
+    earlyLinear = 0.04;
+    earlyAngular = 0.06;
   } else {
     switch (quality) {
       case 'PERFECT':
-        earlyLinear = 0.60;
-        earlyAngular = 0.75;
+        earlyLinear = 0.58;
+        earlyAngular = 0.70;
         break;
       case 'GREAT':
-        earlyLinear = 0.48;
-        earlyAngular = 0.62;
+        earlyLinear = 0.45;
+        earlyAngular = 0.58;
         break;
       case 'NORMAL':
-        earlyLinear = 0.22;
-        earlyAngular = 0.30;
+        earlyLinear = 0.18;
+        earlyAngular = 0.24;
         break;
       case 'RISKY':
-        earlyLinear = 0.12;
-        earlyAngular = 0.15;
+        earlyLinear = 0.10;
+        earlyAngular = 0.12;
         break;
     }
   }
@@ -672,26 +751,23 @@ export function getSettledDampingForFloor(
  */
 export const BASE_STABILITY_ASSIST_KEYFRAMES: Record<number, number> = {
   1: 0.0,
-  15: 0.0,
-  16: 0.05,
-  17: 0.075,
-  18: 0.10,
-  19: 0.14,
-  20: 0.18,
-  21: 0.25,
-  22: 0.35,
-  23: 0.45,
-  24: 0.55,
-  25: 0.65,
-  26: 0.72,
-  27: 0.80,
-  28: 0.88,
-  29: 0.95,
+  4: 0.0,
+  6: 0.05,
+  8: 0.10,
+  10: 0.18,
+  12: 0.25,
+  14: 0.35,
+  16: 0.45,
+  18: 0.55,
+  20: 0.65,
+  22: 0.75,
+  25: 0.85,
+  28: 0.95,
   30: 1.0,
 };
 
 export function getBaseStabilityAssist(floorNumber: number): number {
-  if (floorNumber <= 15) return 0.0;
+  if (floorNumber <= 4) return 0.0;
   if (floorNumber >= 30) return 1.0;
 
   const fLow = Math.floor(floorNumber);
@@ -707,14 +783,13 @@ export function getBaseStabilityAssist(floorNumber: number): number {
 
 /**
  * Active Physics Window scaling:
- * Floors 1-15: All floors remain dynamic (window size 16) so early tower center-of-mass
- *              can physically lean, tip, or collapse on the smaller foundation.
- * Floors 16-25: 8 active dynamic upper floors.
- * Floors 26+: 6 active dynamic upper floors.
+ * Floors 1-4: All placed floors remain dynamic so early tower center-of-mass
+ *             can physically lean, tip, or collapse on the foundation.
+ * Floors 5+: Exactly 6 active dynamic upper floors, providing responsive
+ *            wobble, lean, and placement reaction without numerical multi-body jitter.
  */
 export function getActivePhysicsWindowSize(floorNumber: number): number {
-  if (floorNumber <= 15) return 16;
-  if (floorNumber <= 25) return 8;
+  if (floorNumber <= 4) return Math.max(4, floorNumber);
   return 6;
 }
 

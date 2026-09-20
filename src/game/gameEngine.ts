@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import confetti from 'canvas-confetti';
-import { FeedbackEvent, FeedbackType, FloorDimensions, FloorModuleStyle, GameState, GameStats, PlacementQuality } from '../types';
+import { CameraMode, FeedbackEvent, FeedbackType, FloorDimensions, FloorModuleStyle, GameState, GameStats, PlacementQuality } from '../types';
 import { sounds } from '../audio/sound';
 import { CityScenery } from './cityScenery';
 import { CraneSystem } from './crane';
@@ -10,6 +10,7 @@ import {
   getReleaseMomentumMultipliers,
   getCraneKinematicsForFloor,
   getDifficultyForFloor,
+  getZInfluenceForFloor,
   evaluatePlacementQuality,
   getBaseStabilityAssist,
   getEarlySlipStrength,
@@ -85,6 +86,10 @@ export class GameEngine {
   private swingVelocityX = 0;
   private swingVelocityZ = 0;
 
+  // DEV Top-Down Trajectory Recorder (data-only for console logs)
+  private trajectorySamples: Array<{ x: number; z: number; t: number }> = [];
+  private trajectorySampleTimer = 0;
+
   // Camera tracking & Orbit View
   private cameraTarget = new THREE.Vector3(0, GAME_CONFIG.FOUNDATION_HEIGHT - 6.0 + 1.2, 0);
   private cameraDesiredTarget = new THREE.Vector3(0, GAME_CONFIG.FOUNDATION_HEIGHT - 6.0 + 1.2, 0);
@@ -96,6 +101,20 @@ export class GameEngine {
   private currentOrbitAngle = 0; // Animated orbit angle around Y axis (radians)
   private targetOrbitAngle = 0;  // Target orbit angle around Y axis (multiples of PI/4 = 45°)
   private orbitAngleIndex = 0;   // 0 to 7 (0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°)
+
+  // Collapse Camera Tracking (COLLAPSE_VIEW state & dynamic structure tracking)
+  private cameraMode: CameraMode = 'NORMAL_GAMEPLAY';
+  private collapseCenter = new THREE.Vector3();
+  private collapseDesiredTarget = new THREE.Vector3();
+  private collapseTargetInitialized = false;
+  private currentCollapseDistanceFactor = 1.0;
+  private collapseLowVelocityTime = 0;
+  private collapseSettledTimestamp: number | null = null;
+  // Pre-allocated arrays for zero-allocation performance on mobile
+  private candidateIndices: number[] = [];
+  private tempCoordsX: number[] = [];
+  private tempCoordsZ: number[] = [];
+  private filteredIndices: number[] = [];
 
   // Game Over & Failure Timing States
   private gameOverTriggered = false;
@@ -308,6 +327,13 @@ export class GameEngine {
     this.missedFloorFailureDuration = 0;
     this.collapseFailureDuration = 0;
     this.lastReleaseTime = 0;
+
+    // Reset collapse camera tracking
+    this.cameraMode = 'NORMAL_GAMEPLAY';
+    this.collapseTargetInitialized = false;
+    this.currentCollapseDistanceFactor = 1.0;
+    this.collapseLowVelocityTime = 0;
+    this.collapseSettledTimestamp = null;
 
     // Clean existing floor meshes from scene
     for (const rec of this.physics.records) {
@@ -553,6 +579,11 @@ export class GameEngine {
       suspensionHeight,
       maxSwingDist,
       initialAngularOffset: this.currentMotionProfile.initialAngularOffset,
+      zInfluence: this.currentMotionProfile.zInfluence,
+      riggingDir: this.currentMotionProfile.riggingDir,
+      suspensionPlaneBiasZ: this.currentMotionProfile.suspensionPlaneBiasZ,
+      initialOffsetZ: this.currentMotionProfile.initialOffsetZ,
+      initialVelocityZ: this.currentMotionProfile.initialVelocityZ,
     });
 
     const initTrolley = this.trolleyKinematics.evaluate(0);
@@ -567,16 +598,20 @@ export class GameEngine {
     this.currentTrolleyZ = initTrolley.z;
     this.moduleX = initTrolley.x;
     this.prevCenterCrossModX = initTrolley.x;
-    this.moduleZ = initTrolley.z;
+    this.moduleZ = initTrolley.z + this.currentMotionProfile.initialOffsetZ;
     this.moduleVelX = initTrolley.vx;
-    this.moduleVelZ = initTrolley.vz;
+    this.moduleVelZ = initTrolley.vz + this.currentMotionProfile.initialVelocityZ;
     this.swingOffsetX = 0;
-    this.swingOffsetZ = 0;
+    this.swingOffsetZ = this.currentMotionProfile.initialOffsetZ;
     this.swingVelocityX = 0;
-    this.swingVelocityZ = 0;
+    this.swingVelocityZ = this.currentMotionProfile.initialVelocityZ;
     this.craneRotY = this.currentMotionProfile.initialAngularOffset;
     this.craneRotVelY = 0;
     this.prevTurnaroundSign = 0;
+
+    // Reset trajectory recording for new suspended load
+    this.trajectorySamples = [];
+    this.trajectorySampleTimer = 0;
 
     this.hangingFloorGroup.position.set(this.moduleX, hangingY, this.moduleZ);
     this.hangingFloorGroup.rotation.set(0, this.craneRotY, 0);
@@ -722,7 +757,8 @@ export class GameEngine {
       `AngVel: ${(angularVelocityY * 180 / Math.PI).toFixed(1)}°/s`
     );
 
-    this.logSuspensionPhysics('RELEASE_DROP');
+    this.logSuspensionPhysics('RELEASE_DROP', linearVelocity.x, linearVelocity.z);
+    this.logTopDownTrajectory('ON_RELEASE');
 
     if (import.meta.env.DEV) {
       console.debug('[CraneKinematics]', {
@@ -872,6 +908,20 @@ export class GameEngine {
       this.craneRotY = suspension.yawRot;
       this.craneRotVelY = suspension.yawRotVel;
 
+      // Trajectory sampling & DEV 3D path visualizer (Requirement 24)
+      this.trajectorySampleTimer += delta;
+      if (this.trajectorySampleTimer >= 0.04) {
+        this.trajectorySampleTimer = 0;
+        this.trajectorySamples.push({
+          x: this.moduleX,
+          z: this.moduleZ,
+          t: this.moduleHangingTime,
+        });
+        if (this.trajectorySamples.length > 250) {
+          this.trajectorySamples.shift();
+        }
+      }
+
       // Check physical drop boundary:
       // Drop input is enabled as soon as the load is inside the active gameplay area (|X| <= 8.5m, |Z| <= 6.0m)
       // Symmetric and identical for BOTH LEFT and RIGHT entry directions!
@@ -915,9 +965,9 @@ export class GameEngine {
       }
       this.prevCenterCrossModX = this.moduleX;
 
-      // Central hook block hangs between trolley and load with subtle cable lead
-      const hookX = this.craneX + 0.12 * this.swingOffsetX;
-      const hookZ = this.craneZ + 0.12 * this.swingOffsetZ;
+      // Central hook block hangs between trolley and load with authentic 3D cable lead
+      const hookX = this.craneX + 0.22 * this.swingOffsetX;
+      const hookZ = this.craneZ + 0.22 * this.swingOffsetZ;
 
       this.hangingFloorGroup.position.set(this.moduleX, floorY + suspension.liftY, this.moduleZ);
       this.hangingFloorGroup.rotation.set(suspension.pitchTilt, suspension.yawRot, suspension.rollTilt);
@@ -953,24 +1003,113 @@ export class GameEngine {
       `SpeedMult: ${profile.speedMultiplier.toFixed(2)} | SpeedVar: ${profile.speedVariation.toFixed(3)} | ` +
       `SpringKX: ${profile.swingSpringKX.toFixed(2)} | SpringKZ: ${profile.swingSpringKZ.toFixed(2)} | ` +
       `Damping: ${profile.swingDamping.toFixed(2)} | InertiaFactor: ${profile.inertiaFactor.toFixed(2)} | ` +
+      `ZInfluence: ${profile.zInfluence.toFixed(3)} | RiggingDir: ${profile.riggingDir.toFixed(1)} | ` +
+      `SuspensionPlaneBiasZ: ${profile.suspensionPlaneBiasZ.toFixed(3)} | InitialOffsetZ: ${profile.initialOffsetZ.toFixed(3)} | ` +
       `AmpX: ${profile.ampX.toFixed(2)}m | AmpZ: ${profile.ampZ.toFixed(2)}m`
     );
   }
 
-  public logSuspensionPhysics(eventLabel: string) {
+  public logSuspensionPhysics(eventLabel: string, releasedVelX?: number, releasedVelZ?: number) {
+    const floor = this.floorCount + 1;
+    const zInfluence = getZInfluenceForFloor(floor);
+    const relXStr = releasedVelX !== undefined ? `\n  ReleasedVelocityX:    ${releasedVelX.toFixed(3)} m/s` : '';
+    const relZStr = releasedVelZ !== undefined ? `\n  ReleasedVelocityZ:    ${releasedVelZ.toFixed(3)} m/s` : '';
     console.log(
-      `[SuspensionPhysics] Event: ${eventLabel} (Floor ${this.floorCount + 1})\n` +
+      `[Suspension3D] Event: ${eventLabel} (Floor ${floor})\n` +
+      `  Floor:                ${floor}\n` +
+      `  SupportX:             ${this.craneX.toFixed(3)} m\n` +
+      `  SupportZ:             ${this.craneZ.toFixed(3)} m\n` +
+      `  LoadX:                ${this.moduleX.toFixed(3)} m\n` +
+      `  LoadZ:                ${this.moduleZ.toFixed(3)} m\n` +
+      `  OffsetX:              ${this.swingOffsetX.toFixed(3)} m\n` +
+      `  OffsetZ:              ${this.swingOffsetZ.toFixed(3)} m\n` +
+      `  VelocityX:            ${this.moduleVelX.toFixed(3)} m/s\n` +
+      `  VelocityZ:            ${this.moduleVelZ.toFixed(3)} m/s\n` +
+      `  ZInfluence:           ${zInfluence.toFixed(3)}\n` +
+      `  SuspensionPlaneBiasZ: ${this.currentMotionProfile?.suspensionPlaneBiasZ.toFixed(3) ?? '0.000'}` +
+      relXStr +
+      relZStr + `\n` +
       `  TrolleyVelocityX:     ${this.craneVelX.toFixed(3)} m/s\n` +
       `  TrolleyAccelerationX: ${this.craneAccX.toFixed(3)} m/s²\n` +
-      `  LoadVelocityX:        ${this.moduleVelX.toFixed(3)} m/s\n` +
-      `  SwingOffsetX:         ${this.swingOffsetX.toFixed(3)} m\n` +
-      `  SwingVelocityX:       ${this.swingVelocityX.toFixed(3)} m/s\n` +
       `  TrolleyVelocityZ:     ${this.craneVelZ.toFixed(3)} m/s\n` +
-      `  TrolleyAccelerationZ: ${this.craneAccZ.toFixed(3)} m/s²\n` +
-      `  LoadVelocityZ:        ${this.moduleVelZ.toFixed(3)} m/s\n` +
-      `  SwingOffsetZ:         ${this.swingOffsetZ.toFixed(3)} m\n` +
-      `  SwingVelocityZ:       ${this.swingVelocityZ.toFixed(3)} m/s`
+      `  TrolleyAccelerationZ: ${this.craneAccZ.toFixed(3)} m/s²`
     );
+  }
+
+  /**
+   * DEV-only Top-Down Trajectory Visualizer and ASCII Plotter (Requirement 24)
+   * Evaluates and logs the 2D (X, Z) curvature and metrics of the suspended load.
+   */
+  public logTopDownTrajectory(tag: string = 'TRAJECTORY') {
+    if (this.trajectorySamples.length === 0) return null;
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+
+    for (const pt of this.trajectorySamples) {
+      if (pt.x < minX) minX = pt.x;
+      if (pt.x > maxX) maxX = pt.x;
+      if (pt.z < minZ) minZ = pt.z;
+      if (pt.z > maxZ) maxZ = pt.z;
+    }
+
+    const xRange = maxX - minX;
+    const zRange = maxZ - minZ;
+    const aspect = (zRange / Math.max(xRange, 0.001)) * 100;
+
+    // Build ASCII top-down trajectory plot (X horizontal, Z depth vertical)
+    const W = 36;
+    const H = 9;
+    const grid: string[][] = Array.from({ length: H }, () => Array(W).fill(' '));
+
+    // Draw origin / tower centerline reference if within range
+    const centerCol = Math.round(((0 - minX) / Math.max(xRange, 0.001)) * (W - 1));
+    const centerRow = Math.round(((0 - minZ) / Math.max(zRange, 0.001)) * (H - 1));
+    if (centerCol >= 0 && centerCol < W) {
+      for (let r = 0; r < H; r++) grid[r][centerCol] = '│';
+    }
+    if (centerRow >= 0 && centerRow < H) {
+      for (let c = 0; c < W; c++) {
+        grid[centerRow][c] = (c === centerCol) ? '┼' : '─';
+      }
+    }
+
+    // Plot trajectory points
+    for (let i = 0; i < this.trajectorySamples.length; i++) {
+      const pt = this.trajectorySamples[i];
+      const c = Math.min(Math.max(Math.round(((pt.x - minX) / Math.max(xRange, 0.001)) * (W - 1)), 0), W - 1);
+      const r = Math.min(Math.max(Math.round(((pt.z - minZ) / Math.max(zRange, 0.001)) * (H - 1)), 0), H - 1);
+      grid[r][c] = i === this.trajectorySamples.length - 1 ? '●' : '·';
+    }
+
+    const plotLines = grid.map((row, idx) => {
+      const zVal = minZ + (idx / (H - 1)) * zRange;
+      return `  Z=${zVal >= 0 ? '+' : ''}${zVal.toFixed(2)}m │${row.join('')}│`;
+    }).reverse().join('\n');
+
+    console.log(
+      `[TopDownTrajectory] Floor ${this.floorCount + 1} (${tag}):\n` +
+      `  Samples: ${this.trajectorySamples.length} over ${this.moduleHangingTime.toFixed(1)}s\n` +
+      `  X: [${minX.toFixed(3)}, ${maxX.toFixed(3)}]m | XRange: ${xRange.toFixed(3)}m\n` +
+      `  Z: [${minZ.toFixed(3)}, ${maxZ.toFixed(3)}]m | ZRange: ${zRange.toFixed(3)}m\n` +
+      `  Aspect (ZRange / XRange): ${aspect.toFixed(1)}%\n` +
+      `  Top-Down Trajectory Plot (X horizontal, Z depth vertical):\n` +
+      `${plotLines}\n` +
+      `  (● = current load position, · = sampled path, ┼ = origin)`
+    );
+
+    return {
+      floor: this.floorCount + 1,
+      minX,
+      maxX,
+      minZ,
+      maxZ,
+      xRange,
+      zRange,
+      aspect,
+    };
   }
 
   public logFloorMovementSpeed() {
@@ -1375,7 +1514,12 @@ export class GameEngine {
     this.gameOverTriggered = true;
     this.gameOverReason = reason;
     this.state = 'COLLAPSING';
+    this.cameraMode = 'COLLAPSE_VIEW';
     this.collapseStartTime = performance.now();
+    this.collapseTargetInitialized = false;
+    this.currentCollapseDistanceFactor = 1.0;
+    this.collapseLowVelocityTime = 0;
+    this.collapseSettledTimestamp = null;
 
     const currentSpeed = getSpeedMultiplierForFloor(this.floorCount);
     const currentAssist = getBaseStabilityAssist(this.floorCount);
@@ -1436,28 +1580,219 @@ export class GameEngine {
     this.physics.wakeAllForCollapse();
   }
 
-  private updateCamera(delta: number) {
-    if (this.state === 'COLLAPSING' || this.state === 'GAMEOVER') {
-      // Collapse camera: Slowly pull outward and reveal the falling crooked tower
-      const elapsed = (performance.now() - this.collapseStartTime) / 1000;
-      const collapseTarget = new THREE.Vector3(0, Math.max(this.floorCount * 0.9, 4.0), 0);
-      const collapseAlpha = 1.0 - Math.exp(-1.5 * delta);
-      this.cameraTarget.lerp(collapseTarget, collapseAlpha);
+  public getCameraMode(): CameraMode {
+    return this.cameraMode;
+  }
 
-      const pullBackDist = this.cameraBaseDistance * 1.35 + Math.min(elapsed * 6, 20);
-      const targetCamPos = new THREE.Vector3(
-        this.cameraTarget.x + (this.cameraOffset.x / this.cameraBaseDistance) * pullBackDist,
-        this.cameraTarget.y + (this.cameraOffset.y / this.cameraBaseDistance) * pullBackDist * 1.05,
-        this.cameraTarget.z + (this.cameraOffset.z / this.cameraBaseDistance) * pullBackDist
-      );
-      this.camera.position.lerp(targetCamPos, 1.0 - Math.exp(-1.8 * delta));
+  /**
+   * Calculates the robust visual center and dynamic framing bounds of the collapsing tower.
+   * Filters extreme flying module outliers, clamps Y above ground/foundation,
+   * applies dead-zone smoothing to prevent micro-jitter, and evaluates whether the collapse has settled.
+   */
+  private updateCollapseFraming(delta: number): { isSettled: boolean } {
+    const records = this.physics.records;
+    const now = performance.now();
+    const elapsed = (now - this.collapseStartTime) / 1000;
+
+    // Zero-allocation filtering of relevant candidate bodies
+    this.candidateIndices.length = 0;
+    for (let i = 0; i < records.length; i++) {
+      const rec = records[i];
+      // Exclude bodies that have fallen into the deep void below ground
+      if (rec.body.position.y >= -18.0) {
+        this.candidateIndices.push(i);
+      }
+    }
+
+    // Fallback if no records exist (e.g. immediate miss on floor 0)
+    if (this.candidateIndices.length === 0) {
+      const fallbackTarget = this.collapseCenter.set(0, GAME_CONFIG.COLLAPSE_GROUND_TARGET_MIN_Y, 0);
+      if (!this.collapseTargetInitialized) {
+        this.collapseDesiredTarget.copy(fallbackTarget);
+        this.collapseTargetInitialized = true;
+      }
+      const zoomAlpha = 1.0 - Math.exp(-1.8 * delta);
+      this.currentCollapseDistanceFactor += (1.25 - this.currentCollapseDistanceFactor) * zoomAlpha;
+      return { isSettled: true };
+    }
+
+    // Outlier rejection (Requirements 4 & 5):
+    // If more than 3 candidate modules, calculate median horizontal center and filter extreme outliers
+    this.filteredIndices.length = 0;
+    if (this.candidateIndices.length <= 3) {
+      for (let k = 0; k < this.candidateIndices.length; k++) {
+        this.filteredIndices.push(this.candidateIndices[k]);
+      }
+    } else {
+      this.tempCoordsX.length = this.candidateIndices.length;
+      this.tempCoordsZ.length = this.candidateIndices.length;
+      for (let k = 0; k < this.candidateIndices.length; k++) {
+        const idx = this.candidateIndices[k];
+        this.tempCoordsX[k] = records[idx].body.position.x;
+        this.tempCoordsZ[k] = records[idx].body.position.z;
+      }
+      this.tempCoordsX.sort((a, b) => a - b);
+      this.tempCoordsZ.sort((a, b) => a - b);
+      const midIdx = Math.floor(this.candidateIndices.length / 2);
+      const medX = this.tempCoordsX[midIdx];
+      const medZ = this.tempCoordsZ[midIdx];
+
+      // Keep only modules within reasonable horizontal distance of main cluster (ignore single flying blocks)
+      for (let k = 0; k < this.candidateIndices.length; k++) {
+        const idx = this.candidateIndices[k];
+        const px = records[idx].body.position.x;
+        const pz = records[idx].body.position.z;
+        const distToMed = Math.hypot(px - medX, pz - medZ);
+        if (distToMed <= 22.0) {
+          this.filteredIndices.push(idx);
+        }
+      }
+      // Safety fallback: if all were filtered out, use all candidates
+      if (this.filteredIndices.length === 0) {
+        for (let k = 0; k < this.candidateIndices.length; k++) {
+          this.filteredIndices.push(this.candidateIndices[k]);
+        }
+      }
+    }
+
+    const clusterCount = this.filteredIndices.length;
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    let minZ = Infinity, maxZ = -Infinity;
+    let sumX = 0, sumZ = 0;
+    let lowVelocityCount = 0;
+
+    for (let k = 0; k < clusterCount; k++) {
+      const idx = this.filteredIndices[k];
+      const b = records[idx].body;
+      const px = b.position.x;
+      const py = b.position.y;
+      const pz = b.position.z;
+
+      if (px < minX) minX = px;
+      if (px > maxX) maxX = px;
+      if (py < minY) minY = py;
+      if (py > maxY) maxY = py;
+      if (pz < minZ) minZ = pz;
+      if (pz > maxZ) maxZ = pz;
+
+      sumX += px;
+      sumZ += pz;
+
+      const linSpd = b.velocity.length();
+      const angSpd = b.angularVelocity.length();
+      if (linSpd < 0.35 && angSpd < 0.40) {
+        lowVelocityCount++;
+      }
+    }
+
+    const avgX = sumX / clusterCount;
+    const avgZ = sumZ / clusterCount;
+    const heightSpan = Math.max(0, maxY - minY);
+    const horizSpan = Math.max(0, Math.max(maxX - minX, maxZ - minZ));
+
+    // Dynamic vertical target descending with structure (Requirements 6, 11, 12):
+    // Follow the descending centroid, with slight bias towards ground impact region
+    const groundProgress = THREE.MathUtils.clamp(elapsed / 2.5, 0, 1);
+    const rawTargetY = minY * 0.45 + maxY * 0.55;
+    const groundImpactY = GAME_CONFIG.COLLAPSE_GROUND_TARGET_MIN_Y;
+    const blendedTargetY = THREE.MathUtils.lerp(
+      rawTargetY,
+      Math.min(rawTargetY, groundImpactY + heightSpan * 0.30),
+      groundProgress * 0.45
+    );
+
+    // Strictly clamp so the camera never looks below the foundation/ground level (Requirement 12)
+    const targetY = Math.max(GAME_CONFIG.COLLAPSE_GROUND_TARGET_MIN_Y, blendedTargetY);
+    const targetX = avgX * 0.75;
+    const targetZ = avgZ * 0.75;
+
+    const newTarget = this.collapseCenter.set(targetX, targetY, targetZ);
+
+    // Camera target dead zone (Requirement 10)
+    // Tiny changes (< 0.20m) do not move the desired target, preventing micro-bounce jitter
+    if (!this.collapseTargetInitialized) {
+      this.collapseDesiredTarget.copy(newTarget);
+      this.collapseTargetInitialized = true;
+    } else {
+      const moveDist = newTarget.distanceTo(this.collapseDesiredTarget);
+      if (moveDist >= GAME_CONFIG.COLLAPSE_DEAD_ZONE_M) {
+        this.collapseDesiredTarget.copy(newTarget);
+      }
+    }
+
+    // Dynamic framing zoom factor: 1.24x - 1.50x based on structural spread (Requirements 7 & 8)
+    const targetDistanceFactor = THREE.MathUtils.clamp(
+      1.24 + heightSpan * 0.007 + horizSpan * 0.005,
+      1.24,
+      1.50
+    );
+    // Smooth damp zoom factor to avoid sudden changes
+    const zoomAlpha = 1.0 - Math.exp(-2.5 * delta);
+    this.currentCollapseDistanceFactor += (targetDistanceFactor - this.currentCollapseDistanceFactor) * zoomAlpha;
+
+    // Settled detection (Requirement 14):
+    // True if >= 80% of cluster bodies have low linear and angular velocity
+    const isMajorityLowVel = lowVelocityCount >= Math.max(1, Math.floor(clusterCount * 0.80));
+    return { isSettled: isMajorityLowVel };
+  }
+
+  private updateCamera(delta: number) {
+    if (this.cameraMode === 'COLLAPSE_VIEW' || this.cameraMode === 'GAME_OVER') {
+      const now = performance.now();
+      const elapsed = (now - this.collapseStartTime) / 1000;
+
+      if (this.cameraMode === 'COLLAPSE_VIEW') {
+        const { isSettled } = this.updateCollapseFraming(delta);
+
+        if (isSettled) {
+          this.collapseLowVelocityTime += delta;
+        } else {
+          this.collapseLowVelocityTime = 0;
+        }
+
+        const isPhysicallySettled = this.collapseLowVelocityTime >= GAME_CONFIG.COLLAPSE_SETTLE_REQUIRED_S;
+        if (isPhysicallySettled && this.collapseSettledTimestamp === null) {
+          this.collapseSettledTimestamp = now;
+        }
+
+        const postSettleHoldFinished =
+          this.collapseSettledTimestamp !== null &&
+          (now - this.collapseSettledTimestamp) / 1000 >= GAME_CONFIG.COLLAPSE_POST_SETTLE_HOLD_S;
+
+        // Transition from COLLAPSE_VIEW to GAME_OVER after observation is complete:
+        // Either settled + hold complete (after min viewing time), or max timeout reached
+        if (
+          (elapsed >= GAME_CONFIG.COLLAPSE_MIN_OBSERVE_DURATION_S && isPhysicallySettled && postSettleHoldFinished) ||
+          elapsed >= GAME_CONFIG.COLLAPSE_MAX_OBSERVE_DURATION_S
+        ) {
+          this.state = 'GAMEOVER';
+          this.cameraMode = 'GAME_OVER';
+          this.callbacks.onStateChange(this.state);
+        }
+      }
+
+      // Smooth camera interpolation towards collapse target & distance (Requirement 9)
+      const followAlpha = 1.0 - Math.exp(-2.2 * delta);
+      this.cameraTarget.lerp(this.collapseDesiredTarget, followAlpha);
+
+      // Compute camera position preserving current orbit orientation (Requirements 7 & 23)
+      const offsetDir = this.computeCameraOffsetVector().normalize();
+      const effectiveDist = this.cameraBaseDistance * this.currentCollapseDistanceFactor;
+      const targetCamPos = new THREE.Vector3().copy(this.cameraTarget).addScaledVector(offsetDir, effectiveDist);
+
+      const camAlpha = 1.0 - Math.exp(-2.4 * delta);
+      this.camera.position.lerp(targetCamPos, camAlpha);
       this.camera.lookAt(this.cameraTarget);
 
-      // Check if collapse observation time has completed
-      if (this.state === 'COLLAPSING' && performance.now() - this.collapseStartTime > GAME_CONFIG.COLLAPSE_OBSERVE_DURATION_MS) {
-        this.state = 'GAMEOVER';
-        this.callbacks.onStateChange(this.state);
-      }
+      // Follow sun light target with camera
+      this.sunLight.target.position.copy(this.cameraTarget);
+      this.sunLight.target.updateMatrixWorld();
+      this.sunLight.position.set(
+        this.cameraTarget.x + 35,
+        this.cameraTarget.y + 60,
+        this.cameraTarget.z + 40
+      );
       return;
     }
 

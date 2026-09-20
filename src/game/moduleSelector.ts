@@ -35,37 +35,37 @@ export interface FloorModuleMetadata {
 
 /**
  * Registry of active playable floor modules and their associated category tags.
- * The current six archetypes form the foundation.
+ * Rich multi-tag descriptors ensure cross-biome visual variety while preserving environment theme.
  */
 export const FLOOR_MODULE_REGISTRY: Record<string, FloorModuleMetadata> = {
   MODERN_APARTMENT_V1: {
     style: 'MODERN_APARTMENT_V1',
-    categories: ['CITY', 'UNIVERSAL'],
+    categories: ['CITY', 'ATMOSPHERE', 'SPACE', 'ORBITAL', 'UNIVERSAL'],
     baseWeight: 1.0,
   },
   BRICK_APARTMENT: {
     style: 'BRICK_APARTMENT',
-    categories: ['CITY', 'UNIVERSAL'],
+    categories: ['CITY', 'MOUNTAIN', 'UNIVERSAL'],
     baseWeight: 1.0,
   },
   GLASS_OFFICE: {
     style: 'GLASS_OFFICE',
-    categories: ['CITY', 'UNIVERSAL'],
+    categories: ['CITY', 'CLOUD', 'ATMOSPHERE', 'TECH', 'SPACE', 'ORBITAL', 'UNIVERSAL'],
     baseWeight: 1.0,
   },
   CONCRETE_CANTILEVER: {
     style: 'CONCRETE_CANTILEVER',
-    categories: ['CITY', 'MOUNTAIN', 'TECH', 'UNIVERSAL'],
+    categories: ['CITY', 'MOUNTAIN', 'TECH', 'ORBITAL', 'LUNAR', 'UNIVERSAL'],
     baseWeight: 1.0,
   },
   INDUSTRIAL_FRAME: {
     style: 'INDUSTRIAL_FRAME',
-    categories: ['CITY', 'MOUNTAIN', 'TECH', 'UNIVERSAL'],
+    categories: ['CITY', 'MOUNTAIN', 'CLOUD', 'ATMOSPHERE', 'TECH', 'SPACE', 'ORBITAL', 'LUNAR', 'UNIVERSAL'],
     baseWeight: 1.0,
   },
   SKY_GARDEN: {
     style: 'SKY_GARDEN',
-    categories: ['CITY', 'MOUNTAIN', 'CLOUD', 'UNIVERSAL'],
+    categories: ['CITY', 'MOUNTAIN', 'CLOUD', 'ATMOSPHERE', 'LUNAR', 'UNIVERSAL'],
     baseWeight: 1.0,
   },
 };
@@ -89,21 +89,23 @@ export const REGION_PREFERRED_CATEGORIES: Record<EnvironmentRegionId, ModuleCate
 };
 
 /**
- * Configurable weights for module selection.
+ * Configurable weights and anti-repetition rules for module selection.
  */
 export const MODULE_SELECTION_CONFIG = {
-  /** Target probability (82%) of selecting an environment-compatible module when candidates exist */
-  ENVIRONMENT_COMPATIBLE_WEIGHT: 0.82,
-  /** Target probability (18%) of selecting a UNIVERSAL module for intentional variety */
-  UNIVERSAL_FALLBACK_WEIGHT: 0.18,
-  /** Maximum consecutive identical module archetypes before anti-repetition kicks in */
+  /** Target probability (~70%, within 65–75%) for environment-preferred/compatible modules */
+  ENVIRONMENT_COMPATIBLE_WEIGHT: 0.70,
+  /** Target probability (~30%, within 25–35%) for other valid normal modules to ensure visual variety */
+  OTHER_MODULES_WEIGHT: 0.30,
+  /** Maximum consecutive identical module archetypes before anti-repetition strictly forbids a 3rd */
   MAX_CONSECUTIVE_IDENTICAL: 2,
+  /** Damping factor applied to previous-previous module to prevent repetitive ABABAB alternation */
+  ANTI_ALTERNATION_FACTOR: 0.30,
 };
 
 export interface ModuleSelectionResult {
   style: FloorModuleStyle;
   metadata: FloorModuleMetadata;
-  poolSource: 'ENVIRONMENT' | 'UNIVERSAL_FALLBACK';
+  poolSource: 'ENVIRONMENT_PREFERRED' | 'GENERAL_VARIETY';
   regionId: EnvironmentRegionId;
   floorNumber: number;
 }
@@ -135,18 +137,15 @@ function pickWeighted(pool: FloorModuleMetadata[]): FloorModuleMetadata {
 }
 
 /**
- * Two-stage weighted module selector.
+ * Environment-aware module selector with balanced visual variety and anti-repetition.
  * 
  * Flow:
  * 1. Queries the current environment region from EnvironmentManager (Single Source of Truth).
  * 2. Retrieves preferred module categories for that environment.
- * 3. Enforces the anti-3-in-a-row rule by excluding any archetype that appeared 2 times consecutively.
- * 4. Partitions eligible candidates into:
- *    - Compatible Candidates (matches preferred categories)
- *    - Universal Candidates (has 'UNIVERSAL' tag)
- * 5. Applies weighted roll (82% Environment-Compatible vs 18% Universal Variety).
- * 6. Gracefully falls back to Universal modules if an environment lacks specialized modules.
- * 7. Returns the selected style and metadata.
+ * 3. Partitions all playable candidate modules into Preferred (~70%) vs Other Valid (~30%).
+ * 4. Strictly prevents 3-in-a-row repetition (sets weight to 0 if last 2 were identical).
+ * 5. Dampens immediate ABABAB alternation (penalizes last-last style) to prevent 2-module loops.
+ * 6. Performs weighted random selection and returns style and metadata.
  */
 export function selectFloorModule(
   floorNumber: number,
@@ -160,17 +159,7 @@ export function selectFloorModule(
   // STEP 2: Preferred module categories for this environment
   const preferredCategories = REGION_PREFERRED_CATEGORIES[envRegion] ?? ['CITY'];
 
-  // STEP 3: Anti-repetition rule (no archetype 3 times in a row)
-  let forbiddenStyle: FloorModuleStyle | null = null;
-  const historyLen = history.length;
-  if (
-    historyLen >= MODULE_SELECTION_CONFIG.MAX_CONSECUTIVE_IDENTICAL &&
-    history[historyLen - 1] === history[historyLen - 2]
-  ) {
-    forbiddenStyle = history[historyLen - 1];
-  }
-
-  // STEP 4: Filter registered modules by floor requirements and anti-repetition
+  // STEP 3: Filter registered modules by floor requirements (all 6 core archetypes active)
   const allRegistered = Object.values(FLOOR_MODULE_REGISTRY);
   const activeModules = allRegistered.filter((m) => {
     if (m.minFloor !== undefined && floorNumber < m.minFloor) return false;
@@ -178,51 +167,97 @@ export function selectFloorModule(
     return true;
   });
 
-  let eligibleCandidates = activeModules;
-  if (forbiddenStyle) {
-    const withoutRepeated = activeModules.filter((m) => m.style !== forbiddenStyle);
-    if (withoutRepeated.length > 0) {
-      eligibleCandidates = withoutRepeated;
-    }
-  }
+  const candidates = activeModules.length > 0 ? activeModules : allRegistered;
 
-  // STEP 5: Partition candidate pools
-  const compatibleModules = eligibleCandidates.filter((m) =>
+  // STEP 4: Partition into Environment-Preferred vs Other Valid Normal Modules
+  const preferredModules = candidates.filter((m) =>
     m.categories.some((cat) => preferredCategories.includes(cat))
   );
-  const universalModules = eligibleCandidates.filter((m) =>
-    m.categories.includes('UNIVERSAL')
+  const otherModules = candidates.filter(
+    (m) => !m.categories.some((cat) => preferredCategories.includes(cat))
   );
 
-  // STEP 6: Apply environment weighting vs Universal fallback
-  let selectedPool: FloorModuleMetadata[];
-  let poolSource: 'ENVIRONMENT' | 'UNIVERSAL_FALLBACK';
+  // STEP 5: Assign baseline weights ensuring ~65–75% for preferred and ~25–35% for other
+  const candidateWeights: Map<FloorModuleMetadata, number> = new Map();
+  const targetPref = MODULE_SELECTION_CONFIG.ENVIRONMENT_COMPATIBLE_WEIGHT; // 0.70
+  const targetOther = MODULE_SELECTION_CONFIG.OTHER_MODULES_WEIGHT;         // 0.30
 
-  if (compatibleModules.length > 0) {
-    const roll = Math.random();
-    if (roll < MODULE_SELECTION_CONFIG.ENVIRONMENT_COMPATIBLE_WEIGHT) {
-      selectedPool = compatibleModules;
-      poolSource = 'ENVIRONMENT';
-    } else if (universalModules.length > 0) {
-      selectedPool = universalModules;
-      poolSource = 'UNIVERSAL_FALLBACK';
-    } else {
-      selectedPool = compatibleModules;
-      poolSource = 'ENVIRONMENT';
+  if (preferredModules.length > 0 && otherModules.length > 0) {
+    const pWeightEach = targetPref / preferredModules.length;
+    const oWeightEach = targetOther / otherModules.length;
+
+    for (const m of preferredModules) {
+      candidateWeights.set(m, pWeightEach * (m.baseWeight ?? 1.0));
+    }
+    for (const m of otherModules) {
+      candidateWeights.set(m, oWeightEach * (m.baseWeight ?? 1.0));
     }
   } else {
-    // Graceful fallback when no environment-specific module exists yet (e.g. Moon/Space before future expansion)
-    selectedPool = universalModules.length > 0 ? universalModules : eligibleCandidates;
-    poolSource = 'UNIVERSAL_FALLBACK';
+    for (const m of candidates) {
+      candidateWeights.set(m, (1.0 / candidates.length) * (m.baseWeight ?? 1.0));
+    }
   }
 
-  // STEP 7: Pick module using base weights
-  const selectedMetadata = pickWeighted(selectedPool);
+  // STEP 6: Anti-repetition Rules
+  const historyLen = history.length;
+
+  // Rule A: Strictly prevent 3-in-a-row repetition (same archetype 3 times in a row)
+  if (
+    historyLen >= MODULE_SELECTION_CONFIG.MAX_CONSECUTIVE_IDENTICAL &&
+    history[historyLen - 1] === history[historyLen - 2]
+  ) {
+    const forbiddenStyle = history[historyLen - 1];
+    for (const [m] of candidateWeights) {
+      if (m.style === forbiddenStyle) {
+        candidateWeights.set(m, 0);
+      }
+    }
+  }
+
+  // Rule B: Discourage immediate ABABAB alternation (ping-pong trap between two modules)
+  // If history has [..., A, B] with A !== B, picking A again would produce [A, B, A].
+  // We apply a damping factor to A so other alternatives (C, D, E, F) are prioritized.
+  if (historyLen >= 2 && history[historyLen - 1] !== history[historyLen - 2]) {
+    const prevPrevStyle = history[historyLen - 2];
+    for (const [m, w] of candidateWeights) {
+      if (m.style === prevPrevStyle) {
+        candidateWeights.set(m, w * MODULE_SELECTION_CONFIG.ANTI_ALTERNATION_FACTOR);
+      }
+    }
+  }
+
+  // STEP 7: Weighted random roll
+  let totalWeight = 0;
+  for (const w of candidateWeights.values()) {
+    totalWeight += Math.max(0, w);
+  }
+
+  let selectedMetadata: FloorModuleMetadata;
+  if (totalWeight <= 0) {
+    selectedMetadata = candidates[Math.floor(Math.random() * candidates.length)];
+  } else {
+    let roll = Math.random() * totalWeight;
+    let chosen: FloorModuleMetadata = candidates[0];
+    for (const [m, w] of candidateWeights.entries()) {
+      if (w <= 0) continue;
+      if (roll <= w) {
+        chosen = m;
+        break;
+      }
+      roll -= w;
+    }
+    selectedMetadata = chosen;
+  }
+
+  const isPreferred = preferredModules.some((m) => m.style === selectedMetadata.style);
+  const poolSource: 'ENVIRONMENT_PREFERRED' | 'GENERAL_VARIETY' = isPreferred
+    ? 'ENVIRONMENT_PREFERRED'
+    : 'GENERAL_VARIETY';
 
   // STEP 8: Concise development log
-  if (import.meta.env.DEV) {
+  if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
     console.debug(
-      `[ModuleSelector] Floor: ${floorNumber} | Env: ${envRegion} | Selected: ${selectedMetadata.style} | Categories: ${selectedMetadata.categories.join(', ')} | Pool: ${poolSource}`
+      `[ModuleSelector] Floor: ${floorNumber} | Env: ${envRegion} | Style: ${selectedMetadata.style} | Pool: ${poolSource}`
     );
   }
 

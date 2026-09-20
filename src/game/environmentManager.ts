@@ -500,30 +500,11 @@ export class EnvironmentManager {
     ground.receiveShadow = true;
     this.cityGroup.add(ground);
 
-    // Green city park with dedicated boulevard corridor cutout (Y = -6.03)
-    // The road corridor spans Z = -30m to Z = -14m. The park is geometrically segmented
-    // into North and South zones so no grass plane exists under or coplanar with the road.
-    const parkMat = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.85 });
-
-    // North Park Segment (Z: -14m northward to +210m, length 224m)
-    const northParkGeo = new THREE.PlaneGeometry(45, 224);
-    const northPark = new THREE.Mesh(northParkGeo, parkMat);
-    northPark.rotation.x = -Math.PI / 2;
-    northPark.rotation.z = 0.28;
-    const nCenterZ = 98;
-    const nCenterX = 28 - nCenterZ * Math.tan(0.28);
-    northPark.position.set(nCenterX, -6.03, nCenterZ);
-    this.cityGroup.add(northPark);
-
-    // South Park Segment (Z: -30m southward to -240m, length 210m)
-    const southParkGeo = new THREE.PlaneGeometry(45, 210);
-    const southPark = new THREE.Mesh(southParkGeo, parkMat);
-    southPark.rotation.x = -Math.PI / 2;
-    southPark.rotation.z = 0.28;
-    const sCenterZ = -135;
-    const sCenterX = 28 - sCenterZ * Math.tan(0.28);
-    southPark.position.set(sCenterX, -6.03, sCenterZ);
-    this.cityGroup.add(southPark);
+    // Architectural Urban Landscaping & Irregular Park System (Y = -6.00, Curbs Y = -5.94)
+    // Replaces flat monolithic green rectangles with irregular polygonal garden plots,
+    // roadside green strips, and riverfront parklands bounded by stone retaining curbs
+    // (zero Z-fighting, zero straight-edged box, clear of central construction plaza).
+    this.buildUrbanLandscaping();
 
     // River (Y = -6.04, sunken into base ground)
     const riverGeo = new THREE.PlaneGeometry(42, 500);
@@ -923,6 +904,289 @@ export class EnvironmentManager {
     carGroup.scale.set(CAR_SCALE, CAR_SCALE, CAR_SCALE);
 
     return carGroup;
+  }
+
+  /**
+   * Architectural Urban Landscaping System:
+   * Replaces flat monolithic green sheets with an intentional system of irregular polygonal
+   * garden beds, roadside planter strips, and riverfront parklands bounded by stone retaining curbs.
+   *
+   * Key Design Decisions:
+   * 1. Low-poly, desaturated architectural tones (muted sage/olive greens) to avoid visual noise.
+   * 2. Irregular convex/trapezoidal plots that naturally follow street grid and river contours.
+   * 3. Clear 14m central plaza radius around (0,0) to prevent interference with construction/crane/drops.
+   * 4. Elevation hierarchy: Ground (-6.05) < Turf (-6.00) < Road (-5.99) < Curbs (-5.94)
+   *    guarantees ZERO coplanar Z-fighting at road/grass transitions.
+   */
+  private buildUrbanLandscaping() {
+    const landscapingGroup = new THREE.Group();
+    landscapingGroup.name = 'city_landscaping';
+
+    // Desaturated, sophisticated architectural lawn & foliage materials
+    const turfMat1 = new THREE.MeshStandardMaterial({
+      color: 0x384a32, // Muted natural olive turf
+      roughness: 0.90,
+      side: THREE.DoubleSide,
+    });
+    const turfMat2 = new THREE.MeshStandardMaterial({
+      color: 0x44583b, // Sunlit park meadow turf
+      roughness: 0.88,
+      side: THREE.DoubleSide,
+    });
+    const turfMat3 = new THREE.MeshStandardMaterial({
+      color: 0x2e3e29, // Deep shaded forest turf
+      roughness: 0.92,
+      side: THREE.DoubleSide,
+    });
+    const curbMat = new THREE.MeshStandardMaterial({
+      color: 0x64748b, // Clean architectural stone retaining curb
+      roughness: 0.72,
+    });
+    const treeTrunkMat = new THREE.MeshStandardMaterial({
+      color: 0x3d2b1f,
+      roughness: 0.92,
+    });
+    const treeFoliageMats = [
+      new THREE.MeshStandardMaterial({ color: 0x344c31, roughness: 0.85, flatShading: true }),
+      new THREE.MeshStandardMaterial({ color: 0x425838, roughness: 0.82, flatShading: true }),
+      new THREE.MeshStandardMaterial({ color: 0x2b3d27, roughness: 0.88, flatShading: true }),
+    ];
+
+    // Helper: Create polygonal lawn plot with stone retaining curbs
+    const addPlot = (points: [number, number][], material: THREE.Material, withCurbs = true) => {
+      const shape = new THREE.Shape();
+      // Use negative Y in shape space so rotateX(-Math.PI/2) yields identical positive Z in world space
+      shape.moveTo(points[0][0], -points[0][1]);
+      for (let i = 1; i < points.length; i++) {
+        shape.lineTo(points[i][0], -points[i][1]);
+      }
+      shape.closePath();
+
+      const geo = new THREE.ShapeGeometry(shape);
+      geo.rotateX(-Math.PI / 2);
+
+      const lawnMesh = new THREE.Mesh(geo, material);
+      lawnMesh.position.y = -6.00;
+      lawnMesh.receiveShadow = true;
+      landscapingGroup.add(lawnMesh);
+
+      if (withCurbs) {
+        for (let i = 0; i < points.length; i++) {
+          const p1 = points[i];
+          const p2 = points[(i + 1) % points.length];
+          const dx = p2[0] - p1[0];
+          const dz = p2[1] - p1[1];
+          const len = Math.hypot(dx, dz);
+          if (len < 0.2) continue;
+
+          const midX = (p1[0] + p2[0]) / 2;
+          const midZ = (p1[1] + p2[1]) / 2;
+          const rotY = -Math.atan2(dz, dx);
+
+          const curbGeo = new THREE.BoxGeometry(len, 0.12, 0.35);
+          const curbMesh = new THREE.Mesh(curbGeo, curbMat);
+          curbMesh.position.set(midX, -5.94, midZ);
+          curbMesh.rotation.y = rotY;
+          curbMesh.receiveShadow = true;
+          landscapingGroup.add(curbMesh);
+        }
+      }
+    };
+
+    // Helper: Add stylized low-poly park tree
+    const addTree = (x: number, z: number, scale = 1.0, matIndex = 0) => {
+      const treeGroup = new THREE.Group();
+      const trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.18 * scale, 0.28 * scale, 1.8 * scale, 6),
+        treeTrunkMat
+      );
+      trunk.position.y = -5.1 + 0.9 * scale;
+      trunk.castShadow = true;
+      treeGroup.add(trunk);
+
+      const canopy = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(1.25 * scale, 0),
+        treeFoliageMats[matIndex % treeFoliageMats.length]
+      );
+      canopy.position.y = -5.1 + 1.8 * scale + 0.9 * scale;
+      canopy.rotation.y = (x * 3 + z * 7) % Math.PI;
+      canopy.castShadow = true;
+      canopy.receiveShadow = true;
+      treeGroup.add(canopy);
+
+      treeGroup.position.set(x, 0, z);
+      landscapingGroup.add(treeGroup);
+    };
+
+    // ========================================================================
+    // 1. North-East Riverfront Parklands (Angled alongside riverbank X ~ 45-60)
+    // ========================================================================
+    // Plot NE-1 (Near Waterfront Garden)
+    addPlot([
+      [24, 18],
+      [44, 23],
+      [41, 56],
+      [21, 50],
+    ], turfMat1);
+
+    // Plot NE-2 (Mid-Reach River Promenade Lawn)
+    addPlot([
+      [19, 64],
+      [38, 70],
+      [33, 115],
+      [13, 108],
+    ], turfMat2);
+
+    // Plot NE-3 (North Meadow & Tree Grove)
+    addPlot([
+      [11, 124],
+      [30, 131],
+      [22, 182],
+      [4, 174],
+    ], turfMat3);
+
+    // NE Park Trees
+    addTree(32, 28, 1.1, 0);
+    addTree(28, 42, 1.3, 1);
+    addTree(36, 48, 0.9, 2);
+    addTree(26, 78, 1.2, 0);
+    addTree(22, 98, 1.4, 1);
+    addTree(18, 140, 1.3, 2);
+    addTree(12, 162, 1.1, 0);
+
+    // ========================================================================
+    // 2. South-East Riverfront Parklands (South of the boulevard)
+    // ========================================================================
+    // Plot SE-1 (South Bridge Approach Lawn)
+    addPlot([
+      [36, -34],
+      [53, -39],
+      [57, -78],
+      [39, -72],
+    ], turfMat2);
+
+    // Plot SE-2 (South Riverside Terraces)
+    addPlot([
+      [41, -86],
+      [59, -92],
+      [64, -145],
+      [44, -138],
+    ], turfMat1);
+
+    // Plot SE-3 (Far South Riverfront Green)
+    addPlot([
+      [46, -154],
+      [66, -161],
+      [71, -215],
+      [50, -207],
+    ], turfMat3);
+
+    // SE Park Trees
+    addTree(46, -46, 1.2, 1);
+    addTree(42, -62, 1.0, 2);
+    addTree(52, -105, 1.3, 0);
+    addTree(48, -125, 1.1, 1);
+    addTree(58, -175, 1.4, 2);
+
+    // ========================================================================
+    // 3. Boulevard Parkway Verges (Roadside Planter Strips along Z=-22 road)
+    // Roadbed occupies Z = -29 to Z = -15. Strips sit neatly at Z = -13.6 and Z = -30.4.
+    // ========================================================================
+    // North Roadside Verges (Z = -13.2 to -14.4)
+    addPlot([
+      [-75, -13.0],
+      [-38, -13.0],
+      [-36, -14.2],
+      [-77, -14.2],
+    ], turfMat1);
+    addPlot([
+      [-26, -13.0],
+      [6, -13.0],
+      [8, -14.2],
+      [-24, -14.2],
+    ], turfMat1);
+    addPlot([
+      [18, -13.0],
+      [55, -13.0],
+      [57, -14.2],
+      [16, -14.2],
+    ], turfMat1);
+
+    // South Roadside Verges (Z = -29.8 to -31.0)
+    addPlot([
+      [-75, -29.8],
+      [-38, -29.8],
+      [-36, -31.0],
+      [-77, -31.0],
+    ], turfMat1);
+    addPlot([
+      [-26, -29.8],
+      [6, -29.8],
+      [8, -31.0],
+      [-24, -31.0],
+    ], turfMat1);
+    addPlot([
+      [18, -29.8],
+      [55, -29.8],
+      [57, -31.0],
+      [16, -31.0],
+    ], turfMat1);
+
+    // Low roadside decorative ornamental trees along boulevard verges
+    addTree(-55, -13.6, 0.75, 0);
+    addTree(-10, -13.6, 0.75, 1);
+    addTree(35, -13.6, 0.75, 2);
+    addTree(-55, -30.4, 0.75, 1);
+    addTree(-10, -30.4, 0.75, 0);
+    addTree(35, -30.4, 0.75, 2);
+
+    // ========================================================================
+    // 4. North-West Civic Garden Terrace (Angled Urban Park)
+    // ========================================================================
+    addPlot([
+      [-28, 24],
+      [-52, 29],
+      [-58, 62],
+      [-32, 56],
+    ], turfMat2);
+
+    addPlot([
+      [-34, 68],
+      [-60, 75],
+      [-65, 115],
+      [-38, 107],
+    ], turfMat1);
+
+    // NW Garden Trees
+    addTree(-40, 36, 1.2, 0);
+    addTree(-46, 52, 1.3, 1);
+    addTree(-48, 85, 1.1, 2);
+    addTree(-42, 102, 1.4, 0);
+
+    // ========================================================================
+    // 5. South-West Neighborhood Pocket Park
+    // ========================================================================
+    addPlot([
+      [-26, -44],
+      [-48, -49],
+      [-53, -84],
+      [-29, -78],
+    ], turfMat1);
+
+    addPlot([
+      [-31, -90],
+      [-55, -97],
+      [-60, -135],
+      [-34, -127],
+    ], turfMat2);
+
+    // SW Park Trees
+    addTree(-36, -56, 1.1, 1);
+    addTree(-42, -72, 1.2, 2);
+    addTree(-46, -105, 1.3, 0);
+    addTree(-40, -120, 1.1, 1);
+
+    this.cityGroup.add(landscapingGroup);
   }
 
   private createBuildingMesh(

@@ -15,24 +15,27 @@ interface GameHUDProps {
 
 /**
  * OrbitArrow:
- * Custom lightweight SVG rendering an elliptical 3D camera orbit trajectory based on the concept sketch.
- * - Long, shallow perspective curve sweeping from the inner central area outward around the tower.
- * - Multi-line depth treatment:
- *   - Primary orbit path (opacity ~0.60, stroke 4px) terminating in a clean outward-facing arrowhead.
- *   - Secondary trail 1 (opacity ~0.30, stroke 2.5px) concentric depth line.
- *   - Secondary trail 2 (opacity ~0.16, stroke 1.8px) inner depth line.
- * - Gradient fade: Inner/rear end fades into depth, outward arrowhead end is crisp and clear.
- * - LEFT control points OUTWARD LEFT.
- * - RIGHT control is the exact horizontal mirror (via transform: scaleX(-1)) pointing OUTWARD RIGHT.
+ * Custom lightweight SVG rendering an elliptical 3D camera orbit trajectory based on the user's reference.
+ * - LEFT CONTROL:
+ *   - Begins from the INNER side (closer to the center of the screen).
+ *   - Sweeps outward toward the LEFT.
+ *   - Arrowhead is on the OUTER LEFT end, pointing LEFT / slightly UP-LEFT (↖).
+ * - RIGHT CONTROL:
+ *   - Mirrored horizontally (scaleX(-1)).
+ *   - Begins from the INNER side (closer to center).
+ *   - Sweeps outward toward the RIGHT.
+ *   - Arrowhead is on the OUTER RIGHT end, pointing RIGHT / slightly UP-RIGHT (↗).
+ * - Thick white stroke, rounded caps, large obvious arrowhead, subtle dark shadow.
+ * - No visible square/circle button background.
  */
 const OrbitArrow: React.FC<{ direction: 'left' | 'right' }> = ({ direction }) => {
   const gradId = `orbit-fade-${direction}`;
   return (
     <svg
-      viewBox="0 0 84 46"
+      viewBox="0 0 96 52"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className="w-[80px] h-[46px] sm:w-[86px] sm:h-[50px] text-white/60 group-hover:text-white/85 group-active:text-white transition-colors duration-150 drop-shadow-[0_2px_6px_rgba(0,0,0,0.35)]"
+      className="w-[84px] h-[48px] sm:w-[96px] sm:h-[52px] text-white/70 group-hover:text-white group-active:text-white transition-all duration-150 drop-shadow-[0_2px_8px_rgba(0,0,0,0.65)]"
       style={{
         transform: direction === 'right' ? 'scaleX(-1)' : 'none',
         transformOrigin: 'center center',
@@ -40,45 +43,36 @@ const OrbitArrow: React.FC<{ direction: 'left' | 'right' }> = ({ direction }) =>
       aria-hidden="true"
     >
       <defs>
-        <linearGradient id={gradId} x1="90%" y1="15%" x2="10%" y2="85%">
-          <stop offset="0%" stopColor="currentColor" stopOpacity="0.25" />
-          <stop offset="45%" stopColor="currentColor" stopOpacity="0.70" />
+        <linearGradient id={gradId} x1="100%" y1="90%" x2="0%" y2="15%">
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0.45" />
+          <stop offset="40%" stopColor="currentColor" stopOpacity="0.75" />
           <stop offset="100%" stopColor="currentColor" stopOpacity="1" />
         </linearGradient>
       </defs>
 
-      {/* Secondary depth trail 2 (innermost, lightest) */}
+      {/* Subtle secondary depth echo path (concentric inner orbit trail) */}
       <path
-        d="M 64 2.5 C 44 7 28 16 22 19.5"
+        d="M 80 47 C 76 30, 56 22, 40 21 C 30 20.5, 24 20, 18 19.5"
         stroke="currentColor"
-        strokeWidth="1.8"
+        strokeWidth="2"
         strokeLinecap="round"
-        opacity="0.16"
+        opacity="0.22"
       />
 
-      {/* Secondary depth trail 1 (middle concentric orbit trail) */}
+      {/* Main sweeping curved arrow body: begins from inner center, sweeps outward left */}
       <path
-        d="M 70 6 C 48 11 26 22 16 26"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        opacity="0.30"
-      />
-
-      {/* Main elliptical camera orbit path */}
-      <path
-        d="M 76 11 C 52 16 26 29 8 34.5"
+        d="M 84 44 C 80 23, 56 14, 36 13 C 24 12.5, 16 11.5, 9 11"
         stroke={`url(#${gradId})`}
-        strokeWidth="4"
+        strokeWidth="4.5"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
 
-      {/* Crisp outward-facing arrowhead (points OUTWARD LEFT on left, OUTWARD RIGHT when mirrored) */}
+      {/* Large obvious arrowhead on the outer left end, pointing LEFT / slightly UP-LEFT (↖) */}
       <path
-        d="M 17.5 23.5 L 8 34.5 L 20.5 39.5"
-        stroke={`url(#${gradId})`}
-        strokeWidth="4"
+        d="M 21 5 L 8 11 L 19 20"
+        stroke="currentColor"
+        strokeWidth="4.5"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -95,6 +89,52 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onRotateCameraRight,
 }) => {
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [hasInteractedCamera, setHasInteractedCamera] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('tb_camera_hint_seen') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.code === 'KeyQ' || e.code === 'KeyE') {
+        if (!hasInteractedCamera) {
+          setHasInteractedCamera(true);
+          try {
+            localStorage.setItem('tb_camera_hint_seen', 'true');
+          } catch {}
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [hasInteractedCamera]);
+
+  const handleLeftCameraClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!hasInteractedCamera) {
+      setHasInteractedCamera(true);
+      try {
+        localStorage.setItem('tb_camera_hint_seen', 'true');
+      } catch {}
+    }
+    onRotateCameraLeft();
+  };
+
+  const handleRightCameraClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!hasInteractedCamera) {
+      setHasInteractedCamera(true);
+      try {
+        localStorage.setItem('tb_camera_hint_seen', 'true');
+      } catch {}
+    }
+    onRotateCameraRight();
+  };
 
   useEffect(() => {
     setSoundEnabled(sounds.isEnabled());
@@ -213,16 +253,12 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         - BOTTOM LEFT: Left camera orbit arrow (-45°), points OUTWARD LEFT.
         - BOTTOM RIGHT: Right camera orbit arrow (+45°), points OUTWARD RIGHT (exact mirror).
       */}
-      <div className="w-full flex items-end justify-between pointer-events-none px-0.5 sm:px-1 pb-2 sm:pb-3 pb-[max(0.6rem,env(safe-area-inset-bottom,0px))]">
+      <div className="w-full relative flex items-end justify-between pointer-events-none px-0.5 sm:px-1 pb-2 sm:pb-3 pb-[max(0.6rem,env(safe-area-inset-bottom,0px))]">
         {/* BOTTOM LEFT: Left Camera Orbit Arrow (-45°, points OUTWARD LEFT) */}
         <div className="pointer-events-auto">
           <button
             id="camera-rotate-left-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              onRotateCameraLeft();
-            }}
+            onClick={handleLeftCameraClick}
             onPointerDown={(e) => {
               e.stopPropagation();
             }}
@@ -232,7 +268,9 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             onMouseDown={(e) => {
               e.stopPropagation();
             }}
-            className="w-[84px] h-[72px] sm:w-[92px] sm:h-[76px] flex items-center justify-center bg-transparent border-0 outline-none cursor-pointer select-none group transition-transform duration-150 active:scale-[0.96]"
+            className={`w-[84px] h-[72px] sm:w-[96px] sm:h-[76px] flex items-center justify-center bg-transparent border-0 outline-none cursor-pointer select-none group transition-transform duration-150 active:scale-[0.96] ${
+              !hasInteractedCamera ? 'animate-orbit-sweep-left' : ''
+            }`}
             aria-label="Orbit camera left 45 degrees"
             title="Rotate camera view left 45° (Q)"
           >
@@ -240,15 +278,23 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           </button>
         </div>
 
+        {/* Discovery Hint Badge (Only shown until first camera interaction) */}
+        {!hasInteractedCamera && (
+          <div
+            id="camera-orbit-hint"
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none flex flex-col items-center gap-0.5 animate-pulse select-none"
+          >
+            <div className="px-3 py-1 rounded-full bg-slate-900/70 backdrop-blur-md border border-white/20 text-[10px] sm:text-[11px] font-bold tracking-wider uppercase text-slate-200 shadow-lg">
+              XOAY GÓC NHÌN
+            </div>
+          </div>
+        )}
+
         {/* BOTTOM RIGHT: Right Camera Orbit Arrow (+45°, points OUTWARD RIGHT) */}
         <div className="pointer-events-auto">
           <button
             id="camera-rotate-right-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              onRotateCameraRight();
-            }}
+            onClick={handleRightCameraClick}
             onPointerDown={(e) => {
               e.stopPropagation();
             }}
@@ -258,7 +304,9 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             onMouseDown={(e) => {
               e.stopPropagation();
             }}
-            className="w-[84px] h-[72px] sm:w-[92px] sm:h-[76px] flex items-center justify-center bg-transparent border-0 outline-none cursor-pointer select-none group transition-transform duration-150 active:scale-[0.96]"
+            className={`w-[84px] h-[72px] sm:w-[96px] sm:h-[76px] flex items-center justify-center bg-transparent border-0 outline-none cursor-pointer select-none group transition-transform duration-150 active:scale-[0.96] ${
+              !hasInteractedCamera ? 'animate-orbit-sweep-right' : ''
+            }`}
             aria-label="Orbit camera right 45 degrees"
             title="Rotate camera view right 45° (E)"
           >

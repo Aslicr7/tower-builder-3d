@@ -221,17 +221,13 @@ export class TrolleyKinematics {
       }
     }
 
-    // Lateral Z support motion: smooth excursion
-    // Scaled to ampZ from difficulty curve
-    let z = 0;
-    let vz = 0;
-    let az = 0;
-    if (this.ampZ > 0.01) {
-      const zPhase = t * this.zOmega;
-      z = Math.cos(zPhase) * this.ampZ;
-      vz = -Math.sin(zPhase) * this.ampZ * this.zOmega;
-      az = -Math.cos(zPhase) * this.ampZ * this.zOmega * this.zOmega;
-    }
+    // The crane trolley travels along the boom track (X axis).
+    // Lateral Z support motion is kept at zero: all secondary Z movement originates
+    // causally from true 3D suspended-load pendulum dynamics, sling geometry, and inertia,
+    // eliminating any artificial support wobble or continuous driving forces.
+    const z = 0;
+    const vz = 0;
+    const az = 0;
 
     return { x, vx, ax, z, vz, az, isCruising, isTurning };
   }

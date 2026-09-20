@@ -1,5 +1,5 @@
 import { FloorDimensions, FloorModuleStyle } from '../types';
-import { getCraneKinematicsForFloor, getDifficultyForFloor } from './difficultyCurve';
+import { getCraneKinematicsForFloor, getDifficultyForFloor, getZInfluenceForFloor } from './difficultyCurve';
 import { GAME_CONFIG } from './constants';
 
 /**
@@ -16,6 +16,8 @@ export interface ModuleMotionProfile {
   speedVariation: number;
   ampX: number;
   ampZ: number;
+  zInfluence: number;
+  riggingDir: number;
   rotY: number;
   swingSpringKX: number;
   swingSpringKZ: number;
@@ -25,6 +27,9 @@ export interface ModuleMotionProfile {
   rotDamping: number;
   rotCoupling: number;
   initialAngularOffset: number;
+  suspensionPlaneBiasZ: number;
+  initialOffsetZ: number;
+  initialVelocityZ: number;
   // Legacy compatibility fields
   freqX: number;
   freqZ: number;
@@ -56,6 +61,9 @@ export function createMotionProfile(
   const ampX = kinematics.ampX;
   const ampZ = kinematics.ampZ;
   const rotY = kinematics.rotY;
+  const zInfluence = getZInfluenceForFloor(floorNumber);
+  // Deterministic rigging asymmetry direction per delivery (+1 or -1)
+  const riggingDir = entrySide === 'LEFT' ? (floorNumber % 2 === 0 ? 1.0 : -1.0) : (floorNumber % 2 === 0 ? -1.0 : 1.0);
 
   // Floor progression controls subtle parameter variation:
   // Floor 1-5: subtle variation (±5%) to help players learn readability
@@ -67,8 +75,8 @@ export function createMotionProfile(
   const speedVar = 1.0 + (Math.random() - 0.5) * 0.16 * varScale;
 
   // 2. Physical suspension restoring stiffness and damping
-  let baseSpringK = 5.2;
-  let baseDamping = 1.55;
+  let baseSpringK = 4.8;
+  let baseDamping = 0.32; // Realistic low damping for 50-ton suspended load on 4.8m cables: swings continuously without premature decay
   let inertiaFactor = 1.0;
 
   // Subtle style nuance (wide/heavy modules have slightly higher damping;
@@ -78,7 +86,7 @@ export function createMotionProfile(
     style === 'CONCRETE_CANTILEVER' ||
     style === 'BRICK_APARTMENT'
   ) {
-    baseDamping *= 1.08;
+    baseDamping *= 1.06;
     inertiaFactor = 1.05;
   } else if (
     style === 'GLASS_OFFICE' ||
@@ -91,7 +99,8 @@ export function createMotionProfile(
 
   const springKVar = 1.0 + (Math.random() - 0.5) * 0.10 * varScale;
   const swingSpringKX = baseSpringK * springKVar;
-  const swingSpringKZ = baseSpringK * springKVar * 0.95;
+  // Detune KZ by ~10% for rectangular sling attachment geometry, enabling natural 3D precession into open ellipses
+  const swingSpringKZ = baseSpringK * springKVar * 0.90;
   const dampingVar = 1.0 + (Math.random() - 0.5) * 0.10 * varScale;
   const swingDamping = baseDamping * dampingVar;
 
@@ -102,7 +111,19 @@ export function createMotionProfile(
   // Small initial angular offset (±0.025 rad max, ~1.4°) that damps naturally
   const initialAngularOffset = (Math.random() - 0.5) * 0.05 * varScale;
 
-  // 4. Entry spawn coordinate (guaranteed off-screen)
+  // 4. Per-load 3D suspension plane bias and initial pendulum state:
+  // Chosen ONCE when the module is attached and kept constant throughout its delivery.
+  // Alternating base direction with pseudo-random per-module spread guarantees consecutive modules
+  // do NOT all trace the same path: some bias +Z, some -Z, some stay near center.
+  const baseSign = ((floorNumber * 3 + (entrySide === 'LEFT' ? 1 : 2)) % 2 === 0) ? 1.0 : -1.0;
+  const biasSpread = 0.45 + Math.random() * 0.70; // Bounded spread ~0.45 to 1.15
+  const suspensionPlaneBiasZ = zInfluence * baseSign * biasSpread;
+
+  // Initial 3D pendulum state at delivery attachment:
+  const initialOffsetZ = suspensionPlaneBiasZ * 0.65;
+  const initialVelocityZ = suspensionPlaneBiasZ * 0.35 * (entrySide === 'LEFT' ? 1.0 : -1.0);
+
+  // 5. Entry spawn coordinate (guaranteed off-screen)
   const defaultSpawnX = entrySide === 'LEFT' ? -16.0 : 15.0;
   const entrySpawnX = customSpawnX !== undefined ? customSpawnX : defaultSpawnX;
 
@@ -123,6 +144,8 @@ export function createMotionProfile(
     speedVariation: speedVar,
     ampX,
     ampZ,
+    zInfluence,
+    riggingDir,
     rotY,
     swingSpringKX,
     swingSpringKZ,
@@ -132,6 +155,9 @@ export function createMotionProfile(
     rotDamping,
     rotCoupling,
     initialAngularOffset,
+    suspensionPlaneBiasZ,
+    initialOffsetZ,
+    initialVelocityZ,
     freqX,
     freqZ,
     freqRot,
