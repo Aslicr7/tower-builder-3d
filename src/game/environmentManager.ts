@@ -553,17 +553,14 @@ export class EnvironmentManager {
     roadMesh.receiveShadow = true;
     boulevardGroup.add(roadMesh);
 
-    // Center divider double yellow line (Y = -5.97, with polygonOffset to prevent depth-buffer flicker)
+    // Center divider double yellow line (clean geometric elevation at Y = -5.98, +10mm above road surface)
     const centerLineGeo = new THREE.PlaneGeometry(280, 0.35);
     const centerLineMat = new THREE.MeshBasicMaterial({
       color: 0xf59e0b,
-      polygonOffset: true,
-      polygonOffsetFactor: -1.0,
-      polygonOffsetUnits: -4.0,
     });
     const centerLine = new THREE.Mesh(centerLineGeo, centerLineMat);
     centerLine.rotation.x = -Math.PI / 2;
-    centerLine.position.set(0, -5.97, -22.0);
+    centerLine.position.set(0, -5.98, -22.0);
     boulevardGroup.add(centerLine);
 
     // North and South curbs / sidewalks (3D box geometry with 16cm real height, top at Y = -5.84)

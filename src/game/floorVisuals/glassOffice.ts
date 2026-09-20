@@ -380,11 +380,13 @@ export function buildGlassOffice(
     group.add(returnBeam);
 
     // Right flank corner column anchoring the primary glass volume
+    // Offset outward along facade normal (+Z) to guarantee zero coplanar z-fighting with glass
+    const frameOffset = 0.035;
     const colRight = new THREE.Mesh(
       new THREE.BoxGeometry(colSize, bodyH, colSize),
       mats.structuralSteel
     );
-    colRight.position.set(w / 2 - colSize / 2 - 0.08, 0, mainWingCenterZ + mainWingD / 2 - colSize / 2);
+    colRight.position.set(w / 2 - colSize / 2 - 0.08, 0, mainWingCenterZ + mainWingD / 2 - colSize / 2 + frameOffset);
     setupMesh(colRight);
     group.add(colRight);
   }
@@ -422,13 +424,14 @@ export function buildGlassOffice(
     setupMesh(mainSpandrel);
     group.add(mainSpandrel);
 
-    // Left Corner Structural Column
+    // Left Corner Structural Column (offset outward along +Z facade normal)
     const colSize = 0.16;
+    const frameOffset = 0.035;
     const leftCol = new THREE.Mesh(
       new THREE.BoxGeometry(colSize, bodyH, colSize),
       mats.structuralSteel
     );
-    leftCol.position.set(-w / 2 + colSize / 2 + 0.06, 0, mainCenterZ + mainD / 2 - colSize / 2);
+    leftCol.position.set(-w / 2 + colSize / 2 + 0.06, 0, mainCenterZ + mainD / 2 - colSize / 2 + frameOffset);
     setupMesh(leftCol);
     group.add(leftCol);
 
@@ -467,21 +470,22 @@ export function buildGlassOffice(
     setupMesh(topCradleBeam);
     group.add(topCradleBeam);
 
-    // Heavy Outer Corner Column framing the projecting pod
+    // Heavy Outer Corner Column framing the projecting pod (offset outward along +Z)
     const cantiCornerCol = new THREE.Mesh(
       new THREE.BoxGeometry(0.18, bodyH, 0.18),
       mats.structuralSteel
     );
-    cantiCornerCol.position.set(w / 2 - 0.08, 0, cantiFrontZ - 0.09);
+    cantiCornerCol.position.set(w / 2 - 0.08, 0, cantiFrontZ - 0.09 + frameOffset);
     setupMesh(cantiCornerCol);
     group.add(cantiCornerCol);
 
     // Intermediate vertical steel mullion dividing the panoramic cantilever glazing
+    // Offset outward along local facade normal (+Z) so it cleanly projects in front of the glass
     const midCantiMullion = new THREE.Mesh(
       new THREE.BoxGeometry(0.10, bodyH - cradleBeamH * 2, 0.10),
       mats.structuralSteel
     );
-    midCantiMullion.position.set(cantiCenterX - 0.35, 0, cantiFrontZ - 0.05);
+    midCantiMullion.position.set(cantiCenterX - 0.35, 0, cantiFrontZ - 0.05 + frameOffset);
     setupMesh(midCantiMullion);
     group.add(midCantiMullion);
   }
@@ -540,8 +544,10 @@ export function buildGlassOffice(
     group.add(rightSpandrel);
 
     // Corner Structural Columns for the Twin Pavilions
+    // Offset outward along local facade normal (+Z) to prevent coplanar z-fighting with glass
     const colSize = 0.16;
-    const colFrontZ = wingCenterZ + wingD / 2 - colSize / 2;
+    const frameOffset = 0.035;
+    const colFrontZ = wingCenterZ + wingD / 2 - colSize / 2 + frameOffset;
 
     const leftCol = new THREE.Mesh(new THREE.BoxGeometry(colSize, bodyH, colSize), mats.structuralSteel);
     leftCol.position.set(-w / 2 + colSize / 2 + 0.06, 0, colFrontZ);

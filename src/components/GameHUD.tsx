@@ -218,7 +218,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               </div>
               <div className="text-lg sm:text-xl font-extrabold tracking-tight font-display text-white leading-none mt-0.5">
                 {stats.currentFloor}{' '}
-                <span className="text-slate-400 text-xs font-normal">/ ∞</span>
+                <span className="text-slate-400 text-xs font-normal">/ 100</span>
               </div>
             </div>
           </div>

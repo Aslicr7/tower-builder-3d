@@ -413,7 +413,7 @@ export class GameEngine {
     this.nextEntrySide = this.firstEntrySide;
 
     // DEV Verification of Drop Height Curve across reference checkpoints
-    const testFloors = [1, 3, 5, 7, 8, 9, 10, 11, 15, 21];
+    const testFloors = [1, 5, 10, 15, 20, 25, 30, 35, 40, 50, 60, 70, 80];
     const foundationTopY = this.physics.getFoundationTopY();
     console.log('[DropHeightCheck] --- Reference Checkpoints Verification ---');
     for (const f of testFloors) {

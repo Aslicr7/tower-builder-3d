@@ -287,52 +287,54 @@ export function getReleaseMomentumMultipliers(floorNumber: number): {
 export type StabilizationStatus = 'VERY_STABLE' | 'STABLE' | 'RISKY' | 'DANGEROUS';
 
 /**
- * Drop Height Multiplier progression across floors:
- * Floor 1–2: 2.10x
- * Floor 3: 2.08x, Floor 4: 2.05x, Floor 5: 2.02x
- * Floor 6: 2.00x, Floor 7: 1.97x, Floor 8: 1.94x, Floor 9: 1.91x, Floor 10: 1.88x
- * Floor 11: 1.84x, Floor 12: 1.80x, Floor 13: 1.76x, Floor 14: 1.72x, Floor 15: 1.68x
- * Floor 16: 1.64x, Floor 17: 1.60x, Floor 18: 1.56x, Floor 19: 1.52x, Floor 20: 1.48x
- * Floor 21: 1.43x, Floor 22: 1.38x, Floor 23: 1.33x, Floor 24: 1.28x, Floor 25: 1.23x
- * Floors 26–30: smooth transition down to standard baseline 1.00x
- * Floor 30+: 1.00x
+ * Authoritative Drop Height Multiplier progression across floors:
+ * Floors 1–2: 2.25x
+ * Floor 3: 2.23x, Floor 4: 2.20x, Floor 5: 2.18x
+ * Floor 6: 2.15x, Floor 7: 2.13x, Floor 8: 2.10x, Floor 9: 2.08x, Floor 10: 2.05x
+ * Floor 11: 2.02x, Floor 12: 1.99x, Floor 13: 1.96x, Floor 14: 1.93x, Floor 15: 1.90x
+ * Floor 16: 1.87x, Floor 17: 1.84x, Floor 18: 1.81x, Floor 19: 1.78x, Floor 20: 1.75x
+ * Floor 21: 1.72x, Floor 22: 1.69x, Floor 23: 1.66x, Floor 24: 1.63x, Floor 25: 1.60x
+ * Floor 30: 1.58x, Floor 35: 1.56x, Floor 40: 1.54x, Floor 50: 1.52x, Floor 60: 1.50x, Floor 70: 1.48x, Floor 80+: 1.47x (soft-cap)
+ * High floors maintain a substantial vertical gap (1.47x - 1.60x) and never return to 1.00x.
  */
 export const DROP_HEIGHT_KEYFRAMES: Record<number, number> = {
-  1: 2.10,
-  2: 2.10,
-  3: 2.08,
-  4: 2.05,
-  5: 2.02,
-  6: 2.00,
-  7: 1.97,
-  8: 1.94,
-  9: 1.91,
-  10: 1.88,
-  11: 1.84,
-  12: 1.80,
-  13: 1.76,
-  14: 1.72,
-  15: 1.68,
-  16: 1.64,
-  17: 1.60,
-  18: 1.56,
-  19: 1.52,
-  20: 1.48,
-  21: 1.43,
-  22: 1.38,
-  23: 1.33,
-  24: 1.28,
-  25: 1.23,
-  26: 1.18,
-  27: 1.13,
-  28: 1.08,
-  29: 1.04,
-  30: 1.00,
+  1: 2.25,
+  2: 2.25,
+  3: 2.23,
+  4: 2.20,
+  5: 2.18,
+  6: 2.15,
+  7: 2.13,
+  8: 2.10,
+  9: 2.08,
+  10: 2.05,
+  11: 2.02,
+  12: 1.99,
+  13: 1.96,
+  14: 1.93,
+  15: 1.90,
+  16: 1.87,
+  17: 1.84,
+  18: 1.81,
+  19: 1.78,
+  20: 1.75,
+  21: 1.72,
+  22: 1.69,
+  23: 1.66,
+  24: 1.63,
+  25: 1.60,
+  30: 1.58,
+  35: 1.56,
+  40: 1.54,
+  50: 1.52,
+  60: 1.50,
+  70: 1.48,
+  80: 1.47,
 };
 
 export function getDropHeightMultiplierForFloor(floorNumber: number): number {
-  if (floorNumber <= 1) return 2.10;
-  if (floorNumber >= 30) return 1.00;
+  if (floorNumber <= 1) return 2.25;
+  if (floorNumber >= 80) return 1.47;
 
   const fLow = Math.floor(floorNumber);
   const fHigh = Math.ceil(floorNumber);
@@ -352,7 +354,7 @@ export function getDropHeightMultiplierForFloor(floorNumber: number): number {
     }
   }
 
-  return 1.00;
+  return 1.47;
 }
 
 export function getActualDropDistanceForFloor(floorNumber: number): number {
