@@ -17,7 +17,7 @@ import {
   getDropHeightMultiplierForFloor,
   getActualDropDistanceForFloor,
 } from './difficultyCurve';
-import { PhysicsWorld } from './physicsWorld';
+import { PhysicsWorld, PhysicsFloorRecord } from './physicsWorld';
 import { GAME_CONFIG } from './constants';
 import { createMotionProfile, ModuleMotionProfile } from './motionProfile';
 import { TrolleyKinematics } from './trolleyKinematics';
@@ -120,6 +120,14 @@ export class GameEngine {
   private sameEntrySideStreak = 0;
   private nextEntrySide: 'LEFT' | 'RIGHT' = 'LEFT';
   private debugForceEntrySide: 'LEFT' | 'RIGHT' | null = null;
+
+  // Secret Opening Mechanic State
+  private openingGroundPhase = true;
+  private firstEntrySide: 'LEFT' | 'RIGHT' | null = null;
+  private firstGroundBranchCreated: 'LEFT' | 'RIGHT' | null = null;
+  private secondGroundOpportunityAvailable = false;
+  private secondEntrySideForced: 'LEFT' | 'RIGHT' | null = null;
+
   private hasLoggedCenterCrossingThisFloor = false;
   private hasLoggedDropEnabledThisFloor = false;
   private moduleHangingTime = 0;
@@ -366,10 +374,37 @@ export class GameEngine {
     this.cranePhaseX = 0;
     this.cranePhaseZ = 0;
     this.cranePhaseRot = 0;
-    this.lastEntrySide = null;
-    this.sameEntrySideStreak = 0;
+    // Reset secret ground opening mechanic state
+    this.openingGroundPhase = true;
+    this.firstEntrySide = Math.random() < 0.5 ? 'LEFT' : 'RIGHT';
+    this.firstGroundBranchCreated = null;
+    this.secondGroundOpportunityAvailable = false;
+    this.secondEntrySideForced = null;
+
+    this.lastEntrySide = this.firstEntrySide;
+    this.sameEntrySideStreak = 1;
     this.transitionPhase = 'READY';
-    this.nextEntrySide = this.selectNextEntrySide();
+    this.nextEntrySide = this.firstEntrySide;
+
+    // DEV Verification of Drop Height Curve across reference checkpoints
+    const testFloors = [1, 3, 5, 7, 8, 9, 10, 11, 15, 21];
+    const foundationTopY = this.physics.getFoundationTopY();
+    console.log('[DropHeightCheck] --- Reference Checkpoints Verification ---');
+    for (const f of testFloors) {
+      const mult = getDropHeightMultiplierForFloor(f);
+      const actualDist = getActualDropDistanceForFloor(f);
+      const simSupportTopY = foundationTopY + (f - 1) * GAME_CONFIG.BASE_HEIGHT;
+      const simLoadY = simSupportTopY + actualDist + GAME_CONFIG.BASE_HEIGHT / 2;
+      console.log(
+        `[DropHeightCheck]\n` +
+        `  Floor: ${f}\n` +
+        `  CurrentSupportTopY: ${simSupportTopY.toFixed(2)}m\n` +
+        `  NormalDropDistance: ${GAME_CONFIG.CRANE_CLEARANCE.toFixed(2)}m\n` +
+        `  DropHeightMultiplier: ${mult.toFixed(2)}x\n` +
+        `  ActualDropDistance: ${actualDist.toFixed(2)}m\n` +
+        `  SuspendedLoadY: ${simLoadY.toFixed(2)}m`
+      );
+    }
 
     // Spawn first suspended floor directly in ready position
     this.spawnNextFloorImmediately();
@@ -398,6 +433,13 @@ export class GameEngine {
       this.lastEntrySide = this.debugForceEntrySide;
       this.sameEntrySideStreak = 1;
       return this.debugForceEntrySide;
+    }
+
+    // Secret ground opening mechanic: Drop 2 is forced to opposite side if Drop 1 created a ground branch
+    if (this.floorCount === 1 && this.secondGroundOpportunityAvailable && this.secondEntrySideForced) {
+      this.lastEntrySide = this.secondEntrySideForced;
+      this.sameEntrySideStreak = 1;
+      return this.secondEntrySideForced;
     }
 
     if (this.sameEntrySideStreak >= 3 && this.lastEntrySide !== null) {
@@ -478,11 +520,18 @@ export class GameEngine {
 
     const kinematics = getCraneKinematicsForFloor(this.floorCount + 1);
 
+    // Opening phase traversal: Ensure crane traversal provides enough horizontal space to reach side ground regions
+    const floorNum = this.floorCount + 1;
+    const effectiveAmpX =
+      floorNum <= 2 && (this.openingGroundPhase || this.secondGroundOpportunityAvailable)
+        ? Math.max(kinematics.ampX, 5.8)
+        : kinematics.ampX;
+
     // Initialize deterministic, smooth TrolleyKinematics
     this.trolleyKinematics = new TrolleyKinematics(
       this.currentMotionProfile.entrySpawnX,
       entrySide,
-      kinematics.ampX,
+      effectiveAmpX,
       kinematics.ampZ,
       kinematics.speedMult,
       this.currentMotionProfile.speedVariation
@@ -563,10 +612,27 @@ export class GameEngine {
       `FoundationFootprintScale: ${GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE} | ` +
       `EarlySlipStrength: ${spawnGrip.toFixed(2)}`
     );
+
+    console.log(
+      `[DropHeightCheck]\n` +
+      `  Floor: ${spawnFloor}\n` +
+      `  CurrentSupportTopY: ${towerTopY.toFixed(2)}m\n` +
+      `  NormalDropDistance: ${GAME_CONFIG.CRANE_CLEARANCE.toFixed(2)}m\n` +
+      `  DropHeightMultiplier: ${dropMultiplier.toFixed(2)}x\n` +
+      `  ActualDropDistance: ${actualDrop.toFixed(2)}m\n` +
+      `  SuspendedLoadY: ${hangingY.toFixed(2)}m`
+    );
   }
 
   public static readonly DROP_ZONE_X_MAX = 8.5;
   public static readonly DROP_ZONE_Z_MAX = 6.0;
+
+  // Ground branch valid target areas on left and right sides of central foundation
+  public static readonly LEFT_GROUND_X_MIN = -8.2;
+  public static readonly LEFT_GROUND_X_MAX = -2.3;
+  public static readonly RIGHT_GROUND_X_MIN = 2.3;
+  public static readonly RIGHT_GROUND_X_MAX = 8.2;
+  public static readonly GROUND_BRANCH_Z_MAX = 3.2;
 
   public isInsideDropZone(): boolean {
     return (
@@ -932,30 +998,261 @@ export class GameEngine {
     this.missedFloorFailureDuration = 0;
     this.collapseFailureDuration = 0;
 
+    const curPos = fallenRec.body.position;
+    const curDim = fallenRec.dimensions;
+    const curBottomY = curPos.y - curDim.height / 2;
+    const dropNumber = this.floorCount + 1;
+
+    // 1. Check Out of Bounds / Abyss
+    const isOutOfBounds =
+      curPos.y < -8.5 ||
+      Math.abs(curPos.x) > 14.0 ||
+      Math.abs(curPos.z) > 10.0;
+
+    // 2. Evaluate Foundation Support
+    const foundationTopY = this.physics.getFoundationTopY();
+    const dyFoundation = curBottomY - foundationTopY;
+    let hasFoundationSupport = false;
+    let foundationOverlapArea = 0;
+    let foundationSupportRatio = 0;
+
+    if (dyFoundation >= -0.75 && dyFoundation <= 1.25) {
+      const fw = GAME_CONFIG.BASE_WIDTH * GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE;
+      const fd = GAME_CONFIG.BASE_DEPTH * GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE;
+      const minX1 = curPos.x - curDim.width / 2;
+      const maxX1 = curPos.x + curDim.width / 2;
+      const minX2 = -fw / 2;
+      const maxX2 = fw / 2;
+      const overlapX = Math.max(0, Math.min(maxX1, maxX2) - Math.max(minX1, minX2));
+
+      const minZ1 = curPos.z - curDim.depth / 2;
+      const maxZ1 = curPos.z + curDim.depth / 2;
+      const minZ2 = -fd / 2;
+      const maxZ2 = fd / 2;
+      const overlapZ = Math.max(0, Math.min(maxZ1, maxZ2) - Math.max(minZ1, minZ2));
+
+      foundationOverlapArea = overlapX * overlapZ;
+      foundationSupportRatio = Math.min(1.0, foundationOverlapArea / (curDim.width * curDim.depth));
+      if (foundationOverlapArea > 0.10 && foundationSupportRatio >= 0.15 && tiltAngle < 1.15) {
+        hasFoundationSupport = true;
+      }
+    }
+
+    // 3. Evaluate Module Structure Support
+    let bestModuleSupport: {
+      record: PhysicsFloorRecord;
+      overlapArea: number;
+      supportRatio: number;
+    } | null = null;
+
+    for (const r of this.physics.records) {
+      if (r !== fallenRec && r.settled && !r.isDetached) {
+        const rTop = r.body.position.y + r.dimensions.height / 2;
+        const dyMod = curBottomY - rTop;
+        if (dyMod >= -0.75 && dyMod <= 1.25) {
+          const minX1 = curPos.x - curDim.width / 2;
+          const maxX1 = curPos.x + curDim.width / 2;
+          const minX2 = r.body.position.x - r.dimensions.width / 2;
+          const maxX2 = r.body.position.x + r.dimensions.width / 2;
+          const overlapX = Math.max(0, Math.min(maxX1, maxX2) - Math.max(minX1, minX2));
+
+          const minZ1 = curPos.z - curDim.depth / 2;
+          const maxZ1 = curPos.z + curDim.depth / 2;
+          const minZ2 = r.body.position.z - r.dimensions.depth / 2;
+          const maxZ2 = r.body.position.z + r.dimensions.depth / 2;
+          const overlapZ = Math.max(0, Math.min(maxZ1, maxZ2) - Math.max(minZ1, minZ2));
+
+          const contactArea = overlapX * overlapZ;
+          const supportRatio = Math.min(1.0, contactArea / (curDim.width * curDim.depth));
+          if (contactArea > 0.10 && supportRatio >= 0.15 && tiltAngle < 1.15) {
+            if (!bestModuleSupport || supportRatio > bestModuleSupport.supportRatio) {
+              bestModuleSupport = { record: r, overlapArea: contactArea, supportRatio };
+            }
+          }
+        }
+      }
+    }
+
+    // 4. Determine Authoritative Placement Result
+    type PlacementResultType =
+      | 'FOUNDATION_SUPPORTED'
+      | 'STRUCTURE_SUPPORTED'
+      | 'OPENING_GROUND_SUPPORTED'
+      | 'GROUND_FAILED'
+      | 'OUT_OF_BOUNDS_FAILED';
+
+    let placementResult: PlacementResultType;
+    let supportingRecord: PhysicsFloorRecord | null = null;
+    let actionLog: string = '';
+    let reasonLog: string = '';
+
+    if (isOutOfBounds) {
+      placementResult = 'OUT_OF_BOUNDS_FAILED';
+      actionLog = 'MISSED';
+      reasonLog = 'Fell into abyss / out of bounds';
+    } else if (hasFoundationSupport && (!bestModuleSupport || foundationSupportRatio >= bestModuleSupport.supportRatio)) {
+      placementResult = 'FOUNDATION_SUPPORTED';
+      actionLog = 'FOUNDATION';
+      reasonLog = `Supported by central foundation (${(foundationSupportRatio * 100).toFixed(0)}% support)`;
+    } else if (bestModuleSupport) {
+      placementResult = 'STRUCTURE_SUPPORTED';
+      supportingRecord = bestModuleSupport.record;
+      actionLog = 'STRUCTURE';
+      reasonLog = `Supported by floor ${bestModuleSupport.record.id} (${(bestModuleSupport.supportRatio * 100).toFixed(0)}% support)`;
+    } else {
+      // Resting on world ground (or fallen on road)
+      const modX = curPos.x;
+      const modZ = curPos.z;
+      const isUpright = tiltAngle < 0.60;
+
+      const isLeftGround =
+        modX >= GameEngine.LEFT_GROUND_X_MIN &&
+        modX <= GameEngine.LEFT_GROUND_X_MAX &&
+        Math.abs(modZ) <= GameEngine.GROUND_BRANCH_Z_MAX &&
+        isUpright;
+
+      const isRightGround =
+        modX >= GameEngine.RIGHT_GROUND_X_MIN &&
+        modX <= GameEngine.RIGHT_GROUND_X_MAX &&
+        Math.abs(modZ) <= GameEngine.GROUND_BRANCH_Z_MAX &&
+        isUpright;
+
+      if (this.floorCount === 0 && this.openingGroundPhase) {
+        if (isLeftGround) {
+          placementResult = 'OPENING_GROUND_SUPPORTED';
+          actionLog = 'LEFT_GROUND';
+          reasonLog = 'Drop 1 landed safely on left ground opening';
+        } else if (isRightGround) {
+          placementResult = 'OPENING_GROUND_SUPPORTED';
+          actionLog = 'RIGHT_GROUND';
+          reasonLog = 'Drop 1 landed safely on right ground opening';
+        } else {
+          placementResult = 'GROUND_FAILED';
+          actionLog = 'INVALID_GROUND';
+          reasonLog = 'Drop 1 missed valid ground target zone or tilted excessively';
+        }
+      } else if (this.floorCount === 1 && this.secondGroundOpportunityAvailable) {
+        const isTargetOpposite =
+          (this.firstGroundBranchCreated === 'LEFT' && isRightGround) ||
+          (this.firstGroundBranchCreated === 'RIGHT' && isLeftGround);
+
+        if (isTargetOpposite) {
+          placementResult = 'OPENING_GROUND_SUPPORTED';
+          actionLog = this.firstGroundBranchCreated === 'LEFT' ? 'RIGHT_GROUND' : 'LEFT_GROUND';
+          reasonLog = 'Drop 2 landed safely on opposite ground opening';
+        } else {
+          placementResult = 'GROUND_FAILED';
+          actionLog = 'INVALID_GROUND';
+          reasonLog = 'Drop 2 missed target opposite ground zone or tilted excessively';
+        }
+      } else {
+        placementResult = 'GROUND_FAILED';
+        actionLog = 'INVALID_GROUND';
+        reasonLog = 'Landed on world ground without structural support after opening phase';
+      }
+    }
+
+    const isSuccess =
+      placementResult === 'FOUNDATION_SUPPORTED' ||
+      placementResult === 'STRUCTURE_SUPPORTED' ||
+      placementResult === 'OPENING_GROUND_SUPPORTED';
+
+    // State query for clean logging
+    const leftBranch = this.physics.records.some(
+      (r) => r.isGroundBranch && r.body.position.x < -1.0 && this.physics.isFloorSurviving(r)
+    );
+    const rightBranch = this.physics.records.some(
+      (r) => r.isGroundBranch && r.body.position.x > 1.0 && this.physics.isFloorSurviving(r)
+    );
+    const foundationOccupied =
+      placementResult === 'FOUNDATION_SUPPORTED' ||
+      this.physics.records.some(
+        (r) =>
+          !r.isGroundBranch &&
+          Math.abs(r.body.position.x) <= 2.5 &&
+          Math.abs(r.body.position.z) <= 2.5 &&
+          Math.abs(r.body.position.y - (foundationTopY + 1.15)) < 1.0 &&
+          this.physics.isFloorSurviving(r)
+      );
+
+    console.log(
+      `[OPENING PHASE]\nDrop: ${dropNumber}\nAction: ${actionLog}\nResult: ${
+        isSuccess ? 'VALID' : 'GAME_OVER'
+      }\nReason: ${reasonLog}\nState:\n  openingGroundPhase: ${
+        this.openingGroundPhase
+      }\n  secondGroundOpportunityAvailable: ${
+        this.secondGroundOpportunityAvailable
+      }\n  leftBranch: ${leftBranch}\n  rightBranch: ${rightBranch}\n  foundationOccupied: ${foundationOccupied}`
+    );
+
+    if (!isSuccess) {
+      this.triggerCollapse('MISSED_FLOOR');
+      return;
+    }
+
+    // 5. Update Opening Phase State Machine on Success
+    let isGroundBranchSuccess = false;
+
+    if (placementResult === 'OPENING_GROUND_SUPPORTED') {
+      fallenRec.isGroundBranch = true;
+      isGroundBranchSuccess = true;
+
+      if (this.floorCount === 0) {
+        if (actionLog === 'LEFT_GROUND') {
+          this.firstGroundBranchCreated = 'LEFT';
+          this.secondGroundOpportunityAvailable = true;
+          this.secondEntrySideForced = 'RIGHT';
+        } else {
+          this.firstGroundBranchCreated = 'RIGHT';
+          this.secondGroundOpportunityAvailable = true;
+          this.secondEntrySideForced = 'LEFT';
+        }
+      } else if (this.floorCount === 1) {
+        this.openingGroundPhase = false;
+        this.secondGroundOpportunityAvailable = false;
+        this.secondEntrySideForced = null;
+      }
+    } else if (placementResult === 'FOUNDATION_SUPPORTED') {
+      if (this.floorCount === 0) {
+        this.openingGroundPhase = false;
+        this.secondGroundOpportunityAvailable = false;
+        this.secondEntrySideForced = null;
+      } else if (this.secondGroundOpportunityAvailable) {
+        this.openingGroundPhase = false;
+        this.secondGroundOpportunityAvailable = false;
+        this.secondEntrySideForced = null;
+      }
+    } else if (placementResult === 'STRUCTURE_SUPPORTED') {
+      if (this.secondGroundOpportunityAvailable) {
+        this.openingGroundPhase = false;
+        this.secondGroundOpportunityAvailable = false;
+        this.secondEntrySideForced = null;
+      }
+    }
+
     sounds.playImpact(1.0);
     this.floorCount++;
 
-    // 1. Calculate placement metrics against previous floor (or foundation)
-    let distOffset = Math.sqrt(
-      fallenRec.body.position.x * fallenRec.body.position.x +
-      fallenRec.body.position.z * fallenRec.body.position.z
-    );
-
-    const prevFloor = this.physics.records[this.physics.records.length - 2];
-    if (prevFloor) {
-      const dx = fallenRec.body.position.x - prevFloor.body.position.x;
-      const dz = fallenRec.body.position.z - prevFloor.body.position.z;
+    // 6. Calculate placement metrics against supporting element
+    let distOffset = 0;
+    if (isGroundBranchSuccess) {
+      distOffset = 0;
+    } else if (placementResult === 'FOUNDATION_SUPPORTED') {
+      distOffset = Math.sqrt(curPos.x * curPos.x + curPos.z * curPos.z);
+    } else if (supportingRecord) {
+      const dx = curPos.x - supportingRecord.body.position.x;
+      const dz = curPos.z - supportingRecord.body.position.z;
       distOffset = Math.sqrt(dx * dx + dz * dz);
     }
 
     const rotOffset = Math.abs(this.craneRotY);
 
-    // 2. Authoritative placement quality (Section 32)
-    const placementQuality = evaluatePlacementQuality(distOffset, rotOffset, tiltAngle);
+    // 7. Authoritative placement quality (Section 32)
+    const placementQuality = isGroundBranchSuccess
+      ? 'GREAT'
+      : evaluatePlacementQuality(distOffset, rotOffset, tiltAngle);
 
-    // 3. Apply Hidden Soft Stabilization with authoritative placement quality:
-    // Creates an invisible soft LockConstraint between floors (preserving exact position & rotation)
-    // and enforces the active physics window (top 4 floors)!
+    // 8. Apply Hidden Soft Stabilization with authoritative placement quality:
     const { status } = this.physics.applySoftStabilization(
       fallenRec,
       this.floorCount,

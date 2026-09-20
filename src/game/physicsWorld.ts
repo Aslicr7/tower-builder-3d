@@ -50,6 +50,7 @@ export interface PhysicsFloorRecord {
   initialPlacementForce?: number;
   initialLinearDamping?: number;
   initialAngularDamping?: number;
+  isGroundBranch?: boolean;
 }
 
 export class PhysicsWorld {
@@ -58,6 +59,7 @@ export class PhysicsWorld {
   private foundationMaterial: CANNON.Material;
   public records: PhysicsFloorRecord[] = [];
   public currentFallingFloor: PhysicsFloorRecord | null = null;
+  public groundBody!: CANNON.Body;
   private foundationBody: CANNON.Body;
   private constraints: CANNON.Constraint[] = [];
   private foundationConstraint: CANNON.LockConstraint | null = null;
@@ -114,14 +116,14 @@ export class PhysicsWorld {
     this.world.addContactMaterial(groundContactMat);
 
     // Ground plane
-    const groundBody = new CANNON.Body({
+    this.groundBody = new CANNON.Body({
       type: CANNON.Body.STATIC,
       shape: new CANNON.Plane(),
       material: this.foundationMaterial,
     });
-    groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-    groundBody.position.set(0, -6.0, 0);
-    this.world.addBody(groundBody);
+    this.groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+    this.groundBody.position.set(0, -6.0, 0);
+    this.world.addBody(this.groundBody);
 
     // Tower Foundation rigid body (matches physical and visual 75% footprint scale)
     const fw = (GAME_CONFIG.BASE_WIDTH * GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE) / 2;
@@ -403,14 +405,17 @@ export class PhysicsWorld {
     const linearSpeed = Math.sqrt(vx * vx + vy * vy + vz * vz);
     const angularSpeed = body.angularVelocity.length();
 
-    // CASE A: Check if floor clearly missed the tower and is falling away
-    // It must fall significantly below expectedSupportY (e.g. 4.5m below support top or below foundation)
-    // AND have been falling for at least 0.75s to let the player visibly see it drop past the tower
-    const fallThresholdY = expectedSupportY - 4.5;
-    const isFarBelow = body.position.y < fallThresholdY || body.position.y < (this.getFoundationTopY() - 2.0);
+    // CASE A: Check if floor clearly missed the tower and fell into the abyss/out of bounds
+    // The lowest physical surface is world ground at Y = -6.00.
+    // A floor has fallen away into the abyss ONLY if it drops well below world ground (Y < -8.5)
+    // or flies far outside lateral play bounds (|X| > 14m or |Z| > 10m).
+    const isOutOfBounds =
+      body.position.y < -8.5 ||
+      Math.abs(body.position.x) > 14.0 ||
+      Math.abs(body.position.z) > 10.0;
 
-    if (isFarBelow && elapsedSinceDrop > 0.75) {
-      // Floor has clearly fallen away from the tower
+    if (isOutOfBounds && elapsedSinceDrop > 0.60) {
+      // Floor has clearly fallen away from the tower into the abyss
       return { settled: false, missed: true, impactSpeed: linearSpeed, tiltAngle };
     }
 
@@ -445,22 +450,138 @@ export class PhysicsWorld {
         return { settled: true, missed: false, impactSpeed: linearSpeed, tiltAngle };
       }
 
-      // Safety limit: if contact has lasted >= maxTime and floor is resting safely near/above expected support
+      // Safety limit: if contact has lasted >= maxTime and floor is resting safely on a physical surface (ground Y=-6.0)
       const maxTime = isEarlyUnsafe ? 1.50 : GAME_CONFIG.SETTLING_MAX_TIME_S;
       const maxSpeed = isEarlyUnsafe ? 0.22 : 0.65;
       if (
         contactDuration >= maxTime &&
         linearSpeed < maxSpeed &&
-        body.position.y >= expectedSupportY - 1.0
+        body.position.y >= -5.5
       ) {
         return { settled: true, missed: false, impactSpeed: linearSpeed, tiltAngle };
       }
-    } else if (elapsedSinceDrop > 1.8 && linearSpeed < 0.35 && body.position.y >= expectedSupportY - 1.0) {
-      // Fallback
+    } else if (elapsedSinceDrop > 1.8 && linearSpeed < 0.35 && body.position.y >= -5.5) {
+      // Fallback for settled floor on any surface
       return { settled: true, missed: false, impactSpeed: linearSpeed, tiltAngle };
     }
 
     return { settled: false, missed: false, impactSpeed: linearSpeed, tiltAngle };
+  }
+
+  /**
+   * Evaluates support geometry for a floor module:
+   * - Central Foundation support
+   * - Settled player module support (supports multi-column / branching towers)
+   * - World ground support (for the secret opening phase)
+   */
+  public evaluateFloorSupport(record: PhysicsFloorRecord): {
+    supportedByFoundation: boolean;
+    supportedByModule: PhysicsFloorRecord | null;
+    isRestingOnGround: boolean;
+    supportRatio: number;
+    overlapArea: number;
+    supBody: CANNON.Body;
+  } {
+    const curPos = record.body.position;
+    const curDim = record.dimensions;
+    const curBottomY = curPos.y - curDim.height / 2;
+    const floorArea = curDim.width * curDim.depth;
+
+    let bestCandidate: {
+      type: 'FOUNDATION' | 'MODULE';
+      record?: PhysicsFloorRecord;
+      body: CANNON.Body;
+      supportRatio: number;
+      overlapArea: number;
+    } | null = null;
+
+    // 1. Check Foundation
+    const foundationTopY = this.getFoundationTopY();
+    const dyFoundation = curBottomY - foundationTopY;
+    if (dyFoundation >= -0.75 && dyFoundation <= 1.25) {
+      const fw = GAME_CONFIG.BASE_WIDTH * GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE;
+      const fd = GAME_CONFIG.BASE_DEPTH * GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE;
+      const minX1 = curPos.x - curDim.width / 2;
+      const maxX1 = curPos.x + curDim.width / 2;
+      const minX2 = -fw / 2;
+      const maxX2 = fw / 2;
+      const overlapX = Math.max(0, Math.min(maxX1, maxX2) - Math.max(minX1, minX2));
+
+      const minZ1 = curPos.z - curDim.depth / 2;
+      const maxZ1 = curPos.z + curDim.depth / 2;
+      const minZ2 = -fd / 2;
+      const maxZ2 = fd / 2;
+      const overlapZ = Math.max(0, Math.min(maxZ1, maxZ2) - Math.max(minZ1, minZ2));
+
+      const contactArea = overlapX * overlapZ;
+      const supportRatio = Math.min(1.0, contactArea / floorArea);
+      if (contactArea > 0.05) {
+        bestCandidate = {
+          type: 'FOUNDATION',
+          body: this.foundationBody,
+          supportRatio,
+          overlapArea: contactArea,
+        };
+      }
+    }
+
+    // 2. Check all surviving settled floors beneath this floor
+    for (const r of this.records) {
+      if (r !== record && r.settled && !r.isDetached) {
+        const rTop = r.body.position.y + r.dimensions.height / 2;
+        const dyMod = curBottomY - rTop;
+        if (dyMod >= -0.75 && dyMod <= 1.25) {
+          const minX1 = curPos.x - curDim.width / 2;
+          const maxX1 = curPos.x + curDim.width / 2;
+          const minX2 = r.body.position.x - r.dimensions.width / 2;
+          const maxX2 = r.body.position.x + r.dimensions.width / 2;
+          const overlapX = Math.max(0, Math.min(maxX1, maxX2) - Math.max(minX1, minX2));
+
+          const minZ1 = curPos.z - curDim.depth / 2;
+          const maxZ1 = curPos.z + curDim.depth / 2;
+          const minZ2 = r.body.position.z - r.dimensions.depth / 2;
+          const maxZ2 = r.body.position.z + r.dimensions.depth / 2;
+          const overlapZ = Math.max(0, Math.min(maxZ1, maxZ2) - Math.max(minZ1, minZ2));
+
+          const contactArea = overlapX * overlapZ;
+          const supportRatio = Math.min(1.0, contactArea / floorArea);
+          if (contactArea > 0.05) {
+            if (!bestCandidate || supportRatio > bestCandidate.supportRatio) {
+              bestCandidate = {
+                type: 'MODULE',
+                record: r,
+                body: r.body,
+                supportRatio,
+                overlapArea: contactArea,
+              };
+            }
+          }
+        }
+      }
+    }
+
+    if (bestCandidate) {
+      return {
+        supportedByFoundation: bestCandidate.type === 'FOUNDATION',
+        supportedByModule: bestCandidate.type === 'MODULE' ? bestCandidate.record! : null,
+        isRestingOnGround: false,
+        supportRatio: bestCandidate.supportRatio,
+        overlapArea: bestCandidate.overlapArea,
+        supBody: bestCandidate.body,
+      };
+    }
+
+    // 3. If no structural support found, check if resting on world ground (Y = -6.0, module bottom ~ -6.0, center ~ -4.85)
+    const isNearGround = curBottomY <= -5.20 && curPos.y <= -4.10;
+
+    return {
+      supportedByFoundation: false,
+      supportedByModule: null,
+      isRestingOnGround: isNearGround,
+      supportRatio: isNearGround ? 1.0 : 0,
+      overlapArea: 0,
+      supBody: this.groundBody,
+    };
   }
 
   /**
@@ -486,58 +607,17 @@ export class PhysicsWorld {
     };
     record.stableY = record.body.position.y;
 
-    // Find supporting body among surviving settled floors beneath this floor
-    let prevRec: PhysicsFloorRecord | null = null;
-    let highestPrevY = -Infinity;
-    for (const r of this.records) {
-      if (r !== record && r.settled && !r.isDetached) {
-        const rTop = r.body.position.y + r.dimensions.height / 2;
-        if (rTop <= record.body.position.y + 0.1 && rTop > highestPrevY) {
-          highestPrevY = rTop;
-          prevRec = r;
-        }
-      }
-    }
+    // Evaluate support using evaluateFloorSupport
+    const supportEval = this.evaluateFloorSupport(record);
+    const supBody: CANNON.Body = supportEval.supBody;
 
-    let supX = 0;
-    let supZ = 0;
-    let supW = GAME_CONFIG.BASE_WIDTH * GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE;
-    let supD = GAME_CONFIG.BASE_DEPTH * GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE;
-    let supBody: CANNON.Body = this.foundationBody;
-
-    if (prevRec) {
-      supX = prevRec.body.position.x;
-      supZ = prevRec.body.position.z;
-      supW = prevRec.dimensions.width;
-      supD = prevRec.dimensions.depth;
-      supBody = prevRec.body;
-    }
-
-    const curPos = record.body.position;
-    const curDim = record.dimensions;
-
-    // 1D Overlaps along X and Z
-    const minX1 = curPos.x - curDim.width / 2;
-    const maxX1 = curPos.x + curDim.width / 2;
-    const minX2 = supX - supW / 2;
-    const maxX2 = supX + supW / 2;
-    const overlapX = Math.max(0, Math.min(maxX1, maxX2) - Math.max(minX1, minX2));
-
-    const minZ1 = curPos.z - curDim.depth / 2;
-    const maxZ1 = curPos.z + curDim.depth / 2;
-    const minZ2 = supZ - supD / 2;
-    const maxZ2 = supZ + supD / 2;
-    const overlapZ = Math.max(0, Math.min(maxZ1, maxZ2) - Math.max(minZ1, minZ2));
-
-    const contactArea = overlapX * overlapZ;
-    const floorArea = curDim.width * curDim.depth;
-    const supportRatio = Math.min(1.0, contactArea / floorArea);
+    const supportRatio = record.isGroundBranch ? 1.0 : supportEval.supportRatio;
     record.supportRatio = supportRatio;
 
     // Categorize support according to rules
     let status: StabilizationStatus;
 
-    if (supportRatio >= GAME_CONFIG.STABILIZATION_VERY_STABLE_SUPPORT) {
+    if (record.isGroundBranch || supportRatio >= GAME_CONFIG.STABILIZATION_VERY_STABLE_SUPPORT) {
       // 70 - 100% supported: VERY STABLE
       status = 'VERY_STABLE';
     } else if (supportRatio >= GAME_CONFIG.STABILIZATION_STABLE_SUPPORT) {
@@ -574,13 +654,13 @@ export class PhysicsWorld {
     record.body.linearDamping = damping.linear;
     record.body.angularDamping = damping.angular;
 
-    // Foundation ↔ Floor 1 Connection
-    if (record.id === 1) {
+    // Foundation ↔ Floor Connection: Track foundation constraint for any floor directly supported by the foundation
+    if (supportEval.supportedByFoundation) {
       record.initialPlacementForce = maxForce;
       record.initialLinearDamping = damping.linear;
       record.initialAngularDamping = damping.angular;
 
-      // Ensure a LockConstraint exists between Floor 1 and foundationBody.
+      // Ensure a LockConstraint exists between the floor and foundationBody.
       // If maxForce was 0 (NORMAL/RISKY in early game), create it with maxForce: 0
       // so it registers the exact resting transform without applying artificial early grip.
       if (!record.lockConstraint) {
@@ -696,7 +776,9 @@ export class PhysicsWorld {
   public updateFoundationStabilization(currentFloorCount: number) {
     if (!this.foundationConstraint) return;
 
-    const floor1 = this.records.find((r) => r.id === 1);
+    const floor1 =
+      this.records.find((r) => r.lockConstraint === this.foundationConstraint) ||
+      this.records.find((r) => r.id === 1);
     if (!floor1 || floor1.isDetached) return;
 
     // If Floor 1 is in DANGEROUS status (<25% support), do not save it
@@ -869,7 +951,9 @@ export class PhysicsWorld {
   public isFloorSurviving(rec: PhysicsFloorRecord): boolean {
     if (!rec.settled) return false;
     if (rec.isDetached) return false;
-    if (rec.body.position.y < this.getFoundationTopY() - 0.5) return false;
+
+    // Floor must remain above the abyss (world ground is at Y = -6.0, ground module center is at Y = -4.85)
+    if (rec.body.position.y < -5.8) return false;
 
     // Permanently frozen floors are solid base structures
     if (rec.isFrozen) return true;
@@ -960,8 +1044,10 @@ export class PhysicsWorld {
       const bodyUp = rec.body.vectorToWorldFrame(up);
       const tilt = Math.acos(Math.max(-1, Math.min(1, up.dot(bodyUp))));
 
-      const isFallen = (fallDist > fallLimit || rec.body.position.y < (this.getFoundationTopY() - 2.0)) ||
-                       (tilt > 1.25 && rec.body.velocity.y < -0.8);
+      const isFallen = rec.isGroundBranch
+        ? (fallDist > fallLimit || rec.body.position.y < -7.0 || (tilt > 1.25 && rec.body.velocity.y < -0.8))
+        : ((fallDist > fallLimit || rec.body.position.y < (this.getFoundationTopY() - 2.0)) ||
+           (tilt > 1.25 && rec.body.velocity.y < -0.8));
 
       if (isFallen) {
         rec.isDetached = true;

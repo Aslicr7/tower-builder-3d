@@ -1673,16 +1673,19 @@ export function createFloorModule(
 }
 
 /**
- * Creates the low industrial/concrete structural starting platform.
+ * Creates the structural concrete starting pedestal.
  * 
- * Simple, clean silhouette:
+ * Simple, clean monolithic silhouette:
  *         ┌─────────────┐
- *         │  TOP PLATE  │  (Dark structural steel landing platform, 1.00x footprint at Y = -5.00)
+ *         │  TOP PLATE  │  (Dark structural steel landing platform, 1.00x footprint at Y = -3.70)
  *         ├─────────────┤
- *         │CONCRETE BASE│  (Low poured concrete base platform anchored into city ground at Y = -6.00)
+ *         │  PEDESTAL   │  (Solid concrete pedestal body, 1.00x footprint, height 1.75m)
+ *         ├─────────────┤
+ *         │CONCRETE BASE│  (Poured concrete footing collar anchored into tarmac at Y = -6.00, height 0.35m)
  *         └─────────────┘
  * 
- * Top of foundation is exactly at Y = -5.00 (FOUNDATION_HEIGHT 1.00m above ground Y = -6.00).
+ * Top of foundation is exactly at Y = -3.70 (FOUNDATION_HEIGHT 2.30m above ground Y = -6.00).
+ * Visual height matches exactly one normal floor module (~2.3m).
  * Visual footprint exactly matches 1 normal floor (4.2m x 4.2m, 1.00 scale).
  * Zero residential props, zero pre-built tower floors, zero decorative boxes.
  */
@@ -1694,13 +1697,13 @@ export function createTowerFoundation(): { group: THREE.Group } {
   const fw = GAME_CONFIG.BASE_WIDTH * GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE;
   const fd = GAME_CONFIG.BASE_DEPTH * GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE;
   const groundY = -6.0;
-  const topY = GAME_CONFIG.FOUNDATION_HEIGHT - 6.0; // -5.00
+  const totalH = GAME_CONFIG.FOUNDATION_HEIGHT; // 2.30m
+  const topY = groundY + totalH; // -3.70m
 
-  // 1. CONCRETE BASE: Stepped ground tie-in collar & low poured concrete base platform
-  // Footing collar anchored into tarmac (Y: -6.00 to -5.70)
-  const collarH = 0.30;
-  const collarW = fw * 1.12;
-  const collarD = fd * 1.12;
+  // 1. CONCRETE BASE COLLAR: Heavy footing collar anchored into ground tarmac (Y: -6.00 to -5.65)
+  const collarH = 0.35;
+  const collarW = fw * 1.08;
+  const collarD = fd * 1.08;
   const collarMesh = new THREE.Mesh(
     new THREE.BoxGeometry(collarW, collarH, collarD),
     mats.concreteDark
@@ -1710,22 +1713,20 @@ export function createTowerFoundation(): { group: THREE.Group } {
   collarMesh.receiveShadow = true;
   group.add(collarMesh);
 
-  // Main concrete platform slab (Y: -5.70 to -5.18)
-  const baseSlabH = 0.52;
-  const baseSlabW = fw * 1.03;
-  const baseSlabD = fd * 1.03;
-  const baseSlabMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(baseSlabW, baseSlabH, baseSlabD),
+  // 2. MAIN MONOLITHIC CONCRETE PEDESTAL: Solid pedestal body (Y: -5.65 to -3.90)
+  const topPlateH = 0.20;
+  const pedestalH = totalH - collarH - topPlateH; // 2.30 - 0.35 - 0.20 = 1.75m
+  const pedestalMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(fw, pedestalH, fd),
     mats.concreteWarm
   );
-  baseSlabMesh.position.set(0, groundY + collarH + baseSlabH / 2, 0);
-  baseSlabMesh.castShadow = true;
-  baseSlabMesh.receiveShadow = true;
-  group.add(baseSlabMesh);
+  pedestalMesh.position.set(0, groundY + collarH + pedestalH / 2, 0);
+  pedestalMesh.castShadow = true;
+  pedestalMesh.receiveShadow = true;
+  group.add(pedestalMesh);
 
-  // 2. TOP PLATE: Dark structural steel landing platform (Y: -5.18 to -5.00)
-  // Perfectly matches the 1.00x footprint physical collider boundary (fw x fd) at Y = -5.00
-  const topPlateH = 0.18;
+  // 3. TOP STEEL LANDING PLATE: Heavy structural dark steel landing platform (Y: -3.90 to -3.70)
+  // Perfectly matches the physical collider boundary (fw x fd) at top surface Y = -3.70
   const topPlateMesh = new THREE.Mesh(
     new THREE.BoxGeometry(fw, topPlateH, fd),
     mats.blackMetal

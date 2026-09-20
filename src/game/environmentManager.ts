@@ -340,8 +340,15 @@ export class EnvironmentManager {
 
   // Animated elements
   private skyMaterial: THREE.ShaderMaterial;
-  private trafficMesh: THREE.InstancedMesh | null = null;
-  private trafficData: { x: number; z: number; speed: number; laneY: number }[] = [];
+  private trafficGroup: THREE.Group | null = null;
+  private trafficCars: {
+    mesh: THREE.Group;
+    x: number;
+    y: number;
+    z: number;
+    speed: number;
+    direction: 1 | -1;
+  }[] = [];
   private beaconLights: THREE.Mesh[] = [];
   private beaconTimer = 0;
   private airplaneGroup: THREE.Group | null = null;
@@ -509,10 +516,11 @@ export class EnvironmentManager {
     this.cityGroup.add(river);
 
     // Bridges
-    [-80, 15, 110].forEach((zPos) => {
+    [-80, -22, 15, 110].forEach((zPos) => {
       const bridgeGroup = new THREE.Group();
+      const deckWidth = zPos === -22 ? 14.5 : 6.5;
       const deck = new THREE.Mesh(
-        new THREE.BoxGeometry(70, 1.2, 6.5),
+        new THREE.BoxGeometry(70, 1.2, deckWidth),
         new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.6 })
       );
       deck.position.set(65, -5.1, zPos);
@@ -522,13 +530,46 @@ export class EnvironmentManager {
       const pylonGeo = new THREE.BoxGeometry(1.6, 20, 1.6);
       const pMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.5 });
       const p1 = new THREE.Mesh(pylonGeo, pMat);
-      p1.position.set(54, 2.5, zPos - 3.2);
+      p1.position.set(54, 2.5, zPos - deckWidth * 0.5);
       bridgeGroup.add(p1);
       const p2 = new THREE.Mesh(pylonGeo, pMat);
-      p2.position.set(76, 2.5, zPos + 3.2);
+      p2.position.set(76, 2.5, zPos + deckWidth * 0.5);
       bridgeGroup.add(p2);
       this.cityGroup.add(bridgeGroup);
     });
+
+    // Dedicated City Boulevard in background behind tower (Z = -22m)
+    const boulevardGroup = new THREE.Group();
+    boulevardGroup.name = 'city_boulevard';
+
+    // Road asphalt surface (280m long by 14m wide)
+    const roadGeo = new THREE.PlaneGeometry(280, 14);
+    const roadMat = new THREE.MeshStandardMaterial({ color: 0x272e3b, roughness: 0.88 });
+    const roadMesh = new THREE.Mesh(roadGeo, roadMat);
+    roadMesh.rotation.x = -Math.PI / 2;
+    roadMesh.position.set(0, -6.03, -22.0);
+    roadMesh.receiveShadow = true;
+    boulevardGroup.add(roadMesh);
+
+    // Center divider double yellow line
+    const centerLineGeo = new THREE.PlaneGeometry(280, 0.35);
+    const centerLineMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
+    const centerLine = new THREE.Mesh(centerLineGeo, centerLineMat);
+    centerLine.rotation.x = -Math.PI / 2;
+    centerLine.position.set(0, -6.02, -22.0);
+    boulevardGroup.add(centerLine);
+
+    // North and South curbs / sidewalks
+    const curbGeo = new THREE.BoxGeometry(280, 0.12, 1.4);
+    const curbMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.7 });
+    const northCurb = new THREE.Mesh(curbGeo, curbMat);
+    northCurb.position.set(0, -5.98, -14.6);
+    boulevardGroup.add(northCurb);
+    const southCurb = new THREE.Mesh(curbGeo, curbMat);
+    southCurb.position.set(0, -5.98, -29.4);
+    boulevardGroup.add(southCurb);
+
+    this.cityGroup.add(boulevardGroup);
 
     // Near Architectural Buildings (Radius 65 to 90m, Heights 22 to 42m)
     const nearSpecs: {
@@ -581,24 +622,315 @@ export class EnvironmentManager {
       this.cityGroup.add(bldg);
     }
 
-    // Traffic Mesh (moving vehicle lights on roads)
-    const carCount = 45;
-    const carGeo = new THREE.BoxGeometry(0.8, 0.4, 1.4);
-    const carMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
-    this.trafficMesh = new THREE.InstancedMesh(carGeo, carMat, carCount);
-    const dummy = new THREE.Object3D();
-    for (let i = 0; i < carCount; i++) {
-      const lane = i % 2 === 0 ? 1 : -1;
-      const x = -100 + i * 4.5;
-      const z = -20 + lane * 18 + (i % 3) * 2;
-      const speed = (0.28 + (i % 4) * 0.08) * lane;
-      this.trafficData.push({ x, z, speed, laneY: -5.8 });
-      dummy.position.set(x, -5.8, z);
-      dummy.updateMatrix();
-      this.trafficMesh.setMatrixAt(i, dummy.matrix);
+    // Build Procedural Low-Poly Background Traffic
+    this.buildTraffic();
+  }
+
+  private buildTraffic() {
+    this.trafficGroup = new THREE.Group();
+    this.trafficGroup.name = 'city_traffic';
+    this.trafficCars = [];
+
+    // Shared Materials for optimal mobile GPU performance
+    const windowMat = new THREE.MeshStandardMaterial({
+      color: 0x090d16,
+      roughness: 0.15,
+      metalness: 0.85,
+    });
+    const wheelMat = new THREE.MeshStandardMaterial({
+      color: 0x18181b,
+      roughness: 0.9,
+    });
+    const headlightMat = new THREE.MeshBasicMaterial({
+      color: 0xfffbeb,
+    });
+    const taillightMat = new THREE.MeshBasicMaterial({
+      color: 0xef4444,
+    });
+    const shadowMat = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: 0.35,
+      depthWrite: false,
+    });
+
+    // Shared Geometries
+    const sharedGeos = {
+      sedanBody: new THREE.BoxGeometry(4.40, 0.52, 1.86),
+      sedanCabin: new THREE.BoxGeometry(2.35, 0.52, 1.62),
+      sedanRoof: new THREE.BoxGeometry(2.15, 0.08, 1.58),
+      compactBody: new THREE.BoxGeometry(3.75, 0.52, 1.78),
+      compactCabin: new THREE.BoxGeometry(2.10, 0.52, 1.54),
+      compactRoof: new THREE.BoxGeometry(1.95, 0.08, 1.50),
+      vanBody: new THREE.BoxGeometry(4.65, 0.58, 1.92),
+      vanCargo: new THREE.BoxGeometry(3.10, 0.88, 1.88),
+      vanCabWindow: new THREE.BoxGeometry(1.05, 0.72, 1.82),
+      vanCabRoof: new THREE.BoxGeometry(1.10, 0.08, 1.84),
+      wheel: new THREE.CylinderGeometry(0.35, 0.35, 0.26, 12).rotateX(Math.PI / 2),
+      light: new THREE.BoxGeometry(0.05, 0.12, 0.32),
+      shadow: new THREE.PlaneGeometry(4.4, 2.0).rotateX(-Math.PI / 2),
+    };
+
+    const sharedMats = {
+      window: windowMat,
+      wheel: wheelMat,
+      headlight: headlightMat,
+      taillight: taillightMat,
+      shadow: shadowMat,
+    };
+
+    const CAR_COLORS = [
+      0xf8fafc, // Alpine White
+      0x94a3b8, // Slate Silver
+      0x334155, // Midnight Charcoal
+      0x1e3a8a, // Deep Navy Blue
+      0x0284c7, // Pacific Blue
+      0xb91c1c, // Crimson Red
+      0xf59e0b, // Amber / Taxi Yellow
+      0x15803d, // Forest Green
+    ];
+
+    // 4 Dedicated Boulevard Lanes (Z = -22m)
+    // 2 Eastbound lanes (moving -X to +X, Left -> Right, direction +1)
+    // 2 Westbound lanes (moving +X to -X, Right -> Left, direction -1)
+    const laneDefs: { z: number; direction: 1 | -1; baseSpeed: number }[] = [
+      { z: -18.2, direction: 1, baseSpeed: 9.5 },   // Eastbound Outer
+      { z: -20.4, direction: 1, baseSpeed: 11.5 },  // Eastbound Inner
+      { z: -23.6, direction: -1, baseSpeed: -11.5 }, // Westbound Inner
+      { z: -25.8, direction: -1, baseSpeed: -9.5 },  // Westbound Outer
+    ];
+
+    const variants: ('SEDAN' | 'COMPACT' | 'VAN')[] = [
+      'SEDAN', 'COMPACT', 'SEDAN', 'VAN', 'SEDAN', 'COMPACT',
+    ];
+
+    const carsPerLane = 6;
+    laneDefs.forEach((lane, laneIdx) => {
+      for (let k = 0; k < carsPerLane; k++) {
+        const variant = variants[(k + laneIdx) % variants.length];
+        const colorHex = CAR_COLORS[(k * 3 + laneIdx * 2) % CAR_COLORS.length];
+        const carMesh = this.createLowPolyCar(variant, colorHex, sharedGeos, sharedMats);
+
+        // Staggered distribution along roadway (-110 to +110m)
+        const x = -110 + k * 44 + ((laneIdx * 5 + k * 7) % 11) * 1.5;
+        const speedVariation = 1 + (((k * 13 + laneIdx * 19) % 7) - 3) * 0.04;
+        const speed = lane.baseSpeed * speedVariation;
+
+        carMesh.position.set(x, -6.00, lane.z);
+        // Orientation strictly matches lane travel direction:
+        // direction +1 (Left -> Right) => faces +X (rotation.y = 0)
+        // direction -1 (Right -> Left) => faces -X (rotation.y = Math.PI)
+        carMesh.rotation.y = lane.direction === 1 ? 0 : Math.PI;
+
+        this.trafficGroup!.add(carMesh);
+        this.trafficCars.push({
+          mesh: carMesh,
+          x,
+          y: -6.00,
+          z: lane.z,
+          speed,
+          direction: lane.direction,
+        });
+      }
+    });
+
+    this.cityGroup.add(this.trafficGroup);
+  }
+
+  private createLowPolyCar(
+    variant: 'SEDAN' | 'COMPACT' | 'VAN',
+    colorHex: number,
+    sharedGeos: {
+      sedanBody: THREE.BufferGeometry;
+      sedanCabin: THREE.BufferGeometry;
+      sedanRoof: THREE.BufferGeometry;
+      compactBody: THREE.BufferGeometry;
+      compactCabin: THREE.BufferGeometry;
+      compactRoof: THREE.BufferGeometry;
+      vanBody: THREE.BufferGeometry;
+      vanCargo: THREE.BufferGeometry;
+      vanCabWindow: THREE.BufferGeometry;
+      vanCabRoof: THREE.BufferGeometry;
+      wheel: THREE.BufferGeometry;
+      light: THREE.BufferGeometry;
+      shadow: THREE.BufferGeometry;
+    },
+    sharedMats: {
+      window: THREE.Material;
+      wheel: THREE.Material;
+      headlight: THREE.Material;
+      taillight: THREE.Material;
+      shadow: THREE.Material;
     }
-    this.trafficMesh.instanceMatrix.needsUpdate = true;
-    this.cityGroup.add(this.trafficMesh);
+  ): THREE.Group {
+    const carGroup = new THREE.Group();
+    const paintMat = new THREE.MeshStandardMaterial({
+      color: colorHex,
+      roughness: 0.35,
+      metalness: 0.25,
+    });
+
+    if (variant === 'SEDAN') {
+      // SEDAN (Length: 4.40m, Width: 1.90m, Height: 1.45m)
+      const shadow = new THREE.Mesh(sharedGeos.shadow, sharedMats.shadow);
+      shadow.scale.set(1.02, 0.95, 1);
+      shadow.position.y = 0.02;
+      carGroup.add(shadow);
+
+      // Lower Body
+      const body = new THREE.Mesh(sharedGeos.sedanBody, paintMat);
+      body.position.set(0, 0.54, 0);
+      carGroup.add(body);
+
+      // Cabin Glass Core (Windshield, Rear Window, Side Windows)
+      const cabin = new THREE.Mesh(sharedGeos.sedanCabin, sharedMats.window);
+      cabin.position.set(-0.15, 1.05, 0);
+      carGroup.add(cabin);
+
+      // Cabin Roof Panel
+      const roof = new THREE.Mesh(sharedGeos.sedanRoof, paintMat);
+      roof.position.set(-0.15, 1.33, 0);
+      carGroup.add(roof);
+
+      // 4 Wheels
+      const wFL = new THREE.Mesh(sharedGeos.wheel, sharedMats.wheel);
+      wFL.position.set(1.30, 0.35, -0.92);
+      carGroup.add(wFL);
+      const wFR = new THREE.Mesh(sharedGeos.wheel, sharedMats.wheel);
+      wFR.position.set(1.30, 0.35, 0.92);
+      carGroup.add(wFR);
+      const wRL = new THREE.Mesh(sharedGeos.wheel, sharedMats.wheel);
+      wRL.position.set(-1.30, 0.35, -0.92);
+      carGroup.add(wRL);
+      const wRR = new THREE.Mesh(sharedGeos.wheel, sharedMats.wheel);
+      wRR.position.set(-1.30, 0.35, 0.92);
+      carGroup.add(wRR);
+
+      // Front Headlights (+X bumper)
+      const hlL = new THREE.Mesh(sharedGeos.light, sharedMats.headlight);
+      hlL.position.set(2.205, 0.54, -0.62);
+      carGroup.add(hlL);
+      const hlR = new THREE.Mesh(sharedGeos.light, sharedMats.headlight);
+      hlR.position.set(2.205, 0.54, 0.62);
+      carGroup.add(hlR);
+
+      // Rear Taillights (-X bumper)
+      const tlL = new THREE.Mesh(sharedGeos.light, sharedMats.taillight);
+      tlL.position.set(-2.205, 0.54, -0.62);
+      carGroup.add(tlL);
+      const tlR = new THREE.Mesh(sharedGeos.light, sharedMats.taillight);
+      tlR.position.set(-2.205, 0.54, 0.62);
+      carGroup.add(tlR);
+    } else if (variant === 'COMPACT') {
+      // COMPACT HATCHBACK (Length: 3.75m, Width: 1.80m, Height: 1.45m)
+      const shadow = new THREE.Mesh(sharedGeos.shadow, sharedMats.shadow);
+      shadow.scale.set(0.90, 0.90, 1);
+      shadow.position.y = 0.02;
+      carGroup.add(shadow);
+
+      // Lower Body
+      const body = new THREE.Mesh(sharedGeos.compactBody, paintMat);
+      body.position.set(0, 0.54, 0);
+      carGroup.add(body);
+
+      // Cabin Glass Core
+      const cabin = new THREE.Mesh(sharedGeos.compactCabin, sharedMats.window);
+      cabin.position.set(-0.35, 1.05, 0);
+      carGroup.add(cabin);
+
+      // Cabin Roof Panel
+      const roof = new THREE.Mesh(sharedGeos.compactRoof, paintMat);
+      roof.position.set(-0.35, 1.33, 0);
+      carGroup.add(roof);
+
+      // 4 Wheels
+      const wFL = new THREE.Mesh(sharedGeos.wheel, sharedMats.wheel);
+      wFL.position.set(1.10, 0.35, -0.88);
+      carGroup.add(wFL);
+      const wFR = new THREE.Mesh(sharedGeos.wheel, sharedMats.wheel);
+      wFR.position.set(1.10, 0.35, 0.88);
+      carGroup.add(wFR);
+      const wRL = new THREE.Mesh(sharedGeos.wheel, sharedMats.wheel);
+      wRL.position.set(-1.10, 0.35, -0.88);
+      carGroup.add(wRL);
+      const wRR = new THREE.Mesh(sharedGeos.wheel, sharedMats.wheel);
+      wRR.position.set(-1.10, 0.35, 0.88);
+      carGroup.add(wRR);
+
+      // Front Headlights (+X bumper)
+      const hlL = new THREE.Mesh(sharedGeos.light, sharedMats.headlight);
+      hlL.position.set(1.88, 0.54, -0.58);
+      carGroup.add(hlL);
+      const hlR = new THREE.Mesh(sharedGeos.light, sharedMats.headlight);
+      hlR.position.set(1.88, 0.54, 0.58);
+      carGroup.add(hlR);
+
+      // Rear Taillights (-X bumper)
+      const tlL = new THREE.Mesh(sharedGeos.light, sharedMats.taillight);
+      tlL.position.set(-1.88, 0.54, -0.58);
+      carGroup.add(tlL);
+      const tlR = new THREE.Mesh(sharedGeos.light, sharedMats.taillight);
+      tlR.position.set(-1.88, 0.54, 0.58);
+      carGroup.add(tlR);
+    } else {
+      // SMALL VAN (Length: 4.65m, Width: 1.95m, Height: 1.82m)
+      const shadow = new THREE.Mesh(sharedGeos.shadow, sharedMats.shadow);
+      shadow.scale.set(1.10, 1.00, 1);
+      shadow.position.y = 0.02;
+      carGroup.add(shadow);
+
+      // Lower Chassis
+      const body = new THREE.Mesh(sharedGeos.vanBody, paintMat);
+      body.position.set(0, 0.57, 0);
+      carGroup.add(body);
+
+      // Upper Cargo Box
+      const cargo = new THREE.Mesh(sharedGeos.vanCargo, paintMat);
+      cargo.position.set(-0.55, 1.28, 0);
+      carGroup.add(cargo);
+
+      // Cab Windshield Block
+      const cabWindow = new THREE.Mesh(sharedGeos.vanCabWindow, sharedMats.window);
+      cabWindow.position.set(0.80, 1.20, 0);
+      carGroup.add(cabWindow);
+
+      // Cab Roof Panel
+      const cabRoof = new THREE.Mesh(sharedGeos.vanCabRoof, paintMat);
+      cabRoof.position.set(0.80, 1.60, 0);
+      carGroup.add(cabRoof);
+
+      // 4 Wheels
+      const wFL = new THREE.Mesh(sharedGeos.wheel, sharedMats.wheel);
+      wFL.position.set(1.45, 0.35, -0.94);
+      carGroup.add(wFL);
+      const wFR = new THREE.Mesh(sharedGeos.wheel, sharedMats.wheel);
+      wFR.position.set(1.45, 0.35, 0.94);
+      carGroup.add(wFR);
+      const wRL = new THREE.Mesh(sharedGeos.wheel, sharedMats.wheel);
+      wRL.position.set(-1.40, 0.35, -0.94);
+      carGroup.add(wRL);
+      const wRR = new THREE.Mesh(sharedGeos.wheel, sharedMats.wheel);
+      wRR.position.set(-1.40, 0.35, 0.94);
+      carGroup.add(wRR);
+
+      // Front Headlights (+X bumper)
+      const hlL = new THREE.Mesh(sharedGeos.light, sharedMats.headlight);
+      hlL.position.set(2.33, 0.57, -0.65);
+      carGroup.add(hlL);
+      const hlR = new THREE.Mesh(sharedGeos.light, sharedMats.headlight);
+      hlR.position.set(2.33, 0.57, 0.65);
+      carGroup.add(hlR);
+
+      // Rear Taillights (-X bumper)
+      const tlL = new THREE.Mesh(sharedGeos.light, sharedMats.taillight);
+      tlL.position.set(-2.33, 0.57, -0.65);
+      carGroup.add(tlL);
+      const tlR = new THREE.Mesh(sharedGeos.light, sharedMats.taillight);
+      tlR.position.set(-2.33, 0.57, 0.65);
+      carGroup.add(tlR);
+    }
+
+    return carGroup;
   }
 
   private createBuildingMesh(
@@ -1673,18 +2005,22 @@ export class EnvironmentManager {
     }
 
     // 10D. Update animated vehicles and creatures
-    // City Traffic
-    if (this.trafficMesh && this.cityGroup.visible) {
-      const dummy = new THREE.Object3D();
-      this.trafficData.forEach((car, i) => {
-        car.x += car.speed * delta * 24;
-        if (car.x > 110) car.x = -110;
-        if (car.x < -110) car.x = 110;
-        dummy.position.set(car.x, car.laneY, car.z);
-        dummy.updateMatrix();
-        this.trafficMesh!.setMatrixAt(i, dummy.matrix);
-      });
-      this.trafficMesh.instanceMatrix.needsUpdate = true;
+    // City Traffic (Procedural Low-Poly Cars on Boulevard)
+    if (this.trafficCars.length > 0 && this.cityGroup.visible) {
+      const dt = Math.min(delta, 0.1);
+      for (let i = 0; i < this.trafficCars.length; i++) {
+        const car = this.trafficCars[i];
+        car.x += car.speed * dt;
+
+        // Smooth wrap outside camera view frustum (-125m to +125m)
+        if (car.direction === 1 && car.x > 125) {
+          car.x = -125;
+        } else if (car.direction === -1 && car.x < -125) {
+          car.x = 125;
+        }
+
+        car.mesh.position.x = car.x;
+      }
     }
 
     // City Beacons

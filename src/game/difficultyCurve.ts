@@ -234,25 +234,24 @@ export type StabilizationStatus = 'VERY_STABLE' | 'STABLE' | 'RISKY' | 'DANGEROU
 
 /**
  * Drop Height Multiplier progression across floors:
- * Floors 1–4: ~1.40x (extra drop distance gives horizontal/angular swing more time to manifest)
- * Floors 5–8: 1.38x -> 1.32x (gradual taper begins)
- * Floors 9–10: 1.28x -> 1.25x
- * Floor 12: ~1.20x
- * Floor 15: ~1.14x
- * Floor 18: ~1.08x
- * Floor 20: ~1.04x
- * Floor 21+: exactly 1.00x (returns to current normal suspended-floor drop distance with no jumps)
+ * Floors 1–3: 1.75x (very high early drop for noticeable fall time)
+ * Floors 4–5: 1.65x (still clearly high)
+ * Floors 6–7: 1.55x (moderately high)
+ * Floor 8:    1.45x (beginning to approach normal)
+ * Floor 9:    1.35x (closer)
+ * Floor 10:   1.25x (smooth transition into standard game curve)
+ * Floor 11+:  Preserves current existing behavior (Floor 11 ~1.225x, Floor 12 1.20x, Floor 15 1.14x, Floor 18 1.08x, Floor 20 1.04x, Floor 21+ 1.00x)
  */
 export const DROP_HEIGHT_KEYFRAMES: Record<number, number> = {
-  1: 1.40,
-  2: 1.40,
-  3: 1.40,
-  4: 1.40,
-  5: 1.38,
-  6: 1.36,
-  7: 1.34,
-  8: 1.32,
-  9: 1.28,
+  1: 1.75,
+  2: 1.75,
+  3: 1.75,
+  4: 1.65,
+  5: 1.65,
+  6: 1.55,
+  7: 1.55,
+  8: 1.45,
+  9: 1.35,
   10: 1.25,
   12: 1.20,
   15: 1.14,
@@ -262,7 +261,7 @@ export const DROP_HEIGHT_KEYFRAMES: Record<number, number> = {
 };
 
 export function getDropHeightMultiplierForFloor(floorNumber: number): number {
-  if (floorNumber <= 4) return 1.40;
+  if (floorNumber <= 1) return 1.75;
   if (floorNumber >= 21) return 1.00;
 
   const fLow = Math.floor(floorNumber);
