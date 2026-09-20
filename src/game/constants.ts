@@ -3,8 +3,8 @@ export const GAME_CONFIG = {
   BASE_WIDTH: 4.2,
   BASE_DEPTH: 4.2,
   BASE_HEIGHT: 2.3,
-  FOUNDATION_HEIGHT: 6.0,
-  FOUNDATION_FOOTPRINT_SCALE: 0.75, // 75% of normal floor footprint width & depth
+  FOUNDATION_HEIGHT: 1.0,
+  FOUNDATION_FOOTPRINT_SCALE: 1.00, // 100% of normal floor footprint width & depth (fair, full starting platform)
   
   // Height metric ratio (matches reference image: ~26m per floor)
   METERS_PER_FLOOR: 26.0,

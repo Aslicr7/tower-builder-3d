@@ -86,8 +86,8 @@ export class GameEngine {
   private swingVelocityZ = 0;
 
   // Camera tracking & Orbit View
-  private cameraTarget = new THREE.Vector3(0, 3.2, 0);
-  private cameraDesiredTarget = new THREE.Vector3(0, 3.2, 0);
+  private cameraTarget = new THREE.Vector3(0, GAME_CONFIG.FOUNDATION_HEIGHT - 6.0 + 1.2, 0);
+  private cameraDesiredTarget = new THREE.Vector3(0, GAME_CONFIG.FOUNDATION_HEIGHT - 6.0 + 1.2, 0);
   private cameraOffset = new THREE.Vector3(20, 13, 31);
   private cameraBaseDistance = 38.0;
   private collapseStartTime = 0;
@@ -328,9 +328,12 @@ export class GameEngine {
     this.currentOrbitAngle = 0;
     this.cameraOffset.copy(this.computeCameraOffsetVector());
 
-    // Reset camera desired target with cinematic elevated 3/4 framing
+    // Reset physics first so towerTopY reflects a clean state
+    this.physics.reset();
+
+    // Reset camera desired target with cinematic elevated 3/4 framing relative to real foundation top
     const towerTopY = this.physics.getTowerTopY();
-    const initialTargetY = Math.max(towerTopY - 3.2, 3.2);
+    const initialTargetY = towerTopY + 1.2;
     this.cameraDesiredTarget.set(0, initialTargetY, 0);
     this.cameraTarget.set(0, initialTargetY, 0);
     this.camera.position.set(
@@ -529,7 +532,7 @@ export class GameEngine {
     this.hangingFloorGroup.position.set(this.moduleX, hangingY, this.moduleZ);
     this.hangingFloorGroup.rotation.set(0, this.craneRotY, 0);
 
-    const targetY = Math.max(towerTopY - 3.2, 3.2);
+    const targetY = towerTopY + 1.2;
     this.cameraDesiredTarget.set(0, targetY, 0);
 
     console.log(
@@ -1058,7 +1061,7 @@ export class GameEngine {
     // Begin gentle camera follow toward new tower top.
     // Camera does NOT jump! Exponential smoothing gently leads the camera up.
     const towerTopY = this.physics.getTowerTopY();
-    const targetY = Math.max(towerTopY - 3.2, 3.2);
+    const targetY = towerTopY + 1.2;
     this.cameraDesiredTarget.set(0, targetY, 0);
 
     // Pre-select next entry side so crane trolley can reposition during settling
@@ -1101,7 +1104,7 @@ export class GameEngine {
       (r) =>
         r.settled &&
         r.stableY !== undefined &&
-        (r.stableY - r.body.position.y > Math.max(2.5, r.dimensions.height * 1.3) || r.body.position.y < -2.0)
+        (r.stableY - r.body.position.y > Math.max(2.5, r.dimensions.height * 1.3) || r.body.position.y < (this.physics.getFoundationTopY() - 2.0))
     );
 
     console.log("GAME OVER:", {
@@ -1303,7 +1306,7 @@ export class GameEngine {
 
       // Smooth camera framing continuously tracking the surviving tower top
       const survivingTopY = this.physics.getTowerTopY();
-      const targetY = Math.max(survivingTopY - 3.2, 3.2);
+      const targetY = survivingTopY + 1.2;
       this.cameraDesiredTarget.set(0, targetY, 0);
     }
 

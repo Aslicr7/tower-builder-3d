@@ -404,10 +404,10 @@ export class PhysicsWorld {
     const angularSpeed = body.angularVelocity.length();
 
     // CASE A: Check if floor clearly missed the tower and is falling away
-    // It must fall significantly below expectedSupportY (e.g. 4.5m below support top or below ground -2.0m)
+    // It must fall significantly below expectedSupportY (e.g. 4.5m below support top or below foundation)
     // AND have been falling for at least 0.75s to let the player visibly see it drop past the tower
     const fallThresholdY = expectedSupportY - 4.5;
-    const isFarBelow = body.position.y < fallThresholdY || body.position.y < -2.0;
+    const isFarBelow = body.position.y < fallThresholdY || body.position.y < (this.getFoundationTopY() - 2.0);
 
     if (isFarBelow && elapsedSinceDrop > 0.75) {
       // Floor has clearly fallen away from the tower
@@ -869,7 +869,7 @@ export class PhysicsWorld {
   public isFloorSurviving(rec: PhysicsFloorRecord): boolean {
     if (!rec.settled) return false;
     if (rec.isDetached) return false;
-    if (rec.body.position.y < -0.5) return false;
+    if (rec.body.position.y < this.getFoundationTopY() - 0.5) return false;
 
     // Permanently frozen floors are solid base structures
     if (rec.isFrozen) return true;
@@ -960,7 +960,7 @@ export class PhysicsWorld {
       const bodyUp = rec.body.vectorToWorldFrame(up);
       const tilt = Math.acos(Math.max(-1, Math.min(1, up.dot(bodyUp))));
 
-      const isFallen = (fallDist > fallLimit || rec.body.position.y < -2.0) ||
+      const isFallen = (fallDist > fallLimit || rec.body.position.y < (this.getFoundationTopY() - 2.0)) ||
                        (tilt > 1.25 && rec.body.velocity.y < -0.8);
 
       if (isFallen) {

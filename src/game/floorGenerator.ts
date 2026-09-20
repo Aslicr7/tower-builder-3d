@@ -1673,21 +1673,18 @@ export function createFloorModule(
 }
 
 /**
- * Creates the compact industrial concrete foundation and structural platform.
+ * Creates the low industrial/concrete structural starting platform.
  * 
- * Simple strong silhouette:
+ * Simple, clean silhouette:
  *         ┌─────────────┐
- *         │  TOP PLATE  │  (Dark structural steel landing platform, flush with 75% collider)
+ *         │  TOP PLATE  │  (Dark structural steel landing platform, 1.00x footprint at Y = -5.00)
+ *         ├─────────────┤
+ *         │CONCRETE BASE│  (Low poured concrete base platform anchored into city ground at Y = -6.00)
  *         └─────────────┘
- *        ┌───────────────┐
- *        │ CONCRETE CORE │  (Low poured concrete mass with heavy structural steel angle corners)
- *        └───────────────┘
- *      ┌───────────────────┐
- *      │ FOUNDATION / BASE │  (Stepped concrete spread footing anchored into city ground)
- *      └───────────────────┘
  * 
- * Visual footprint exactly matches the 75% x 75% physical collider at Y = 0.0.
- * Zero residential props, zero windows, zero balconies, zero awnings.
+ * Top of foundation is exactly at Y = -5.00 (FOUNDATION_HEIGHT 1.00m above ground Y = -6.00).
+ * Visual footprint exactly matches 1 normal floor (4.2m x 4.2m, 1.00 scale).
+ * Zero residential props, zero pre-built tower floors, zero decorative boxes.
  */
 export function createTowerFoundation(): { group: THREE.Group } {
   const mats = getArchMaterials();
@@ -1696,80 +1693,44 @@ export function createTowerFoundation(): { group: THREE.Group } {
 
   const fw = GAME_CONFIG.BASE_WIDTH * GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE;
   const fd = GAME_CONFIG.BASE_DEPTH * GAME_CONFIG.FOUNDATION_FOOTPRINT_SCALE;
+  const groundY = -6.0;
+  const topY = GAME_CONFIG.FOUNDATION_HEIGHT - 6.0; // -5.00
 
-  // 1. FOUNDATION / SUB-BASE: Stepped spread footing anchored into the city ground (Y: -6.0 to -3.8)
-  const footingH = 1.8;
-  const footingW = fw * 1.35;
-  const footingD = fd * 1.35;
-  const footingMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(footingW, footingH, footingD),
-    mats.concreteWarm
-  );
-  footingMesh.position.set(0, -6.0 + footingH / 2, 0);
-  footingMesh.castShadow = true;
-  footingMesh.receiveShadow = true;
-  group.add(footingMesh);
-
-  // Stepped transition collar plinth (Y: -4.2 to -3.8)
-  const plinthH = 0.4;
-  const plinthW = fw * 1.15;
-  const plinthD = fd * 1.15;
-  const plinthMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(plinthW, plinthH, plinthD),
+  // 1. CONCRETE BASE: Stepped ground tie-in collar & low poured concrete base platform
+  // Footing collar anchored into tarmac (Y: -6.00 to -5.70)
+  const collarH = 0.30;
+  const collarW = fw * 1.12;
+  const collarD = fd * 1.12;
+  const collarMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(collarW, collarH, collarD),
     mats.concreteDark
   );
-  plinthMesh.position.set(0, -4.0, 0);
-  plinthMesh.castShadow = true;
-  plinthMesh.receiveShadow = true;
-  group.add(plinthMesh);
+  collarMesh.position.set(0, groundY + collarH / 2, 0);
+  collarMesh.castShadow = true;
+  collarMesh.receiveShadow = true;
+  group.add(collarMesh);
 
-  // 2. CONCRETE CORE: Heavy raw structural monolith (Y: -3.8 to -0.22)
-  const coreH = 3.58;
-  const coreMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(fw, coreH, fd),
-    mats.concreteLight
+  // Main concrete platform slab (Y: -5.70 to -5.18)
+  const baseSlabH = 0.52;
+  const baseSlabW = fw * 1.03;
+  const baseSlabD = fd * 1.03;
+  const baseSlabMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(baseSlabW, baseSlabH, baseSlabD),
+    mats.concreteWarm
   );
-  coreMesh.position.set(0, -3.8 + coreH / 2, 0);
-  coreMesh.castShadow = true;
-  coreMesh.receiveShadow = true;
-  group.add(coreMesh);
+  baseSlabMesh.position.set(0, groundY + collarH + baseSlabH / 2, 0);
+  baseSlabMesh.castShadow = true;
+  baseSlabMesh.receiveShadow = true;
+  group.add(baseSlabMesh);
 
-  // Heavy vertical structural steel corner pilasters
-  const cornerSize = 0.16;
-  const cornerOffsetX = fw / 2 - cornerSize / 2;
-  const cornerOffsetZ = fd / 2 - cornerSize / 2;
-  [
-    [-cornerOffsetX, -cornerOffsetZ],
-    [cornerOffsetX, -cornerOffsetZ],
-    [-cornerOffsetX, cornerOffsetZ],
-    [cornerOffsetX, cornerOffsetZ],
-  ].forEach(([cx, cz]) => {
-    const col = new THREE.Mesh(
-      new THREE.BoxGeometry(cornerSize, coreH, cornerSize),
-      mats.blackMetal
-    );
-    col.position.set(cx, -3.8 + coreH / 2, cz);
-    col.castShadow = true;
-    group.add(col);
-  });
-
-  // Horizontal perimeter steel reinforcement band (waler) around core center
-  const walerMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(fw + 0.04, 0.22, fd + 0.04),
-    mats.blackMetal
-  );
-  walerMesh.position.set(0, -2.0, 0);
-  walerMesh.castShadow = true;
-  group.add(walerMesh);
-
-  // 3. TOP PLATE: Dark structural steel landing platform (Y: -0.22 to 0.00)
-  // Perfectly matches the 75% physical collider boundary (fw x fd) at Y = 0.00
-  const topPlateH = 0.22;
+  // 2. TOP PLATE: Dark structural steel landing platform (Y: -5.18 to -5.00)
+  // Perfectly matches the 1.00x footprint physical collider boundary (fw x fd) at Y = -5.00
+  const topPlateH = 0.18;
   const topPlateMesh = new THREE.Mesh(
     new THREE.BoxGeometry(fw, topPlateH, fd),
     mats.blackMetal
   );
-  topPlateMesh.position.set(0, -topPlateH / 2, 0);
+  topPlateMesh.position.set(0, topY - topPlateH / 2, 0);
   topPlateMesh.castShadow = true;
   topPlateMesh.receiveShadow = true;
   group.add(topPlateMesh);
@@ -1778,15 +1739,15 @@ export function createTowerFoundation(): { group: THREE.Group } {
   const targetBedW = fw * 0.82;
   const targetBedD = fd * 0.82;
   const targetBedMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(targetBedW, 0.03, targetBedD),
+    new THREE.BoxGeometry(targetBedW, 0.02, targetBedD),
     mats.concreteDark
   );
-  targetBedMesh.position.set(0, -0.015, 0);
+  targetBedMesh.position.set(0, topY + 0.005, 0);
   targetBedMesh.receiveShadow = true;
   group.add(targetBedMesh);
 
-  // 4 corner heavy anchor shoes / shear keys
-  const shoeSize = 0.38;
+  // 4 corner heavy anchor shoes / shear keys on top plate
+  const shoeSize = 0.36;
   const shoeOffsetX = fw / 2 - shoeSize / 2;
   const shoeOffsetZ = fd / 2 - shoeSize / 2;
   [
@@ -1796,10 +1757,10 @@ export function createTowerFoundation(): { group: THREE.Group } {
     [shoeOffsetX, shoeOffsetZ],
   ].forEach(([sx, sz]) => {
     const shoe = new THREE.Mesh(
-      new THREE.BoxGeometry(shoeSize, 0.06, shoeSize),
+      new THREE.BoxGeometry(shoeSize, 0.04, shoeSize),
       mats.blackMetal
     );
-    shoe.position.set(sx, -0.03, sz);
+    shoe.position.set(sx, topY + 0.015, sz);
     shoe.castShadow = true;
     group.add(shoe);
   });
