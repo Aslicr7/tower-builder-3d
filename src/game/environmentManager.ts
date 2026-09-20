@@ -361,6 +361,7 @@ export class EnvironmentManager {
   private lunarCragsGroup: THREE.Group | null = null;
   private starsMesh: THREE.Points | null = null;
   private mountainEagles: THREE.Group | null = null;
+  private cityBuildingFootprints: { x: number; z: number; radius: number }[] = [];
 
   // Current calculated region state
   private currentRegion = 0;
@@ -488,7 +489,9 @@ export class EnvironmentManager {
   // 2. REGION 1: CITY & GROUND (FLOORS 1–20)
   // ========================================================================
   private buildCity() {
-    // Ground tarmac plane
+    this.cityBuildingFootprints = [];
+
+    // Ground tarmac plane (Base Level Y = -6.05)
     const groundGeo = new THREE.PlaneGeometry(600, 600, 4, 4);
     const groundMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.9 });
     const ground = new THREE.Mesh(groundGeo, groundMat);
@@ -497,22 +500,38 @@ export class EnvironmentManager {
     ground.receiveShadow = true;
     this.cityGroup.add(ground);
 
-    // Green city park
-    const parkGeo = new THREE.PlaneGeometry(45, 450);
+    // Green city park with dedicated boulevard corridor cutout (Y = -6.03)
+    // The road corridor spans Z = -30m to Z = -14m. The park is geometrically segmented
+    // into North and South zones so no grass plane exists under or coplanar with the road.
     const parkMat = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.85 });
-    const park = new THREE.Mesh(parkGeo, parkMat);
-    park.rotation.x = -Math.PI / 2;
-    park.rotation.z = 0.28;
-    park.position.set(28, -6.03, 0);
-    this.cityGroup.add(park);
 
-    // River
+    // North Park Segment (Z: -14m northward to +210m, length 224m)
+    const northParkGeo = new THREE.PlaneGeometry(45, 224);
+    const northPark = new THREE.Mesh(northParkGeo, parkMat);
+    northPark.rotation.x = -Math.PI / 2;
+    northPark.rotation.z = 0.28;
+    const nCenterZ = 98;
+    const nCenterX = 28 - nCenterZ * Math.tan(0.28);
+    northPark.position.set(nCenterX, -6.03, nCenterZ);
+    this.cityGroup.add(northPark);
+
+    // South Park Segment (Z: -30m southward to -240m, length 210m)
+    const southParkGeo = new THREE.PlaneGeometry(45, 210);
+    const southPark = new THREE.Mesh(southParkGeo, parkMat);
+    southPark.rotation.x = -Math.PI / 2;
+    southPark.rotation.z = 0.28;
+    const sCenterZ = -135;
+    const sCenterX = 28 - sCenterZ * Math.tan(0.28);
+    southPark.position.set(sCenterX, -6.03, sCenterZ);
+    this.cityGroup.add(southPark);
+
+    // River (Y = -6.04, sunken into base ground)
     const riverGeo = new THREE.PlaneGeometry(42, 500);
     const riverMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.15, metalness: 0.85 });
     const river = new THREE.Mesh(riverGeo, riverMat);
     river.rotation.x = -Math.PI / 2;
     river.rotation.z = 0.28;
-    river.position.set(65, -6.0, 0);
+    river.position.set(65, -6.04, 0);
     this.cityGroup.add(river);
 
     // Bridges
@@ -539,34 +558,35 @@ export class EnvironmentManager {
     });
 
     // Dedicated City Boulevard in background behind tower (Z = -22m)
+    // Clean, distinct Y-hierarchy: Ground (-6.05) < Grass (-6.03) < Road (-5.99) < Markings (-5.98) < Curbs (-5.84)
     const boulevardGroup = new THREE.Group();
     boulevardGroup.name = 'city_boulevard';
 
-    // Road asphalt surface (280m long by 14m wide)
+    // Road asphalt surface (280m long by 14m wide, Y = -5.99)
     const roadGeo = new THREE.PlaneGeometry(280, 14);
     const roadMat = new THREE.MeshStandardMaterial({ color: 0x272e3b, roughness: 0.88 });
     const roadMesh = new THREE.Mesh(roadGeo, roadMat);
     roadMesh.rotation.x = -Math.PI / 2;
-    roadMesh.position.set(0, -6.03, -22.0);
+    roadMesh.position.set(0, -5.99, -22.0);
     roadMesh.receiveShadow = true;
     boulevardGroup.add(roadMesh);
 
-    // Center divider double yellow line
+    // Center divider double yellow line (Y = -5.98, +1cm above road surface)
     const centerLineGeo = new THREE.PlaneGeometry(280, 0.35);
     const centerLineMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
     const centerLine = new THREE.Mesh(centerLineGeo, centerLineMat);
     centerLine.rotation.x = -Math.PI / 2;
-    centerLine.position.set(0, -6.02, -22.0);
+    centerLine.position.set(0, -5.98, -22.0);
     boulevardGroup.add(centerLine);
 
-    // North and South curbs / sidewalks
-    const curbGeo = new THREE.BoxGeometry(280, 0.12, 1.4);
+    // North and South curbs / sidewalks (3D box geometry with 16cm real height, top at Y = -5.84)
+    const curbGeo = new THREE.BoxGeometry(280, 0.16, 1.4);
     const curbMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.7 });
     const northCurb = new THREE.Mesh(curbGeo, curbMat);
-    northCurb.position.set(0, -5.98, -14.6);
+    northCurb.position.set(0, -5.92, -14.3);
     boulevardGroup.add(northCurb);
     const southCurb = new THREE.Mesh(curbGeo, curbMat);
-    southCurb.position.set(0, -5.98, -29.4);
+    southCurb.position.set(0, -5.92, -29.7);
     boulevardGroup.add(southCurb);
 
     this.cityGroup.add(boulevardGroup);
@@ -603,6 +623,11 @@ export class EnvironmentManager {
       bldg.position.set(x, -6.0, z);
       bldg.rotation.y = spec.rot;
       this.cityGroup.add(bldg);
+      this.cityBuildingFootprints.push({
+        x,
+        z,
+        radius: Math.hypot(spec.w, spec.d) * 0.5,
+      });
     });
 
     // Midground City (Radius 95 to 160m, Heights 30 to 52m)
@@ -620,6 +645,11 @@ export class EnvironmentManager {
       bldg.position.set(x, -6.0, z);
       bldg.rotation.y = (Math.PI / 4) * (i % 4);
       this.cityGroup.add(bldg);
+      this.cityBuildingFootprints.push({
+        x,
+        z,
+        radius: Math.hypot(10, 10) * 0.5,
+      });
     }
 
     // Build Procedural Low-Poly Background Traffic
@@ -631,7 +661,7 @@ export class EnvironmentManager {
     this.trafficGroup.name = 'city_traffic';
     this.trafficCars = [];
 
-    // Shared Materials for optimal mobile GPU performance
+    // Shared Materials for optimal GPU performance
     const windowMat = new THREE.MeshStandardMaterial({
       color: 0x090d16,
       roughness: 0.15,
@@ -642,19 +672,13 @@ export class EnvironmentManager {
       roughness: 0.9,
     });
     const headlightMat = new THREE.MeshBasicMaterial({
-      color: 0xfffbeb,
+      color: 0xfef08a,
     });
     const taillightMat = new THREE.MeshBasicMaterial({
-      color: 0xef4444,
-    });
-    const shadowMat = new THREE.MeshBasicMaterial({
-      color: 0x000000,
-      transparent: true,
-      opacity: 0.35,
-      depthWrite: false,
+      color: 0x991b1b,
     });
 
-    // Shared Geometries
+    // Shared Geometries (unscaled base shapes, scaled to 0.70x at car group root)
     const sharedGeos = {
       sedanBody: new THREE.BoxGeometry(4.40, 0.52, 1.86),
       sedanCabin: new THREE.BoxGeometry(2.35, 0.52, 1.62),
@@ -668,7 +692,6 @@ export class EnvironmentManager {
       vanCabRoof: new THREE.BoxGeometry(1.10, 0.08, 1.84),
       wheel: new THREE.CylinderGeometry(0.35, 0.35, 0.26, 12).rotateX(Math.PI / 2),
       light: new THREE.BoxGeometry(0.05, 0.12, 0.32),
-      shadow: new THREE.PlaneGeometry(4.4, 2.0).rotateX(-Math.PI / 2),
     };
 
     const sharedMats = {
@@ -676,62 +699,44 @@ export class EnvironmentManager {
       wheel: wheelMat,
       headlight: headlightMat,
       taillight: taillightMat,
-      shadow: shadowMat,
     };
 
+    // Subdued, low-saturation architectural vehicle colors (no distracting bright neons)
     const CAR_COLORS = [
-      0xf8fafc, // Alpine White
-      0x94a3b8, // Slate Silver
+      0x64748b, // Muted Slate Grey
       0x334155, // Midnight Charcoal
-      0x1e3a8a, // Deep Navy Blue
-      0x0284c7, // Pacific Blue
-      0xb91c1c, // Crimson Red
-      0xf59e0b, // Amber / Taxi Yellow
-      0x15803d, // Forest Green
+      0x3b526b, // Dusty Muted Navy
+      0x274332, // Restrained Dark Pine
+      0x9c9484, // Warm Low-Saturation Beige
+      0xe2e8f0, // Soft Off-White
+      0x8c5b43, // Muted Terracotta Earth
     ];
 
-    // 4 Dedicated Boulevard Lanes (Z = -22m)
-    // 2 Eastbound lanes (moving -X to +X, Left -> Right, direction +1)
-    // 2 Westbound lanes (moving +X to -X, Right -> Left, direction -1)
-    const laneDefs: { z: number; direction: 1 | -1; baseSpeed: number }[] = [
-      { z: -18.2, direction: 1, baseSpeed: 9.5 },   // Eastbound Outer
-      { z: -20.4, direction: 1, baseSpeed: 11.5 },  // Eastbound Inner
-      { z: -23.6, direction: -1, baseSpeed: -11.5 }, // Westbound Inner
-      { z: -25.8, direction: -1, baseSpeed: -9.5 },  // Westbound Outer
+    // Dedicated boulevard lanes positioned in the background half of the 14m roadbed (Z: -29 to -15)
+    // Speed reduced to calm cruising (~75% of previous speed: 7.2 to 8.4 m/s)
+    const laneDefs: { z: number; direction: 1 | -1; baseSpeed: number; initX: number; variant: 'SEDAN' | 'COMPACT' | 'VAN'; color: number }[] = [
+      { z: -20.8, direction: 1, baseSpeed: 7.2, initX: -75, variant: 'SEDAN', color: CAR_COLORS[0] },   // Eastbound Mid-Inner
+      { z: -22.4, direction: 1, baseSpeed: 8.4, initX: 30, variant: 'COMPACT', color: CAR_COLORS[2] },  // Eastbound Mid
+      { z: -24.4, direction: -1, baseSpeed: -8.4, initX: -15, variant: 'SEDAN', color: CAR_COLORS[4] }, // Westbound Mid
+      { z: -26.0, direction: -1, baseSpeed: -7.2, initX: 85, variant: 'VAN', color: CAR_COLORS[1] },    // Westbound Outer (Deep background)
     ];
 
-    const variants: ('SEDAN' | 'COMPACT' | 'VAN')[] = [
-      'SEDAN', 'COMPACT', 'SEDAN', 'VAN', 'SEDAN', 'COMPACT',
-    ];
+    // Exactly 1 vehicle per lane ensures spacious 100m+ separation, ZERO bumper-to-bumper bunching,
+    // and produces approximately 2 to 4 visible background vehicles at any time.
+    laneDefs.forEach((lane) => {
+      const carMesh = this.createLowPolyCar(lane.variant, lane.color, sharedGeos, sharedMats);
+      carMesh.position.set(lane.initX, -5.99, lane.z);
+      carMesh.rotation.y = lane.direction === 1 ? 0 : Math.PI;
 
-    const carsPerLane = 6;
-    laneDefs.forEach((lane, laneIdx) => {
-      for (let k = 0; k < carsPerLane; k++) {
-        const variant = variants[(k + laneIdx) % variants.length];
-        const colorHex = CAR_COLORS[(k * 3 + laneIdx * 2) % CAR_COLORS.length];
-        const carMesh = this.createLowPolyCar(variant, colorHex, sharedGeos, sharedMats);
-
-        // Staggered distribution along roadway (-110 to +110m)
-        const x = -110 + k * 44 + ((laneIdx * 5 + k * 7) % 11) * 1.5;
-        const speedVariation = 1 + (((k * 13 + laneIdx * 19) % 7) - 3) * 0.04;
-        const speed = lane.baseSpeed * speedVariation;
-
-        carMesh.position.set(x, -6.00, lane.z);
-        // Orientation strictly matches lane travel direction:
-        // direction +1 (Left -> Right) => faces +X (rotation.y = 0)
-        // direction -1 (Right -> Left) => faces -X (rotation.y = Math.PI)
-        carMesh.rotation.y = lane.direction === 1 ? 0 : Math.PI;
-
-        this.trafficGroup!.add(carMesh);
-        this.trafficCars.push({
-          mesh: carMesh,
-          x,
-          y: -6.00,
-          z: lane.z,
-          speed,
-          direction: lane.direction,
-        });
-      }
+      this.trafficGroup!.add(carMesh);
+      this.trafficCars.push({
+        mesh: carMesh,
+        x: lane.initX,
+        y: -5.99,
+        z: lane.z,
+        speed: lane.baseSpeed,
+        direction: lane.direction,
+      });
     });
 
     this.cityGroup.add(this.trafficGroup);
@@ -753,30 +758,23 @@ export class EnvironmentManager {
       vanCabRoof: THREE.BufferGeometry;
       wheel: THREE.BufferGeometry;
       light: THREE.BufferGeometry;
-      shadow: THREE.BufferGeometry;
     },
     sharedMats: {
       window: THREE.Material;
       wheel: THREE.Material;
       headlight: THREE.Material;
       taillight: THREE.Material;
-      shadow: THREE.Material;
     }
   ): THREE.Group {
     const carGroup = new THREE.Group();
     const paintMat = new THREE.MeshStandardMaterial({
       color: colorHex,
-      roughness: 0.35,
-      metalness: 0.25,
+      roughness: 0.45,
+      metalness: 0.15,
     });
 
     if (variant === 'SEDAN') {
-      // SEDAN (Length: 4.40m, Width: 1.90m, Height: 1.45m)
-      const shadow = new THREE.Mesh(sharedGeos.shadow, sharedMats.shadow);
-      shadow.scale.set(1.02, 0.95, 1);
-      shadow.position.y = 0.02;
-      carGroup.add(shadow);
-
+      // SEDAN (Scaled to 0.70x: Length: 3.08m, Width: 1.30m, Height: 1.01m)
       // Lower Body
       const body = new THREE.Mesh(sharedGeos.sedanBody, paintMat);
       body.position.set(0, 0.54, 0);
@@ -822,12 +820,7 @@ export class EnvironmentManager {
       tlR.position.set(-2.205, 0.54, 0.62);
       carGroup.add(tlR);
     } else if (variant === 'COMPACT') {
-      // COMPACT HATCHBACK (Length: 3.75m, Width: 1.80m, Height: 1.45m)
-      const shadow = new THREE.Mesh(sharedGeos.shadow, sharedMats.shadow);
-      shadow.scale.set(0.90, 0.90, 1);
-      shadow.position.y = 0.02;
-      carGroup.add(shadow);
-
+      // COMPACT HATCHBACK (Scaled to 0.70x: Length: 2.62m, Width: 1.25m, Height: 1.01m)
       // Lower Body
       const body = new THREE.Mesh(sharedGeos.compactBody, paintMat);
       body.position.set(0, 0.54, 0);
@@ -873,12 +866,7 @@ export class EnvironmentManager {
       tlR.position.set(-1.88, 0.54, 0.58);
       carGroup.add(tlR);
     } else {
-      // SMALL VAN (Length: 4.65m, Width: 1.95m, Height: 1.82m)
-      const shadow = new THREE.Mesh(sharedGeos.shadow, sharedMats.shadow);
-      shadow.scale.set(1.10, 1.00, 1);
-      shadow.position.y = 0.02;
-      carGroup.add(shadow);
-
+      // SMALL VAN (Scaled to 0.70x: Length: 3.25m, Width: 1.34m, Height: 1.27m)
       // Lower Chassis
       const body = new THREE.Mesh(sharedGeos.vanBody, paintMat);
       body.position.set(0, 0.57, 0);
@@ -929,6 +917,10 @@ export class EnvironmentManager {
       tlR.position.set(-2.33, 0.57, 0.65);
       carGroup.add(tlR);
     }
+
+    // Explicit scale reduction (0.70x of original dimensions) ensuring background subordination
+    const CAR_SCALE = 0.70;
+    carGroup.scale.set(CAR_SCALE, CAR_SCALE, CAR_SCALE);
 
     return carGroup;
   }
@@ -1096,20 +1088,47 @@ export class EnvironmentManager {
       depthWrite: false,
     });
 
+    // Mountain peaks placed on the distant background perimeter (180m to 240m radius)
+    // City buildings end at radius 160m; mountains form an authentic background horizon behind the skyline.
     const pillarSpecs = [
-      { angle: 0.45, dist: 95, rad: 22, height: 75, snow: true },
-      { angle: 1.25, dist: 110, rad: 28, height: 85, snow: true },
-      { angle: 2.15, dist: 100, rad: 20, height: 68, snow: false },
-      { angle: 2.95, dist: 125, rad: 34, height: 98, snow: true },
-      { angle: 3.85, dist: 105, rad: 24, height: 78, snow: true },
-      { angle: 4.75, dist: 115, rad: 26, height: 82, snow: true },
-      { angle: 5.55, dist: 98, rad: 22, height: 72, snow: false },
+      { angle: 0.45, dist: 195, rad: 26, height: 85, snow: true },
+      { angle: 1.15, dist: 215, rad: 32, height: 95, snow: true },
+      { angle: 1.95, dist: 185, rad: 24, height: 78, snow: false },
+      { angle: 2.75, dist: 235, rad: 38, height: 110, snow: true },
+      { angle: 3.65, dist: 200, rad: 28, height: 88, snow: true },
+      { angle: 4.55, dist: 220, rad: 30, height: 92, snow: true },
+      { angle: 5.45, dist: 190, rad: 25, height: 82, snow: false },
     ];
 
+    const placedPeaks: { x: number; z: number; rad: number; height: number }[] = [];
+
     pillarSpecs.forEach((p, idx) => {
+      let currentDist = Math.max(p.dist, 175);
+      const cosA = Math.cos(p.angle);
+      const sinA = Math.sin(p.angle);
+      let x = cosA * currentDist;
+      let z = sinA * currentDist;
+
+      // Enforce strict spatial clearance against all city building footprints
+      if (this.cityBuildingFootprints && this.cityBuildingFootprints.length > 0) {
+        let maxOverlapPush = 0;
+        for (const bldg of this.cityBuildingFootprints) {
+          const distToBldg = Math.hypot(x - bldg.x, z - bldg.z);
+          const minRequired = p.rad + bldg.radius + 16;
+          if (distToBldg < minRequired) {
+            maxOverlapPush = Math.max(maxOverlapPush, minRequired - distToBldg);
+          }
+        }
+        if (maxOverlapPush > 0) {
+          currentDist += maxOverlapPush + 10;
+          x = cosA * currentDist;
+          z = sinA * currentDist;
+        }
+      }
+
+      placedPeaks.push({ x, z, rad: p.rad, height: p.height });
+
       const peakGroup = new THREE.Group();
-      const x = Math.cos(p.angle) * p.dist;
-      const z = Math.sin(p.angle) * p.dist;
 
       // Lower rock body (tapered cylinder / cone)
       const baseGeo = new THREE.CylinderGeometry(p.rad * 0.45, p.rad, p.height * 0.75, 7);
@@ -1136,7 +1155,7 @@ export class EnvironmentManager {
 
       // Waterfall ribbon cascading down one dramatic cliff (Ref 4)
       if (idx === 1) {
-        const waterGeo = new THREE.PlaneGeometry(3.5, 35);
+        const waterGeo = new THREE.PlaneGeometry(4.5, 45);
         const waterMat = new THREE.MeshBasicMaterial({
           color: 0xbae6fd,
           transparent: true,
@@ -1144,7 +1163,7 @@ export class EnvironmentManager {
           side: THREE.DoubleSide,
         });
         const waterfall = new THREE.Mesh(waterGeo, waterMat);
-        waterfall.position.set(p.rad * 0.46, 25, 0);
+        waterfall.position.set(p.rad * 0.46, 30, 0);
         peakGroup.add(waterfall);
       }
 
@@ -1152,21 +1171,28 @@ export class EnvironmentManager {
       this.mountainGroup.add(peakGroup);
     });
 
-    // Mountain suspension footbridge connecting two peaks (Ref 3)
-    const bridgeGeo = new THREE.BoxGeometry(26, 0.4, 2.2);
-    const bridgeMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.9 });
-    const mBridge = new THREE.Mesh(bridgeGeo, bridgeMat);
-    mBridge.position.set(65, 48, -75);
-    mBridge.rotation.y = 0.6;
-    this.mountainGroup.add(mBridge);
+    // Mountain suspension footbridge connecting the two adjacent peaks (indices 0 & 1)
+    if (placedPeaks.length >= 2) {
+      const p1 = placedPeaks[0];
+      const p2 = placedPeaks[1];
+      const midX = (p1.x + p2.x) * 0.5;
+      const midZ = (p1.z + p2.z) * 0.5;
+      const span = Math.hypot(p2.x - p1.x, p2.z - p1.z) * 0.45;
+      const bridgeGeo = new THREE.BoxGeometry(span, 0.5, 2.4);
+      const bridgeMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.9 });
+      const mBridge = new THREE.Mesh(bridgeGeo, bridgeMat);
+      mBridge.position.set(midX, 52, midZ);
+      mBridge.rotation.y = Math.atan2(p2.z - p1.z, p2.x - p1.x);
+      this.mountainGroup.add(mBridge);
+    }
 
-    // Deep valley mist planes floating at Y = 25m to 45m
+    // Deep valley mist planes floating in the distant mountain ring at Y = 28m to 48m
     for (let m = 0; m < 8; m++) {
-      const mistGeo = new THREE.PlaneGeometry(160, 160);
+      const mistGeo = new THREE.PlaneGeometry(180, 180);
       const mist = new THREE.Mesh(mistGeo, mistMat);
       mist.rotation.x = -Math.PI / 2;
       const mAng = (m / 8) * Math.PI * 2;
-      mist.position.set(Math.cos(mAng) * 120, 28 + (m % 3) * 6, Math.sin(mAng) * 120);
+      mist.position.set(Math.cos(mAng) * 195, 32 + (m % 3) * 6, Math.sin(mAng) * 195);
       this.mountainGroup.add(mist);
     }
 
@@ -1179,13 +1205,13 @@ export class EnvironmentManager {
       );
       // Small simple V-shape bird mesh
       const vertices = new Float32Array([
-        -1.2, 0, -0.4,
-         0.0, 0,  0.4,
-         1.2, 0, -0.4,
+        -1.4, 0, -0.5,
+         0.0, 0,  0.5,
+         1.4, 0, -0.5,
       ]);
       eagleWing.geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
       const eAng = (e / 6) * Math.PI * 2;
-      eagleWing.position.set(Math.cos(eAng) * 65, 52 + (e % 3) * 6, Math.sin(eAng) * 65);
+      eagleWing.position.set(Math.cos(eAng) * 155, 62 + (e % 3) * 6, Math.sin(eAng) * 155);
       this.mountainEagles.add(eagleWing);
     }
     this.mountainGroup.add(this.mountainEagles);
